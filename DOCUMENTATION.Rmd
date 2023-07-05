@@ -1,0 +1,147 @@
+---
+title: "DOCUMENTATION"
+output:
+  html_document: default
+  pdf_document: default
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T)
+```
+
+## Organising your data
+* inventory folder
+* _assets folder
+* additional_db folder
+* results folder
+target_genome_path
+
+## List of all code words & parameters
+cancer_subtype
+min_n_participants
+
+PANCAN
+min_depth
+min_tumor_vac
+max_germline_vaf
+max_germline_vac
+max_n_vars
+target_genome_version
+zip
+cores - maybe various options, because requirements may vary
+
+## Inventory
+
+### Participants inventory
+
+Essential file. Recommended name: . It is recommended, no necessary.
+
+| **participant_id** | **tumor_subtype** | **somatic_path** | **somatic_genome** | **cohort_name** |
+|:------------------:|:-----------------:|:----------------:|:------------------:|:---------------:|
+|                    |                   |                  |                    |                 |
+|                    |                   |                  |                    |                 |
+|                    |                   |                  |                    |                 |
+
+where
+    
+- **participant_id**: unique ID of a patient, i.e. `p12345`. It should appear
+                      once and only once in the table.
+- **tumor_subtype**: tumor subtype of that patient, i.e. `ADENOCARCINOMA`. 
+                     tumor_subtype and tumor_type columns 
+                     **should not contain "-" sign** as it is used within the 
+                     analysis for other purposes. For example, NEURO-ENDOCRINE
+                     in tumor_type column will be flagged, and NEURO_ENDOCRINE
+                     is allowed. Also, values in tumor_subtype column can not
+                     be numbers.
+- **somatic_path**: a full path on your system (computer/server) to the 
+                    file with **somatic** genetic mutations detected in that 
+                    individual. For the format of that file, see below.
+- **somatic_genome**: a genome version to which data from that patient were
+                      mapped, i.e. `hg19`.
+- **cohort_name** : name of the cohort
+                      
+**At least 9 patients per tumor type is recommended.** Although this is a bare
+minimum and does not guarantee best results. All other columns in the table 
+will be ignored. **Comma separated**
+
+### Analysis inventory
+
+|**tumor_subtype**|**restrictedTest**|**software**|**gr_id**|**gr_code**|**gr_file**|**gr_upstr**|**gr_downstr**|**gr_genome**|**gr_excl_id**|**gr_excl_code**|**gr_excl_file**|**gr_excl_upstr**|**gr_excl_downstr**|**gr_excl_genome**|**blacklisted_codes**|**union_percentage**|**intersect_percentage**|
+|:-------------:|:--------------:|:--------:|:-----:|:-------:|:-------:|:--------:|:----------:|:---------:|:----------:|:------------:|:------------:|:-------------:|:---------------:|:--------------:|:-----------------:|:----------------:|:--------------------:|
+|             |              |        |     |       |       |        |          |         |          |            |            |             |               |              |                 |                |                    |
+
+where
+
+- **tumor_subtype**: 
+- **restrictedTest**: 
+- **software**: 
+- **gr_id**: 
+- **gr_code**: 
+- **gr_file**: 
+- **gr_upstr**: 
+- **gr_downstr**: 
+- **gr_genome**: 
+- **gr_excl_id**: 
+- **gr_excl_code**: 
+- **gr_excl_file**: 
+- **gr_excl_upstr**: 
+- **gr_excl_downstr**: 
+- **gr_excl_genome**: 
+- **blacklisted_codes**: 
+- **union_percentage**: 
+- **intersect_percentage**: 
+
+**Comma separated**
+
+### Black/white list inventory
+|**list_name**|**file_path**|**file_type**|**score_column**|**min_value**|**max_value**|**file_genome**|
+|:-----------:||:-----------:|:-----------:|:--------------:|:-----------:|:-----------:|:-------------:|
+|             |              |             |                |             |             |               |
+
+where
+
+- **file_path**: 
+- **file_type**: 
+- **score_column**: 
+- **min_value**: 
+- **max_value**: 
+- **file_genome**: 
+
+1) files from the table exist 2) codes in file_type are white or black 
+3) min_value and max_value are given is score_column is given 4) genomes versions of 
+files are allowed ones.
+
+We highly recommend to bring this files to target genome version as this process
+can be long and high memory
+
+## Input files
+
+### Somatic mutations table(s)
+In case of annovar format, it's not possible to filter based on VAF/VAC, etc.
+
+#### Annovar-like:
+
+|key|chr|start|stop|ref|var|Gene.refGene|Func.refGene|ExonicFunc.refGene|GeneDetail.refGene|AAChange.refGene|Use.For.Plots|Use.For.Plots.Indel|t_depth|t_ref_count|t_alt_count|n_depth|n_ref_count|n_alt_count|t_maxVAF|
+|---|---|-----|----|---|---|------------|------------|------------------|------------------|----------------|-------------|-------------------|-------|-----------|-----------|-------|-----------|-----------|--------|
+|trololo|   |     |    |   |   |            |            |                  |                  |                |             |                   |       |           |           |       |           |           |        |
+
+
+after t_depth columns are optional
+
+#### MAF:
+
+|Tumor_Sample_Barcode|Chromosome|Start_Position|End_Position|Reference_Allele|Tumor_Seq_Allele2|Gene|Variant_Classification|Amino_acids|t_depth|t_ref_count|t_alt_count|n_depth|n_ref_count|n_alt_count|t_maxVAF|
+|:------------------:|:--------:|:------------:|:----------:|:--------------:|:---------------:|:--:|:--------------------:|:---------:|:-----:|:---------:|:---------:|:-----:|:---------:|:---------:|:------:|
+|      trololo       |          |              |            |                |                 |    |                      |           |       |           |           |       |           |           |        |
+
+
+## Configuring the pipeline
+
+## A note on genome versions
+Mutpanning runs on hg19 only. Liftover shatters CN regions into lots of small 
+ones which can lead to overestimation of number of driver mutations. Therefore
+it is best to perform match between genetic elements and CN on the same genome
+version CN were done.
+
+#We have to store somewhere IDs of patients which were filtered out as hypermutated
