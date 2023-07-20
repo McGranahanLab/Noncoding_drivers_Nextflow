@@ -35,14 +35,14 @@ process check_inventories {
 
 	script:
 	"""
-	if [ -z "${blacklist_inventory_path}" ]
+	if echo "${blacklist_inventory_path}" | grep -q "EMPTY_FILE.txt"
 	then
 	    1_check_patients_inventory.R --inventory_patients ${patients_inventory_path} \
 	                                 --inventory_analysis ${analysis_inventory_path}
     else
         1_check_patients_inventory.R --inventory_patients ${patients_inventory_path} \
-	                             --inventory_analysis ${analysis_inventory_path} \
-	                             --inventory_blacklisted ${blacklist_inventory_path} 
+	                                 --inventory_analysis ${analysis_inventory_path} \
+	                                 --inventory_blacklisted ${blacklist_inventory_path} 
     fi
 
 	
@@ -50,9 +50,9 @@ process check_inventories {
 }
 
 workflow {
-    patients_inv = Channel.of(params.patients_inventory)
-    analysis_inv = Channel.of(params.analysis_inventory) 
-    blacklist_inv = Channel.of(params.blacklist_inventory) 
+    patients_inv = Channel.fromPath(params.patients_inventory)
+    analysis_inv = Channel.fromPath(params.analysis_inventory) 
+    blacklist_inv = Channel.fromPath(params.blacklist_inventory) 
 
     patients_inv.combine(analysis_inv)
                 .combine(blacklist_inv) | 
