@@ -72,6 +72,7 @@ check_min_int_msg <- function(value, value_name, min_value) {
 #'              script if something is wrong
 #' @author Maria Litovchenko
 #' @param argsList list of submitted command line arguments
+#' @param outputType string, type of output argument: folder or file
 #' @return void
 #' @export
 check_input_arguments <- function(argsList, outputType = NULL) {
@@ -155,43 +156,3 @@ printArgs <- function(argsList) {
   }
 }
 
-# Checking inventories --------------------------------------------------------
-#' checkHaveEssentialColumns
-#' @description Checks that all columns needed to be in inventory table are 
-#'              indeed present there.
-#' @author Maria Litovchenko
-#' @param filePath path to inventory
-#' @param essentialCols string vector, containing essential column names
-#' @param inventory_type string, type of inventory (patient, analysis, etc)
-#' @param cores integer, number of cores to be used
-#' @return data table, in case all columns are found and stops the script 
-#'         otherwise.
-#' @export
-checkHaveEssentialColumns <- function(filePath, essentialCols, 
-                                      inventory_type, cores = 1) {
-  result <- suppressWarnings(fread(filePath, header = T, stringsAsFactors = F, 
-                                   nThread = cores))
-  if (!all(essentialCols %in% colnames(result))) {
-    stop('[', Sys.time(), '] ', inventory_type, ' inventory must have ',
-         'columns: ', paste(essentialCols, collapse = ', '))
-  }
-  result
-}
-
-#' checkColumnNotNumber
-#' @description Checks that there are no numbers in the vector 
-#' @author Maria Litovchenko
-#' @param x vector
-#' @param x_name name of that vector, if available
-#' @return void, if no number in the vector was found and stops script 
-#'         execution otherwise
-#' @export
-checkColumnNotNumber <- function(x, x_name = NULL) {
-  x_to_int <- suppressWarnings(as.integer(x))
-  
-  if (any(!is.na(x_to_int))) {
-    int_in_x <- x[!is.na(x_to_int)]
-    stop('[', Sys.time(), '] Found a numerical value(s) in ', x_name, ': ',
-         paste(int_in_x, collapse = ', '), '. Not allowed.')
-  }
-}
