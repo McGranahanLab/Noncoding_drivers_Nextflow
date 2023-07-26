@@ -733,6 +733,19 @@ if (!is.null(args$inventory_blacklisted)) {
   }
 }
 
+# check, that across all inventories there are just 2 different genome versions
+genomesVersions <- c(patientsInv$somatic_genome, analysisInv$gr_genome,
+                     analysisInv$gr_excl_genome)
+if (!is.null(args$inventory_blacklisted)) {
+  genomesVersions <- c(genomesVersions, bwInv$file_genome)
+}
+genomesVersions <- unique(genomesVersions)
+if (length(genomesVersions) > 2) {
+  stop('[', Sys.time(), '] > 2 different genome versions are detected across ',
+       'all inventory tables. Please restrict it to the maximum of 2 ',
+       'different genome versions.')
+}
+
 print(paste0('[', Sys.time(), '] Analysis inventory is OK'))
 
 message("End time of run: ", Sys.time())
