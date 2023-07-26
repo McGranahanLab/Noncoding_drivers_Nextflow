@@ -37,17 +37,19 @@ cores - maybe various options, because requirements may vary
 
 Essential file. Recommended name: . It is recommended, no necessary.
 
-| **participant_id** | **tumor_subtype** | **somatic_path** | **somatic_genome** | **cohort_name** |
-|:------------------:|:-----------------:|:----------------:|:------------------:|:---------------:|
-|                    |                   |                  |                    |                 |
-|                    |                   |                  |                    |                 |
-|                    |                   |                  |                    |                 |
+| **participant_id** | **tumor_subtype** |   **somatic_path**   | **somatic_genome** | **cohort_name** |
+|:------------------:|:-----------------:|:--------------------:|:------------------:|:---------------:|
+| TCGA-05-4244       | LUAD              |  *full path to file* |      hg19          |      TCGA       |
+| TCGA-05-4249       | LUAD              |  *full path to file* |      hg19          |      TCGA       |
+| TCGA-05-4250       | LUAD              |  *full path to file* |      hg19          |      TCGA       |
+| TCGA-18-3406       | LUSC              |  *full path to file* |      hg19          |      TCGA       |
+| TCGA-18-3407       | LUSC              |  *full path to file* |      hg19          |      TCGA       |
 
 where
     
-- **participant_id**: unique ID of a patient, i.e. `p12345`. It should appear
-                      once and only once in the table.
-- **tumor_subtype**: tumor subtype of that patient, i.e. `ADENOCARCINOMA`. 
+- **participant_id**: unique ID of a patient, i.e. `TCGA-05-4244`. It should
+                      appear once and only once in the table.
+- **tumor_subtype**: tumor subtype of that patient, i.e. `LUAD`. 
                      tumor_subtype and tumor_type columns 
                      **should not contain "-" sign** as it is used within the 
                      analysis for other purposes. For example, NEURO-ENDOCRINE
@@ -55,8 +57,8 @@ where
                      is allowed. Also, values in tumor_subtype column can not
                      be numbers.
 - **somatic_path**: a full path on your system (computer/server) to the 
-                    file with **somatic** genetic mutations detected in that 
-                    individual. For the format of that file, see below.
+                    file with **somatic** genetic mutations detected in **that
+                    individual**. For the format of that file, see below.
 - **somatic_genome**: a genome version to which data from that patient were
                       mapped, i.e. `hg19`.
 - **cohort_name** : name of the cohort
@@ -67,14 +69,18 @@ will be ignored. **Comma separated**
 
 ### Analysis inventory
 
-|**tumor_subtype**|**restrictedTest**|**software**|**gr_id**|**gr_code**|**gr_file**|**gr_upstr**|**gr_downstr**|**gr_genome**|**gr_excl_id**|**gr_excl_code**|**gr_excl_file**|**gr_excl_upstr**|**gr_excl_downstr**|**gr_excl_genome**|**blacklisted_codes**|**union_percentage**|**intersect_percentage**|
-|:-------------:|:--------------:|:--------:|:-----:|:-------:|:-------:|:--------:|:----------:|:---------:|:----------:|:------------:|:------------:|:-------------:|:---------------:|:--------------:|:-----------------:|:----------------:|:--------------------:|
-|             |              |        |     |       |       |        |          |         |          |            |            |             |               |              |                 |                |                    |
+| **tumor_subtype** | **restrictedTest** | **software** | **gr_id** | **gr_code** | **gr_file** | **gr_upstr** | **gr_downstr** | **gr_genome** | **gr_base** | **gr_excl_id** | **gr_excl_code** | **gr_excl_file** | **gr_excl_upstr** | **gr_excl_downstr** | **gr_excl_genome** | **gr_excl_base** | **blacklisted_codes** | **union_percentage** | **intersect_percentage** |
+|:-----------------:|:------------------:|:------------:|:---------:|:-----------:|:---------------------------------------------------------------------------------------------------------------------------:|:------------:|:--------------:|:-------------:|:-----------:|:--------------:|:----------------:|:---------------------------------------------------------------------------------------------------------------------------:|:-----------------:|:-------------------:|:------------------:|:----------------:|:---------------------:|:--------------------:|:------------------------:|
+| LUAD              | FALSE              | chasmplus    | CDS       | CDS         | /Users/maria/Desktop/BitBucket//Noncoding_drivers/_assets/additional_db_processed_2023-02-21/hg38.refGene_biotyped_hg38.gtf | 0            | 0              | hg19          | 0           | NA             | NA               | NA                                                                                                                          | NA                | NA                  | NA                 | NA               | CRG;DAC;DUKE          | NA                   | NA                       |
+| LUAD              | FALSE              | dndscv       | CDS       | CDS         | /Users/maria/Desktop/BitBucket//Noncoding_drivers/_assets/additional_db_processed_2023-02-21/hg38.refGene_biotyped_hg38.gtf | 0            | 0              | hg19          | 0           | NA             | NA               | NA                                                                                                                          | NA                | NA                  | NA                 | NA               | CRG;DAC;DUKE          | NA                   | NA                       |
+| LUAD              | FALSE              | mutpanning   | CDS       | CDS         | /Users/maria/Desktop/BitBucket//Noncoding_drivers/_assets/additional_db_processed_2023-02-21/hg38.refGene_biotyped_hg38.gtf | 0            | 0              | hg19          | 0           | NA             | NA               | NA                                                                                                                          | NA                | NA                  | NA                 | NA               | CRG;DAC;DUKE          | NA                   | NA                       |
+| LUAD              | FALSE              | oncodrivefml | CDS       | CDS         | /Users/maria/Desktop/BitBucket//Noncoding_drivers/_assets/additional_db_processed_2023-02-21/hg38.refGene_biotyped_hg38.gtf | 0            | 0              | hg19          | 0           | NA             | NA               | NA                                                                                                                          | NA                | NA                  | NA                 | NA               | CRG;DAC;DUKE          | NA                   | NA                       |
+| LUAD              | FALSE              | oncodrivefml | ss        | ss          | /Users/maria/Desktop/BitBucket//Noncoding_drivers/_assets/additional_db_processed_2023-02-21/hg38.refGene_biotyped_hg38.gtf | 20           | 6              | hg19          | 0           | CDS            | CDS              | /Users/maria/Desktop/BitBucket//Noncoding_drivers/_assets/additional_db_processed_2023-02-21/hg38.refGene_biotyped_hg38.gtf | 0                 | 0                   | hg19               | 0                | CRG;DAC;DUKE          | 50                   | 80                       |
 
 where
 
 - **tumor_subtype**: 
-- **restrictedTest**: 
+- **restrictedTest**: optional
 - **software**: 
 - **gr_id**: 
 - **gr_code**: 
@@ -89,15 +95,15 @@ where
 - **gr_excl_downstr**: 
 - **gr_excl_genome**: 
 - **blacklisted_codes**: 
-- **union_percentage**: 
-- **intersect_percentage**: 
+- **union_percentage**: optional
+- **intersect_percentage**: optional
 
 **Comma separated**
 
 ### Black/white list inventory
-|**list_name**|**file_path**|**file_type**|**score_column**|**min_value**|**max_value**|**file_genome**|
-|:-----------:||:-----------:|:-----------:|:--------------:|:-----------:|:-----------:|:-------------:|
-|             |              |             |                |             |             |               |
+|**list_name**|**file_path** |**file_genome**| **file_type**  |**score_column**|**min_value**| **max_value** |
+|:-----------:|:------------:|:-------------:|:--------------:|:--------------:|:-----------:|:-------------:|
+|             |              |               |                |                |             |               |
 
 where
 

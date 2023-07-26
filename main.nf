@@ -29,6 +29,8 @@ analysis_inventory = Channel.fromPath(params.analysis_inventory, checkIfExists: 
 * Processes
 *----------------------------------------------------------------------------*/
 process check_inventories {
+	debug true
+	
 	input:
 	tuple val(patients_inventory_path), val(analysis_inventory_path), 
 	      val(blacklist_inventory_path)
@@ -38,10 +40,12 @@ process check_inventories {
 	if echo "${blacklist_inventory_path}" | grep -q "EMPTY_FILE.txt"
 	then
 	    1_check_patients_inventory.R --inventory_patients ${patients_inventory_path} \
-	                                 --inventory_analysis ${analysis_inventory_path}
+	                                 --inventory_analysis ${analysis_inventory_path} \
+	                                 --target_genome_version ${params.target_genome_version}
     else
         1_check_patients_inventory.R --inventory_patients ${patients_inventory_path} \
 	                                 --inventory_analysis ${analysis_inventory_path} \
+	                                 --target_genome_version ${params.target_genome_version} \
 	                                 --inventory_blacklisted ${blacklist_inventory_path} 
     fi
 

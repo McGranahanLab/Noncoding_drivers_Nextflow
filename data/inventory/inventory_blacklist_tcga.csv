@@ -1,4 +1,4 @@
 list_name,file_path,file_genome,file_type,score_column,min_value,max_value
-CRG,/re_gecip/cancer_lung/pipelines/Noncoding_drivers/_assets/black_white_lists/wgEncodeCrgMapabilityAlign100mer.bigWig,hg19,white,score,1,1
-DAC,/re_gecip/cancer_lung/pipelines/Noncoding_drivers/_assets/black_white_lists/wgEncodeDacMapabilityConsensusExcludable.bed,hg19,black,NA,NA,NA
-DUKE,/re_gecip/cancer_lung/pipelines/Noncoding_drivers/_assets/black_white_lists/wgEncodeDukeMapabilityUniqueness35bp_processed.bed,hg19,white,NA,NA,NA
+CRG,/Users/maria/Desktop/BitBucket/Noncoding_drivers/_assets/black_white_lists/wgEncodeCrgMapabilityAlign100mer.bigWig,hg19,white,score,1,1
+DAC,/Users/maria/Desktop/BitBucket/Noncoding_drivers/_assets/black_white_lists/wgEncodeDacMapabilityConsensusExcludable.bed,hg19,black,NA,NA,NA
+DUKE,/Users/maria/Desktop/BitBucket/Noncoding_drivers/_assets/black_white_lists/wgEncodeDukeMapabilityUniqueness35bp_processed.bed,hg19,white,NA,NA,NA

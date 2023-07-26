@@ -22,14 +22,14 @@ box::use(argparse[...])
 box::use(data.table[...])
 
 # Parcing input arguments -----------------------------------------------------
-#' check_file_existance_msg
+#' check_file_existence_msg
 #' @description Checks, whatever or not file exist and stops the execution if
 #'              it is not. Prints an error.
 #' @author Maria Litovchenko
 #' @param filePath path to file
 #' @return void
 #' @export
-check_file_existance_msg <- function(filePath) {
+check_file_existence_msg <- function(filePath) {
   if (!file.exists(filePath)) {
     stop('[', Sys.time(), '] File does not exist: ', filePath)
   }
@@ -145,7 +145,7 @@ printArgs <- function(argsList) {
 checkHaveEssentialColumns <- function(filePath, essentialCols, 
                                       inventory_type, cores = 1) {
   result <- suppressWarnings(fread(filePath, header = T, stringsAsFactors = F, 
-                                   nThread = cores, select = essentialCols))
+                                   nThread = cores))
   if (!all(essentialCols %in% colnames(result))) {
     stop('[', Sys.time(), '] ', inventory_type, ' inventory must have ',
          'columns: ', paste(essentialCols, collapse = ', '))
