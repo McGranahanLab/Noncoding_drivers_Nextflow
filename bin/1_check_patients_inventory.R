@@ -625,7 +625,7 @@ parser$add_argument("-b", "--inventory_blacklisted",
                     help = blackListHelp)
 
 parser$add_argument('-m', '--min_n_participants', 
-                    required = F, type = 'integer', default = 0, 
+                    required = F, type = 'integer', default = 1, 
                     help = 'Minimal number of participants per tumor subtype')
 
 parser$add_argument("-g", "--target_genome_version", 
@@ -633,25 +633,13 @@ parser$add_argument("-g", "--target_genome_version",
                     help = 'Target genome version, i.e. hg19')
 
 args <- parser$parse_args()
+
+timeStart <- Sys.time()
+message('[', Sys.time(), '] Start time of run')
+
+# check arguments are correct
+check_input_arguments(args)
 printArgs(args)
-
-# check file existence
-lapply(args[c('inventory_patients', 'inventory_analysis')], 
-       check_file_existence_msg)
-if (!is.null(args$inventory_blacklisted)) {
-  check_file_existence_msg(args$inventory_blacklisted)
-}
-
-# GLOBAL ARGUMENTS ------------------------------------------------------------
-GR_CODES <- c('protein_coding', "3primeUTR", "5primeUTR", "CDS", "lincRNA", 
-              "lincRNA_promoter", "lincRNA_ss", "miRNA", "misc_RNA", 
-              "promoter", "rRNA", "snoRNA", "snRNA", "ss")
-
-SOFTWARE_GR_CODES <- list('activedriverwgs' = NULL, 'dndscv' = c('CDS'),
-                          'mutpanning' = c('CDS'), 'chasmplus' = c('CDS'), 
-                          'driverpower' = NULL, 'nbr' = NULL, 
-                          'oncodrivefml' = NULL, 'oncodriveclustl' = NULL,
-                          'digdriver' = NULL)
 
 # Check the inventory----------------------------------------------------------
 patientsInv <- checkParticipantInventory(args$inventory_patients)
@@ -706,3 +694,8 @@ if (!is.null(args$inventory_blacklisted)) {
 }
 
 print(paste0('[', Sys.time(), '] Analysis inventory is OK'))
+
+message("End time of run: ", Sys.time())
+message('Total execution time: ',  
+        difftime(Sys.time(), timeStart, units = 'mins'), ' mins.')
+message('Finished!')

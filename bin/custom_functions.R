@@ -21,6 +21,21 @@
 box::use(argparse[...])
 box::use(data.table[...])
 
+# GLOBAL ARGUMENTS ------------------------------------------------------------
+#' @export
+GR_CODES <- c('protein_coding', "3primeUTR", "5primeUTR", "CDS", "lincRNA", 
+              "lincRNA_promoter", "lincRNA_ss", "miRNA", "misc_RNA", 
+              "promoter", "rRNA", "snoRNA", "snRNA", "ss")
+
+#' @export
+SOFTWARE_GR_CODES <- list('activedriverwgs' = NULL, 'dndscv' = c('CDS'),
+                          'mutpanning' = c('CDS'), 'chasmplus' = c('CDS'), 
+                          'driverpower' = NULL, 'nbr' = NULL, 
+                          'oncodrivefml' = NULL, 'oncodriveclustl' = NULL,
+                          'digdriver' = NULL)
+#' @export
+acceptedChrNames <- c(c(1:24, 'X', 'Y'), paste0('chr', c(1:24, 'X', 'Y')))
+
 # Parcing input arguments -----------------------------------------------------
 #' check_file_existence_msg
 #' @description Checks, whatever or not file exist and stops the execution if
@@ -59,54 +74,64 @@ check_min_int_msg <- function(value, value_name, min_value) {
 #' @param argsList list of submitted command line arguments
 #' @return void
 #' @export
-check_input_arguments <- function(argsList) {
-  if (!is.null(args$inventoryP)) {
-    lapply(args$inventoryP, check_file_existance_msg)
+check_input_arguments <- function(argsList, outputType = NULL) {
+  if (!is.null(argsList$inventory_patients)) {
+    lapply(argsList$inventory_patients, check_file_existence_msg)
   }
-  if (!is.null(args$inventory)) {
-    lapply(args$inventory, check_file_existance_msg)
+  if (!is.null(argsList$inventory_analysis)) {
+    lapply(argsList$inventory_analysis, check_file_existence_msg)
   }
-  if (!is.null(args$blacklist_inventory)) {
-    check_file_existance_msg(args$blacklist_inventory)
+  if (!is.null(argsList$inventory_blacklisted)) {
+    lapply(argsList$inventory_blacklisted, check_file_existence_msg)
   }
-  if (!is.null(args$chain)) {
-    check_file_existance_msg(args$chain)
+  if (!is.null(argsList$min_n_participants)) {
+    check_min_int_msg(argsList$min_n_participants, 'min_n_participants', 1)
   }
-  if (!is.null(args$min_n_participants)) {
-    check_min_int_msg(args$min_n_participants, 'min_n_participants', 1)
+  if (!is.null(argsList$min_depth)) {
+    check_min_int_msg(argsList$min_depth, 'min_depth', 1)
   }
-  if (!is.null(args$min_depth)) {
-    check_min_int_msg(args$min_depth, 'min_depth', 1)
+  if (!is.null(argsList$min_tumor_vac)) {
+    check_min_int_msg(argsList$min_tumor_vac, 'min_tumor_vac', 1)
   }
-  if (!is.null(args$min_tumor_vac)) {
-    check_min_int_msg(args$min_tumor_vac, 'min_tumor_vac', 1)
+  if (!is.null(argsList$min_tumor_vaf)) {
+    check_min_int_msg(argsList$min_tumor_vaf, 'min_tumor_vaf', 0)
   }
-  if (!is.null(args$min_tumor_vaf)) {
-    check_min_int_msg(args$min_tumor_vaf, 'min_tumor_vaf', 0)
+  if (!is.null(argsList$max_germline_vaf)) {
+    check_min_int_msg(argsList$max_germline_vaf, 'max_germline_vaf', 0)
   }
-  if (!is.null(args$max_germline_vaf)) {
-    check_min_int_msg(args$max_germline_vaf, 'max_germline_vaf', 0)
+  if (!is.null(argsList$max_germline_vac)) {
+    check_min_int_msg(argsList$max_germline_vac, 'max_germline_vac', 0)
   }
-  if (!is.null(args$max_germline_vac)) {
-    check_min_int_msg(args$max_germline_vac, 'max_germline_vac', 0)
+  if (!is.null(argsList$max_n_vars)) {
+    check_min_int_msg(argsList$max_n_vars, 'max_n_vars', 0)
   }
-  if (!is.null(args$max_n_vars)) {
-    check_min_int_msg(args$max_n_vars, 'max_n_vars', 0)
+  if (!is.null(argsList$min_reg_len)) {
+    check_min_int_msg(argsList$min_reg_len, 'min_reg_len', 0)
   }
-  if (!is.null(args$min_reg_len)) {
-    check_min_int_msg(args$min_reg_len, 'min_reg_len', 0)
+  if (!is.null(argsList$target_genome_path)) {
+    check_file_existence_msg(argsList$target_genome_path)
   }
-  if (!is.null(args$target_genome_path)) {
-    check_file_existance_msg(args$target_genome_path)
+  if (!is.null(argsList$chain)) {
+    check_file_existence_msg(argsList$chain)
   }
-  if (!is.null(args$output)) {
-    if (!dir.exists(dirname(args$output))) {
-      dir.create(dirname(args$output), recursive = T)
-      message('[', Sys.time(), '] Created directory ', dirname(args$output)) 
+  
+  if (!is.null(argsList$output)) {
+    if (!is.null(outputType)) {
+      dirToCheck <- argsList$output
+      if (outputType == 'file') {
+        dirToCheck <- dirname(argsList$output)
+      }
+      if (!dir.exists(dirToCheck)) {
+        dir.create(dirToCheck, recursive = T)
+        message('[', Sys.time(), '] Created directory ', dirToCheck) 
+      }
+    } else {
+      stop('[', Sys.time(), '] Please give outputType argument.')
     }
   }
-  if (!is.null(args$cores)) {
-    check_min_int_msg(args$cores, 'cores', 1)
+  
+  if (!is.null(argsList$cores)) {
+    check_min_int_msg(argsList$cores, 'cores', 1)
   }
 }
 
