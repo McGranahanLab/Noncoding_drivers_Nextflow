@@ -2,12 +2,67 @@
 # FILE: 1_check_patients_inventory.R ------------------------------------------
 #
 # DESCRIPTION: Checks if submitted by user patients', analysis and black&white
-#              lists inventories are valid.
-#             
-# USAGE: Rscript --vanilla 1_check_patients_inventory.R \
-#                --inventory_patients [path to your file]
+# lists inventories are valid.
+# Checks performed for patients' inventory:
+# 1) inventory has all needed columns participant_id, tumor_subtype, 
+#    participant_tumor_subtype, somatic_path, somatic_genome, cohort_name and 
+#    columns tumor_subtype, participant_tumor_subtype, somatic_genome and 
+#    cohort_name are not numbers
+# 2) participant_id is linked to one and only one participant_tumor_subtype
+# 3) all participant_id - tumor_subtype pairs are unique 
+# 4) tumor_subtype do not contain - sign because it's going to be used in 
+#    file naming
+# 5) mutation files exist 
+# 6) genome version is the same for all variant files 
 #
-# OPTIONS: --inventory_patients
+# Checks performed for black & white lists inventory:
+# 1) all needed columns are present (list_name, file_path, file_genome, 
+#    file_type, score_column, min_value and max_value) are present and columns
+#    list_name, file_type, file_genome and score_column are not numbers
+# 2) each list_name appears once and only once
+# 3) each file_path appears once and only once
+# 4) files listed in file_path exist
+# 5) codes in file_type are "white" or "black" 
+# 6) min_value and max_value are given or 
+# 7) genomes versions of files are allowed ones
+#
+# Checks performed for analysis inventory:
+# 1) all needed columns are present and columns tumor_subtype, gr_id, gr_code,
+#    gr_genome, gr_excl_id, gr_excl_code, gr_excl_genome, blacklisted_codes
+#    are not numbers
+# 2) files exist
+# 3) software are one of the accepted ones
+# 4) software can handle gr_code, i.e dndscv can only process CDS
+# 5) gr_code and gr_excl_code do not contain - sign because it's going to be 
+#    used in file naming.
+# 6) in gr_file and gr_excl_file only gtf or bed files are supplied
+# 7) if gr_code / gr_excl_code is given, that the file is provided as well. 
+# 8) gr_code is acceptable, if gr_file and gr_excl_file are gtf 
+# 9) for promoters and splice sites upstream and downstream are not 0 at the
+#    same time if gtf file is given 
+# 10) within same gr_id, all lines have same value of blacklisted codes 
+# 11) there are <= 2 genome versions, including target genome version
+# 12) files in gr_file and gr_excl_file always have the same genome version 
+#     assigned to the same file
+# 13) gr_id is defined by the same files and upstream/downstream combinations
+#     across tumor_subtypes and software
+# 14) check, that if dndscv is requested, a gtf file is given
+# 15) check, that if digdriver is requested, a gtf file is given, one per 
+#     tumor
+# 16) If union_percentage/intersect_percentage column are given, check that 
+#     it is NA for rows with gr_code equals to CDS, and values in it in range
+#     of 0 to 100 for the other rows              
+#
+# USAGE: Rscript --vanilla 1_check_patients_inventory.R \
+#                --inventory_patients [path to your file] \
+#                --inventory_analysis [path to your file] \
+#                --inventory_blacklisted [path to your file] \ # optional
+#                --min_n_participants 9 \ # optional
+#                --target_genome_version hg19
+#
+# OPTIONS: Run 
+#          Rscript --vanilla 1_check_patients_inventory.R -h
+#          to see the full list of options and their descriptions.
 #
 # REQUIREMENTS: argparse, data.table
 # BUGS: --
@@ -16,7 +71,7 @@
 # COMPANY:  UCL, Cancer Institute, London, the UK
 # VERSION:  1
 # CREATED:  22.06.2023
-# REVISION: 05.07.2023
+# REVISION: 26.07.2023
 
 box::use(./custom_functions[...])
 suppressPackageStartupMessages(library(argparse))
