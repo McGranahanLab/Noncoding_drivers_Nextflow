@@ -24,7 +24,7 @@
 # 4) files listed in file_path exist
 # 5) codes in file_type are "white" or "black" 
 # 6) min_value and max_value are given or 
-# 7) genomes versions of files are allowed ones
+# 7) black& white lists are on the same genome version as target genome version
 #
 # Checks performed for analysis inventory:
 # 1) all needed columns are present and columns tumor_subtype, gr_id, gr_code,
@@ -556,7 +556,8 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
 #' 4) files listed in file_path exist
 #' 5) codes in file_type are "white" or "black" 
 #' 6) min_value and max_value are given or 
-#' 7) genomes versions of files are allowed ones
+#' 7) black& white lists are on the same genome version as target 
+#'    genome version.
 #' @author Maria Litovchenko
 #' @param inventoryPath black&white lists inventory analysis path
 #' @param targetGenomeVersion character, genome version, in which final files
@@ -618,16 +619,17 @@ checkBlacklistInventory <- function(inventoryPath, targetGenomeVersion,
          'score_column is not NA')
   }
   
-  # 7) check, that there are <= 2 genome versions, including target genome
-  #    version
+  # 7) check, black& white lists are on the same genome version as target 
+  #    genome version.
   genomeVers <- c(result$file_genome, targetGenomeVersion)
   genomeVers <- unique(genomeVers)
   genomeVers <- genomeVers[!is.na(genomeVers)]
-  if (length(unique(genomeVers)) > 2) {
-    stop('[', Sys.time(), '] No more than 2 genome versions, including ',
-         '--target_genome_version are allowed in the black&white lists ',
-         'inventory table. Current genome versions: ', 
-         paste(genomeVers, collapse = ', '), '.')
+  if (length(unique(genomeVers)) > 1) {
+    stop('[', Sys.time(), '] Please submit files in black&white lists ',
+         'inventories on the same genome version as --target_genome_version ',
+         '(', targetGenomeVersion, '). Lift over of black&white lists can be ',
+         'time & memory consuming and therefore is not implemented in this ',
+         'pipeline.')
   }
   
   result

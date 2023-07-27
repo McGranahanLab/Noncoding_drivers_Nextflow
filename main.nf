@@ -39,20 +39,22 @@ process check_inventories {
 	"""
 	if echo "${blacklist_inventory_path}" | grep -q "EMPTY_FILE.txt"
 	then
-	    1_check_patients_inventory.R --inventory_patients ${patients_inventory_path} \
-	                                 --inventory_analysis ${analysis_inventory_path} \
-	                                 --target_genome_version ${params.target_genome_version}
+	    1_check_inventories.R --inventory_patients ${patients_inventory_path} \
+	                          --inventory_analysis ${analysis_inventory_path} \
+	                          --target_genome_version ${params.target_genome_version}
     else
-        1_check_patients_inventory.R --inventory_patients ${patients_inventory_path} \
-	                                 --inventory_analysis ${analysis_inventory_path} \
-	                                 --target_genome_version ${params.target_genome_version} \
-	                                 --inventory_blacklisted ${blacklist_inventory_path} 
+        1_check_inventories.R --inventory_patients ${patients_inventory_path} \
+	                          --inventory_analysis ${analysis_inventory_path} \
+	                          --target_genome_version ${params.target_genome_version} \
+	                          --inventory_blacklisted ${blacklist_inventory_path} 
     fi
-
 	
 	"""
 }
 
+/* ----------------------------------------------------------------------------
+* Workflows
+*----------------------------------------------------------------------------*/
 workflow {
     patients_inv = Channel.fromPath(params.patients_inventory)
     analysis_inv = Channel.fromPath(params.analysis_inventory) 
