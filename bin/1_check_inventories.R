@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# FILE: 1_check_patients_inventory.R ------------------------------------------
+# FILE: 1_check_inventories.R -------------------------------------------------
 #
 # DESCRIPTION: Checks if submitted by user patients', analysis and black&white
 # lists inventories are valid.

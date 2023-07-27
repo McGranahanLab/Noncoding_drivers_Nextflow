@@ -156,3 +156,90 @@ printArgs <- function(argsList) {
   }
 }
 
+# Reading inventories ---------------------------------------------------------
+#' readParticipantInventory
+#' @description Reads participant inventory into data table
+#' @author Maria Litovchenko
+#' @param inventoryPath path to file with participants inventory
+#' @param cores integer, number of cores to use
+#' @return data table with the inventory
+#' @export
+readParticipantInventory <- function(inventoryPath, cores = 1) {
+  result <- fread(inventoryPath, sep = ',', header = T, stringsAsFactors = F, 
+                  select = c('tumor_subtype', 'participant_id', 
+                             'participant_tumor_subtype', 'somatic_path', 
+                             'somatic_genome', 'cohort_name'),
+                  nThread = cores)
+  result[, tumor_subtype := as.character(tumor_subtype)]
+  result[, participant_tumor_subtype := as.character(participant_tumor_subtype)]
+  result[, participant_id := as.character(participant_id)]
+  result[, cohort_name := as.character(cohort_name)]
+  
+  result
+}
+
+#' readAnalysisInventory
+#' @description Reads analysis inventory into data table
+#' @author Maria Litovchenko
+#' @param inventoryPath path to file with analysis inventory
+#' @param cores integer, number of cores to use
+#' @return data table with the inventory
+#' @export
+readAnalysisInventory <- function(inventoryPath, cores = 1) {
+  essenCols <- c('tumor_subtype', 'software', 'gr_id', 'gr_code', 'gr_file',
+                 'gr_upstr', 'gr_downstr', 'gr_genome', 'gr_excl_id',
+                 'gr_excl_code', 'gr_excl_file', 'gr_excl_upstr',
+                 'gr_excl_downstr', 'gr_excl_genome', 'blacklisted_codes')
+  result <- fread(inventoryPath, sep = ',', header = T, stringsAsFactors = F,
+                  select = essenCols, nThread = cores)
+  
+  result[, tumor_subtype := as.character(tumor_subtype)]
+  result[, gr_id := as.character(gr_id)]
+  result[, gr_code := as.character(gr_code)]
+  result[, gr_upstr := as.integer(gr_upstr)]
+  result[, gr_downstr := as.integer(gr_downstr)]
+  result[, gr_genome := as.character(gr_genome)]
+  result[, gr_excl_id := as.character(gr_excl_id)]
+  result[, gr_excl_code := as.character(gr_excl_code)]
+  result[, gr_excl_upstr := as.integer(gr_excl_upstr)]
+  result[, gr_excl_downstr := as.integer(gr_excl_downstr)]
+  result[, gr_excl_genome := as.character(gr_excl_genome)]
+  result[, blacklisted_codes := as.character(blacklisted_codes)]
+  
+  result
+}
+
+#' readBlacklistInventory
+#' @description Reads black&white lists inventory into data table
+#' @author Maria Litovchenko
+#' @param inventoryPath black&white lists inventory analysis path
+#' @param cores integer, number of cores to use
+#' @return data table with black&white lists inventory
+#' @export
+readBlacklistInventory <- function(inventoryPath, cores = 1) {
+  # 1) read and check that all needed columns are present
+  essenCols <- c('list_name', 'file_path', 'file_genome', 'file_type', 
+                 'score_column', 'min_value', 'max_value')
+  result <- fread(inventoryPath, sep = ',', header = T, stringsAsFactors = F,
+                  select = essenCols, nThread = cores)
+  
+  result[, list_name := as.character(list_name)]
+  result[, file_genome := as.character(file_genome)]
+  result[, file_type := as.character(file_type)]
+  result[, score_column := as.character(score_column)]
+  result
+}
+
+# Misc -----------------------------------------------------------------------
+#' getSeqlevelsStyle
+#' @description Detemines a seqlevelstyle (aka chromosome naming style) from
+#' the reference genome
+#' @author Maria Litovchenko
+#' @param fastaPath path to fasta file
+#' @return UCSC, in case naming format is chr1, and NCBI otherwise
+getSeqlevelsStyle <- function(fastaPath) {
+  # read just the first line
+  result <- fread(fastaPath, nrows = 1, header = F)$V1
+  result <- ifelse(grepl('>chr', result), 'UCSC', 'NCBI')
+  result
+}
