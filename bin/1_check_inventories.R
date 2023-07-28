@@ -41,15 +41,17 @@
 # 9) for promoters and splice sites upstream and downstream are not 0 at the
 #    same time if gtf file is given 
 # 10) within same gr_id, all lines have same value of blacklisted codes 
-# 11) there are <= 2 genome versions, including target genome version
-# 12) files in gr_file and gr_excl_file always have the same genome version 
+# 11) within same tumor_subtype, all lines have same value of blacklisted 
+#     codes
+# 12) there are <= 2 genome versions, including target genome version
+# 13) files in gr_file and gr_excl_file always have the same genome version 
 #     assigned to the same file
-# 13) gr_id is defined by the same files and upstream/downstream combinations
+# 14) gr_id is defined by the same files and upstream/downstream combinations
 #     across tumor_subtypes and software
-# 14) check, that if dndscv is requested, a gtf file is given
-# 15) check, that if digdriver is requested, a gtf file is given, one per 
+# 15) check, that if dndscv is requested, a gtf file is given
+# 16) check, that if digdriver is requested, a gtf file is given, one per 
 #     tumor
-# 16) If union_percentage/intersect_percentage column are given, check that 
+# 17) If union_percentage/intersect_percentage column are given, check that 
 #     it is NA for rows with gr_code equals to CDS, and values in it in range
 #     of 0 to 100 for the other rows              
 #
@@ -212,16 +214,18 @@ checkParticipantInventory <- function(inventoryPath, cores = 1) {
 #' 8) gr_code is acceptable, if gr_file and gr_excl_file are gtf 
 #' 9) for promoters and splice sites upstream and downstream are not 0 at the
 #'    same time if gtf file is given 
-#' 10) within same gr_id, all lines have same value of blacklisted codes 
-#' 11) there are <= 2 genome versions, including target genome version
-#' 12) files in gr_file and gr_excl_file always have the same genome version 
+#' 10) within same gr_id, all lines have same value of blacklisted codes
+#' 11) within same tumor_subtype, all lines have same value of blacklisted 
+#'     codes
+#' 12) there are <= 2 genome versions, including target genome version
+#' 13) files in gr_file and gr_excl_file always have the same genome version 
 #'     assigned to the same file
-#' 13) gr_id is defined by the same files and upstream/downstream combinations
+#' 14) gr_id is defined by the same files and upstream/downstream combinations
 #'     across tumor_subtypes and software
-#' 14) check, that if dndscv is requested, a gtf file is given
-#' 15) check, that if digdriver is requested, a gtf file is given, one per 
+#' 15) check, that if dndscv is requested, a gtf file is given
+#' 16) check, that if digdriver is requested, a gtf file is given, one per 
 #'     tumor
-#' 16) If union_percentage/intersect_percentage column are given, check that 
+#' 17) If union_percentage/intersect_percentage column are given, check that 
 #'     it is NA for rows with gr_code equals to CDS, and values in it in range
 #'     of 0 to 100 for the other rows 
 #' @author Maria Litovchenko 
@@ -391,7 +395,7 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
   blackListsDT <- data.table(blacklisted_codes = unique(result$blacklisted_codes))
   blackListsDT <- blackListsDT[complete.cases(blackListsDT)]
   if (nrow(blackListsDT) > 0) {
-    blackListsDT[, blacklisted_codes_parsed := strsplit(blacklisted_codes,',')]
+    blackListsDT[, blacklisted_codes_parsed := strsplit(blacklisted_codes,';')]
     colsOrder <- colnames(result)
     result <- merge(result, blackListsDT, by = 'blacklisted_codes', all.x = T)
     result[, blacklisted_codes := NULL]
@@ -409,7 +413,20 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
   }
   result <- do.call(rbind, result)
   
-  # 11) check, that there are <= 2 genome versions, including target genome
+  # 11) within same tumor_subtype, all lines have same value of blacklisted 
+  #     codes
+  result <- split(result, result$tumor_subtype)
+  sameBlackList <- sapply(result, 
+                          function(x) length(unique(x$blacklisted_codes)) == 1)
+  if (!all(sameBlackList)) {
+    stop('[', Sys.time(), '] Rows with the same tumor_subtype should have ',
+         'the same blacklisted_codes. Offending tumor_subtype: ',
+         paste(names(sameBlackList[!sameBlackList]), collapse = ', '), '.')
+  }
+  result <- do.call(rbind, result)
+  
+  
+  # 12) check, that there are <= 2 genome versions, including target genome
   #     version
   genomeVers <- c(result$gr_genome, result$gr_excl_genome, targetGenomeVersion)
   genomeVers <- unique(genomeVers)
@@ -420,7 +437,7 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
          'versions: ', paste(genomeVers, collapse = ', '), '.')
   }
   
-  # 12) check, that files in gr_file and gr_excl_file always have the same 
+  # 13) check, that files in gr_file and gr_excl_file always have the same 
   #     genome version assigned to the same file.
   fileToGenomeVers <- rbind(setNames(result[,.(gr_file, gr_genome)],
                                      c('filePath', 'genomeVersion')),
@@ -442,7 +459,7 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
          'correct.')
   }
   
-  # 13) check that gr_id is defined by the same files and upstream/downsteam 
+  # 14) check that gr_id is defined by the same files and upstream/downsteam 
   #     combinations across tumor_subtypes and softwares genome version
   grIdUniq <- lapply(split(result[, !colnames(result) %in% 
                                     c('restrictedTest', 'union_percentage',
@@ -465,14 +482,14 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
          'gr_ids.')
   }
   
-  # 14) check, that if dndscv is requested, a gtf file is given
+  # 15) check, that if dndscv is requested, a gtf file is given
   if ('dndscv' %in% result$software & 
       any(!result[software == 'dndscv']$gr_file_ext %in% 'gtf')) {
     stop('[', Sys.time(), '] Creation of regions input for dndscv from bed ',
          'files is not supported. Please submit gtf')
   }
   
-  # 15) check, that if digdriver is requested, a gtf file is given, one per 
+  # 16) check, that if digdriver is requested, a gtf file is given, one per 
   #     tumor
   if ('digdriver' %in% result$software) {
     digGTFcheck <- result[software == 'digdriver']
@@ -495,7 +512,7 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
   result[, gr_file_ext := NULL]
   result[, gr_excl_file_ext := NULL]
   
-  # 16) If union_percentage/intersect_percentage column are given, check that 
+  # 17) If union_percentage/intersect_percentage column are given, check that 
   #     it is NA for rows with gr_code equals to CDS, and values in it in range
   #     of 0 to 100 for the other rows 
   if (!'union_percentage' %in% colnames(result)) {
