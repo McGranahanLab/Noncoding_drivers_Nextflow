@@ -275,6 +275,143 @@ readSomaticVars <- function(filePath, cores = 1) {
   result
 }
 
+# FUNCTIONS: lifting over mutations -------------------------------------------
+#' liftOverVariants
+#' @description IF NESSECARY, lifts over coordinates from original genome given by 
+#' inDT to targetGenome with using chain chainObj
+#' @author Maria Litovchenko
+#' @param inDT data table with genomic regions. Columns chr, start, end, key, 
+#' somatic_genome, ref, var are required. Key column should contain a unique 
+#' identifier of a genomic region from the table, i.e. number of keys should be 
+#' the same as number of rows in inDT. origGenome column should contain the 
+#' same value for all rows.
+#' @param targetGenome target genome version
+#' @param chainObj chain to move genome coordinates from original genome 
+#' version to the target one
+#' @return lifted over genomic coordinates with added columns key_orig,
+#' chr_orig, start_orig, end_orig, somatic_genome_orig
+liftOverVariants <- function(inDT, targetGenome, chainObj) {
+  if (unique(inDT$somatic_genome) != targetGenome) {
+    message('[', Sys.time(), '] A liftover from ', unique(inDT$somatic_genome),
+            ' to ', targetGenome, ' for ', unique(inDT$participant_id),
+            ' will be performed.')
+    
+    # perform lift over
+    inGR <- makeGRangesFromDataFrame(inDT, keep.extra.columns = T)
+    seqlevelsStyle(inGR) <- seqlevelsStyle(chainObj)
+    result <- liftOver(inGR, chainObj)
+    result <- unlist(result)
+    rm(inGR) # free memory 
+    
+    # inform about not lifted variants
+    notLifted <- inDT[!key %in% result$key]
+    notLiftedPerc <- round(100 * length(notLifted) / nrow(inDT), 2)
+    message('[', Sys.time(), '] ', length(notLifted), '(', notLiftedPerc,
+            '%) variants were not lifted over for ', 
+            unique(inDT$participant_id))
+    
+    # inform if lifted variants are not uniquely mapped to the new genome
+    if (max(table(result$key)) > 1) {
+      nonUniqMap <- table(result$key)
+      nonUniqMap <- nonUniqMap[nonUniqMap > 1]
+      nonUniqMap <- data.table(ID = names(nonUniqMap), nVars = nonUniqMap)
+      nonUniqMap <- apply(nonUniqMap, 1, paste, collapse = ': ')
+      nonUniqMap <- paste(nonUniqMap, collapse = ', ')
+      message('[', Sys.time(), '] lift over for ', unique(inDT$participant_id),
+              ' had variants mapped non-uniquely: ', nonUniqMap)
+    }
+    
+    # update key column
+    keyUPD <- data.table(chr = as.character(seqnames(result)),
+                         pos = start(result), ref = result$ref,
+                         var = result$var)
+    result$keyUpd <-  gsub(' ', '', apply(keyUPD, 1, paste, collapse = ':'))
+    colnames(mcols(result)) <- gsub('somatic_genome', 'somatic_genome_orig',
+                                    colnames(mcols(result)))
+    result$somatic_genome <- targetGenome
+    result <- as.data.table(result)
+    result[, strand := NULL]
+    result[, width := NULL]
+    setnames(result, 'seqnames', 'chr')
+  } else {
+    result <- copy(inDT)
+    
+    # update key column
+    keyUPD <- result[,.(chr, start, ref, var)]
+    result[, keyUpd :=  gsub(' ', '', apply(keyUPD, 1, paste, collapse = ':'))]
+    colnames(result) <- gsub('somatic_genome', 'somatic_genome_orig',
+                             colnames(result))
+    result$somatic_genome <- targetGenome
+  }
+  
+  # add columns with original chr, start and end columns
+  origPos <- inDT[,.(key, chr, start, end)]
+  setnames(origPos, c('chr', 'start', 'end'), 
+           c('chr_orig', 'start_orig', 'end_orig'))
+  result <- merge(result, origPos, by = 'key', all.x = T)
+  setnames(result, c('key', 'keyUpd'), c('key_orig', 'key'))
+  setcolorder(result, colnames(inDT))
+  
+  result
+}
+
+# FUNCTIONS: filtering mutations by black& white regions ----------------------
+#' filterVarsByBlackWhiteList
+#' @description 
+#' @author Maria Litovchenko
+#' @param varsDT data table with variants. Columns chr, start, end are 
+#' essential
+#' @param bwFile path to file with black- or white- listed genomic regions.
+#' @param bwName string, a code name for black- or white- listed genomic 
+#' regions file
+#' @param chrStyle character, one of NCBI or UCSC which determine chromosome
+#' naming style (1 or chr1 respectively). Final result will have this 
+#' chromosome naming style.
+#' @param bwScoreCol string, name of the column containing scores on which 
+#' regions should be filtred.
+#' @param bwScoreMin numeric, minimum value of a score
+#' @param bwScoreMax numeric, maximum value of a score
+#' @param cores number of cores
+#' @param roiGR GRanges, regions of interest. If given (not NULL), only regions
+#' of interest will be read from the file.
+#' @return a filtered data table with variants
+filterVarsByBlackWhiteList <- function(varsDT, bwFile, chrStyle, bwName, 
+                                       bwFileType, bwScoreCol = NA, 
+                                       bwScoreMin = NA,  bwScoreMax = NA, 
+                                       cores = 1) {
+  if (chrStyle != 'NCBI' & chrStyle != 'UCSC') {
+    stop('[', Sys.time(), '] chrStyle should be one of NCBI or UCSC. Current ',
+         'value: ', chrStyle, '.')
+  }
+  
+  message('[', Sys.time(), '] Started filtering variants by ', bwName)
+  
+  # read black- or white- listed files
+  annoGR <- readInAndFilterBWregions(bwFile, chrStyle, bwScoreCol, bwScoreMin,
+                                     bwScoreMax, cores)
+  # convert variants to Granges
+  result <- makeGRangesFromDataFrame(varsDT, keep.extra.columns = T)
+  seqlevelsStyle(result) <- chrStyle
+  before <- nrow(varsDT)
+  # find overlaps between black- or white- listed regions and variants
+  annoOvrl <- as.data.table(findOverlaps(result, annoGR, ignore.strand = F))
+  colnames(annoOvrl) <- c('varIdx', 'annoIdx')
+  # filtering
+  if (bwFileType == 'white') {
+    result <- varsDT[unique(annoOvrl$varIdx)]
+  } else {
+    result <- varsDT[setdiff(1:nrow(varsDT), unique(annoOvrl$varIdx))]
+  }
+  after <- nrow(result)
+  if (after != before) {
+    message('[', Sys.time(), '] Removed ', before - after, '(',
+            round(100 * (before - after) / before, 2), '%) mutations becasuse',
+            ' of filtering by ', bwName)
+  }
+  message('[', Sys.time(), '] Finished filtering variants by ', bwName)
+  
+  result
+}
 
 # Parse input arguments -------------------------------------------------------
 # create parser object
@@ -419,7 +556,19 @@ if (!is.null(args$blacklist_inventory)) {
 # select cancer subtype
 patientsInv <- patientsInv[tumor_subtype %in% args$cancer_subtype]
 analysisInv <- analysisInv[tumor_subtype %in% args$cancer_subtype]
-
+# select only black&white lists which will be used in the future
+if (!is.null(args$blacklist_inventory)) {
+  uniqBWcodes <- unlist(unique(analysisInv$blacklisted_codes))
+  if (!any(is.na(uniqBWcodes))) {
+    if (any(uniqBWcodes != '')) {
+      bwInv <- bwInv[list_name %in% uniqBWcodes]
+    } else {
+      bwInv <- NULL
+    }
+  } else {
+    bwInv <- NULL
+  }
+}
 message('[', Sys.time(), '] Read inventories')
 
 # READ mutations files --------------------------------------------------------
@@ -725,17 +874,19 @@ if (any(unique(allVars$somatic_genome) != args$target_genome_version)) {
 }
 
 # FILTER variants: location in black-/white- listed regions -------------------
-if (!is.null(bwInv)) {
-  for (i in 1:nrow(bwInv)) {
-    allVars <- filterVarsByBlackWhiteList(varsDT = allVars,
-                                          bwFile = bwInv$file_path[i],
-                                          chrStyle = outChrStyle,
-                                          bwName = bwInv$list_name[i],
-                                          bwFileType = bwInv$file_type[i],
-                                          bwScoreCol = bwInv$score_column[i],
-                                          bwScoreMin = bwInv$min_value[i],
-                                          bwScoreMax = bwInv$max_value[i],
-                                          cores = args$cores)
+if ('blacklisted_codes' %in% colnames(analysisInv)) {
+  if (!is.null(bwInv)) {
+    for (i in 1:nrow(bwInv)) {
+      allVars <- filterVarsByBlackWhiteList(varsDT = allVars,
+                                            bwFile = bwInv$file_path[i],
+                                            chrStyle = outChrStyle,
+                                            bwName = bwInv$list_name[i],
+                                            bwFileType = bwInv$file_type[i],
+                                            bwScoreCol = bwInv$score_column[i],
+                                            bwScoreMin = bwInv$min_value[i],
+                                            bwScoreMax = bwInv$max_value[i],
+                                            cores = args$cores)
+    }
   }
 }
 
