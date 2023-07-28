@@ -205,6 +205,17 @@ readAnalysisInventory <- function(inventoryPath, cores = 1) {
   result[, gr_excl_downstr := as.integer(gr_excl_downstr)]
   result[, gr_excl_genome := as.character(gr_excl_genome)]
   result[, blacklisted_codes := as.character(blacklisted_codes)]
+  blackListsDT <- data.table(blacklisted_codes = unique(result$blacklisted_codes))
+  blackListsDT <- blackListsDT[complete.cases(blackListsDT)]
+  if (nrow(blackListsDT) > 0) {
+    blackListsDT[, blacklisted_codes_parsed := strsplit(blacklisted_codes,';')]
+    colsOrder <- colnames(result)
+    result <- merge(result, blackListsDT, by = 'blacklisted_codes', all.x = T)
+    result[, blacklisted_codes := NULL]
+    setnames(result, 'blacklisted_codes_parsed', 'blacklisted_codes')
+    setcolorder(result, colsOrder)
+    rm(colsOrder, blackListsDT)
+  }
   
   result
 }
@@ -227,6 +238,124 @@ readBlacklistInventory <- function(inventoryPath, cores = 1) {
   result[, file_genome := as.character(file_genome)]
   result[, file_type := as.character(file_type)]
   result[, score_column := as.character(score_column)]
+  result
+}
+
+# Reading black&white regions lists -------------------------------------------
+#' readMappabilityTracks
+#' @description  Reads mappability tracks to data table. Accepts only bigwig
+#' (bw), bed and gtf files. Bed files can be gziped.
+#' @author Maria Litovchenko
+#' @param filePath path to the file.
+#' @param cores number of cores to use (used in fread only)
+#' @param roiGR GRanges, regions of interest. If given (not NULL), only regions
+#' of interest will be read from the file.
+#' @return data table.
+#' @export
+readMappabilityTracks <- function(filePath, cores = 1, roiGR = NULL) {
+  fileExt <- gsub('.gz$', '', tolower(filePath))
+  fileExt <- gsub('.*[.]', '', fileExt)
+  
+  if (!grepl('bed|bigwig|bw|gtf', fileExt)) {
+    msg <- paste('Unrecognized mappability file format:', filePath,
+                 'only bigwig (bw), bed and gtf formats are acceptable.',
+                 'Please provide files with bw or bed in file extension.')
+    stop(msg)
+  }
+  
+  if (is.null(roiGR)) {
+    mapTrack <- import(filePath)
+  } else {
+    mapTrack <- import(filePath, which = roiGR)
+  }
+  
+  if (fileExt == 'gtf') {
+    message('[', Sys.time(), '] GTF file as black-/white- list file was ',
+            'submitted. All entries in the file will be used.')
+    mapTrack <- disjoin(reduce(mapTrack))
+  }
+  
+  mapTrack <- as.data.table(mapTrack)
+  setnames(mapTrack, 'seqnames', 'chr')
+  
+  mapTrack
+}
+
+#' filterBWregions
+#' @description Filters black- or white- listed regions according to the 
+#' requested range of values in bwScoreCol column.
+#' @author Maria Litovchenko
+#' @param bwGRs GRanges object representation of black and white regions
+#' @param bwScoreCol string, name of the column containing scores on which 
+#' regions should be filtred.
+#' @param bwScoreMin numeric, minimum value of a score
+#' @param bwScoreMax numeric, maximum value of a score
+#' @return filtered Granges
+#' @export
+filterBWregions <- function(bwGRs, bwScoreCol = NA, bwScoreMin = NA, 
+                            bwScoreMax = NA) {
+  if (!is.na(bwScoreCol)) {
+    result <- bwGRs[as.vector(bwGRs[, bwScoreCol, with = F] >= bwScoreMin), ]
+    result <- result[as.vector(result[, bwScoreCol, with = F] <= bwScoreMax), ]
+  } else {
+    result <- copy(bwGRs)
+  }
+  result
+}
+
+#' readInAndFilterBWregions
+#' @description Reads in and filters, if required, file with black- or white-
+#' listed genomic regions.
+#' @author Maria Litovchenko
+#' @param bwFile path to file with black- or white- listed genomic regions.
+#' @param chrStyle character, one of NCBI or UCSC which determine chromosome
+#' naming style (1 or chr1 respectively). Final result will have this 
+#' chromosome naming style.
+#' @param bwScoreCol string, name of the column containing scores on which 
+#' regions should be filtred.
+#' @param bwScoreMin numeric, minimum value of a score
+#' @param bwScoreMax numeric, maximum value of a score
+#' @param roiGR GRanges, regions of interest. If given (not NULL), only regions
+#' of interest will be read from the file.
+#' @return GRanges object
+#' @export
+readInAndFilterBWregions <- function(bwFile, chrStyle, bwScoreCol = NA, 
+                                     bwScoreMin = NA, bwScoreMax = NA, 
+                                     cores = 1, roiGR = NULL) {
+  if (chrStyle != 'NCBI' & chrStyle != 'UCSC') {
+    stop('[', Sys.time(), '] chrStyle should be one of NCBI or UCSC.')
+  }
+  
+  message('[', Sys.time(), '] Started reading ', bwFile)
+  if (!is.null(roiGR)) {
+    nbefore <- 0
+    result <- data.table()
+    for (chrID in sort(unique(as.character(seqnames(roiGR))))) {
+      message('[', Sys.time(), ']\t processing chromosome ', chrID)
+      oneChr <- readMappabilityTracks(bwFile, cores, 
+                                      roiGR[seqnames(roiGR) == chrID])
+      nbefore <- nbefore + length(oneChr)
+      result <- rbind(result, filterBWregions(oneChr, bwScoreCol, 
+                                              bwScoreMin, bwScoreMax))
+    }
+  } else {
+    result <- readMappabilityTracks(bwFile, cores)
+    nbefore <- length(result)
+    result <- filterBWregions(result, bwScoreCol, bwScoreMin, bwScoreMax)
+  }
+  result <- as.data.table(result)
+  if (!is.na(bwScoreCol)) {
+    nafter <- length(result)
+    message('[', Sys.time(), '] Removed ', nbefore - nafter, '(',
+            round(100 * (nbefore - nafter) / nbefore, 2), '%) entries from ', 
+            bwFile, ' due to not passing cut offs on ', bwScoreCol)
+    
+  }
+  message('[', Sys.time(), '] Finished reading ', bwFile)
+  
+  result <- makeGRangesFromDataFrame(result)
+  seqlevelsStyle(result) <- chrStyle
+  
   result
 }
 
