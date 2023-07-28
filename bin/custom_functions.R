@@ -237,6 +237,7 @@ readBlacklistInventory <- function(inventoryPath, cores = 1) {
 #' @author Maria Litovchenko
 #' @param fastaPath path to fasta file
 #' @return UCSC, in case naming format is chr1, and NCBI otherwise
+#' @export
 getSeqlevelsStyle <- function(fastaPath) {
   # read just the first line
   result <- fread(fastaPath, nrows = 1, header = F)$V1

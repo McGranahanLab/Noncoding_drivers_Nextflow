@@ -9,7 +9,12 @@
 #
 # REQUIREMENTS: 
 # BUGS: --
-# NOTES:  
+# NOTES: It may seem excessive to filter mutations by location in black&white
+# regions because genomic regions of interest will exclude those regions 
+# anyway. Yet, in some tools, i.e. dNdScv we will not be able to completely 
+# remove regions overlapping black&white regions as that will disrupt internal
+# gene structure. Therefore, it is best to filter mutations by location in 
+# black&white regions as well.
 # AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk
 # COMPANY:  UCL, Cancer Institute, London, the UK
 # VERSION:  1
@@ -283,12 +288,22 @@ patientsHelp <- paste('Path to patientsInv table listing information about',
 parser$add_argument("-p", "--inventory_patients", required = T, 
                     type = 'character', help = patientsHelp)
 
+analysisHelp <- paste('Path to inventory table containing details of the',
+                      'future analysis to be conducted. Minimal columns:',
+                      'tumor_subtype,', 'software,', 'gr_id,', 'gr_code,', 
+                      'gr_file,', 'gr_upstr,', 'gr_downstr,', 'gr_genome,', 
+                      'gr_excl_id,', 'gr_excl_code,', 'gr_excl_file,',
+                      'gr_excl_upstr,', 'gr_excl_downstr,', 'gr_excl_genome,',
+                      'blacklisted_codes.')
+parser$add_argument("-a", "--inventory_analysis", required = T, 
+                    type = 'character', help = analysisHelp)
+
 subtypeHelp <- paste('A cancer subtype to select from patientsInv table. Only',
                      'mutations from patients with that cancer type will be',
                      'selected. In case an analysis of several cancer types',
                      'needed to be performed please run this script ',
                      'separetedly for each cancer type.')
-parser$add_argument("-c", "--cancer_subtype", required = F, type = 'character',
+parser$add_argument("-c", "--cancer_subtype", required = T, type = 'character',
                     default = NULL, help = subtypeHelp)
 
 blackListHelp <- paste('Path to patientsInv table containing details of the',
@@ -365,6 +380,7 @@ parser$add_argument("-n", "--cores", required = F, type = 'integer',
 
 # Test input args -------------------------------------------------------------
 args <- list(inventory_patients = '../data/inventory/inventory_patients_tcga.csv',
+             inventory_analysis = '../data/inventory/inventory_analysis_tcga.csv',
              blacklist_inventory = '../data/inventory/inventory_blacklist_tcga.csv', 
              cancer_subtype = 'LUSC', min_depth = 30, 
              min_tumor_vac = 10, max_germline_vac = 5,
@@ -387,7 +403,24 @@ printArgs(args)
 
 # READ inventories ------------------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients, args$cores)
-bwInv <- readBlacklistInventory(args$blacklist_inventory, args$cores)
+# check that if somatic_genome in patientsInv is not the same as target one
+# chain file is submitted
+if (any(!unique(patientsInv$somatic_genome) %in% args$target_genome_version) &
+    is.null(args$chain)) {
+  stop('[', Sys.time(), '] genome version of some mutation tables is not ',
+       'the same as --target_genome_version, but no chain file is provided')
+}
+
+analysisInv <- readAnalysisInventory(args$inventory_analysis, args$cores)
+if (!is.null(args$blacklist_inventory)) {
+  bwInv <- readBlacklistInventory(args$blacklist_inventory, args$cores)
+}
+
+# select cancer subtype
+patientsInv <- patientsInv[tumor_subtype %in% args$cancer_subtype]
+analysisInv <- analysisInv[tumor_subtype %in% args$cancer_subtype]
+
+message('[', Sys.time(), '] Read inventories')
 
 # READ mutations files --------------------------------------------------------
 message('[', Sys.time(), '] Started reading input mutation files')
@@ -405,9 +438,6 @@ for (i in 1:n_files) {
   if ((100 * (i / n_files)) %% 2) {
     message('\t[', Sys.time(), '] Read: ', round(100 * (i / n_files), 2), '%')
   }
-  
-  insert here on i = 1 checks that all needed columns are present in case
-  filtering by vaf is requested
 }
 
 allVars <- as.data.table(do.call(rbind.fill, allVars))
@@ -431,8 +461,8 @@ allVars <- allVars[chr %in% acceptedChrNames]
 after <- nrow(allVars)
 if (after != before) {
   message('[', Sys.time(), '] Removed ', before - after, ' out of ', before, 
-          ' (', round(100 * (before - after)/ before), '%) because of non ',
-          'canonical chromosome')
+          ' (', round(100 * (before - after)/ before), '%) mutations because ',
+          'of non canonical chromosome')
 }
 
 # 2) duplicated mutations
@@ -441,8 +471,8 @@ allVars <- allVars[!duplicated(allVars)]
 after <- nrow(allVars)
 if (after != before) {
   message('[', Sys.time(), '] Removed ', before - after, ' out of ', before, 
-          ' (', round(100 * (before - after)/ before), '%) because of ',
-          'duplication')
+          ' (', round(100 * (before - after)/ before), '%) mutations because ',
+          'of duplication')
 }
 
 # 3) N as ref or alt allele
@@ -451,8 +481,8 @@ allVars <- allVars[ref != 'N' & var != 'N']
 after <- nrow(allVars)
 if (after != before) {
   message('[', Sys.time(), '] Removed ', before - after, ' out of ',  before, 
-          ' (', round(100 * (before - after)/ before), '%) because of N in ',
-          'ref/alt')
+          ' (', round(100 * (before - after)/ before), '%) mutations because ',
+          'of N in ref/alt')
 }
 
 # 4) equal alt and ref
@@ -461,176 +491,224 @@ allVars <- allVars[ref != var]
 after <- nrow(allVars)
 if (after != before) {
   message('[', Sys.time(), '] Removed ', before - after, ' out of ', before, 
-          ' (',  round(100 * (before - after)/ before), '%) ref = alt')
+          ' (',  round(100 * (before - after)/before), '%) mutations because ',
+          'of ref = alt')
 }
 
 # FILTER variants : VAF, ALT counts, etc --------------------------------------
-# These are just basic filters, they are needed to filter out low confidence 
-# variants.
-# 1st filter: VAF > 5%,  varCount > 10, germline VAF < 1%, germ var count < 5,
-# depth > 30
-if (all(c('t_depth', 't_alt_count', 'n_depth', 'n_alt_count') %in%
-        colnames(allVars))) {
-  if(!is.null(args$min_depth)) {
-    # inform about number of entries and participants with NA in t_depth or 
-    # n_depth
-    nNA <- nrow(allVars[is.na(t_depth) | is.na(n_depth)])
-    nParticipantsNA <- allVars[is.na(t_depth) | 
-                                 is.na(n_depth)][,.(participant_id, 
-                                                    cohort_name)]
-    nParticipantsNA <- unique(nParticipantsNA)
-    nParticipantsNA <- nParticipantsNA[,.N, by = cohort_name]
-    nParticipantsNA <- apply(nParticipantsNA, 1, 
-                             function(x) paste0(x['N'], ' from ',
-                                                x['cohort_name'], ' cohort'))
-    nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
-    message('[', Sys.time(), '] Found ', nNA, ' entries with NA in t_depth ',
-            'or n_depth columns in participants: ', nParticipantsNA, 
-            '. The entries will NOT be filtered out. If it is undesirable ',
-            'behaviour, consider adding column(s) t_depth/n_depth to the ',
-            'corresponding mutational tables and set values to 0.')
+# 1) minimum depth of coverage for mutations
+if (!is.null(args$min_depth)) {
+  if ('t_depth' %in% colnames(allVars)) {
+    # inform about number of entries and participants with NA in t_depth
+    nNA <- nrow(allVars[is.na(t_depth)])
+    if (nNA > 0) {
+      nParticipantsNA <- unique(allVars[is.na(t_depth)]$participant_id)
+      nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
+      message('[', Sys.time(), '] Found ', nNA, ' entries with NA in t_depth ',
+              'column in participants: ', nParticipantsNA, '. ',
+              'The entries will NOT be filtered out. If it is undesirable ',
+              'behaviour, consider adding column(s) t_depth to the ',
+              'corresponding mutational tables and set values to 0.')
+    }
     
     before <- nrow(allVars)
     allVars <- allVars[t_depth >= args$min_depth | is.na(t_depth)]
-    message('[', Sys.time(), '] Removed ', before - nrow(allVars), ' out of ', 
-            before, ' (', round(100 * (before - nrow(allVars))/ before),  
-            '%) because low (< ', args$min_depth, ') tumor depth')
+    after <- nrow(allVars)
+    if (after != before) {
+      message('[', Sys.time(), '] Removed ', before - after, ' out of ', 
+              before, ' (', round(100 * (before - after)/ before), '%) ',
+              'mutations because of low (< ', args$min_depth, ') tumor depth.')
+    }
+  } else {
+    warning('[', Sys.time(), '] an argument is given to --min_depth, but ',
+            'column t_depth is not found in the mutation table. Filtering ',
+            'will not be performed.')
+  }
+  if ('n_depth' %in% colnames(allVars)) {
+    # inform about number of entries and participants with NA in n_depth
+    nNA <- nrow(allVars[is.na(n_depth)])
+    if (nNA > 0) {
+      nParticipantsNA <- unique(allVars[is.na(n_depth)]$participant_id)
+      nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
+      message('[', Sys.time(), '] Found ', nNA, ' entries with NA in n_depth ',
+              'column in participants: ', nParticipantsNA, '. ',
+              'The entries will NOT be filtered out. If it is undesirable ',
+              'behaviour, consider adding column(s) n_depth to the ',
+              'corresponding mutational tables and set values to 0.')
+    }
     
     before <- nrow(allVars)
     allVars <- allVars[n_depth >= args$min_depth | is.na(n_depth)]
-    message('[', Sys.time(), '] Removed ', before - nrow(allVars), ' out of ', 
-            before, ' (', round(100 * (before - nrow(allVars))/ before),  
-            '%) because low (< ', args$min_depth, ') normal depth')
+    after <- nrow(allVars)
+    if (after != before) {
+      message('[', Sys.time(), '] Removed ', before - after, ' out of ', 
+              before, ' (', round(100 * (before - after)/ before), '%) ',
+              'mutations because of low (< ', args$min_depth, ') tumor depth.')
+    }
+  } else {
+    warning('[', Sys.time(), '] an argument is given to --min_depth, but ',
+            'column n_depth is not found in the mutation table. Filtering ',
+            'will not be performed.')
   }
-  
-  if(!is.null(args$min_tumor_vaf)) {
+}
+
+# 2) minimum VAF for tumor mutations
+if (!is.null(args$min_tumor_vaf)) {
+  if ('t_alt_count' %in% colnames(allVars) & 
+      't_depth' %in% colnames(allVars)) {
     # inform about number of entries and participants with NA in t_alt_count or 
     # t_depth
     nNA <- nrow(allVars[is.na(t_alt_count) | is.na(t_depth)])
-    nParticipantsNA <- allVars[is.na(t_alt_count) | 
-                                 is.na(t_depth)][,.(participant_id, 
-                                                    cohort_name)]
-    nParticipantsNA <- unique(nParticipantsNA)
-    nParticipantsNA <- nParticipantsNA[,.N, by = cohort_name]
-    nParticipantsNA <- apply(nParticipantsNA, 1, 
-                             function(x) paste0(x['N'], ' from ',
-                                                x['cohort_name'], ' cohort'))
-    nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
-    message('[', Sys.time(), '] Found ', nNA, ' entries with NA in ',
-            't_alt_count or t_depth columns in participants: ', 
-            nParticipantsNA, '. The entries will NOT be filtered out. If it ',
-            'is undesirable behaviour, consider adding column(s) ',
-            't_alt_count and t_depth to the corresponding mutational tables ',
-            'and set up proper values.')
+    if (nNA > 0) {
+      nParticipantsNA <- allVars[is.na(t_alt_count) | is.na(t_depth)]
+      nParticipantsNA <- unique(nParticipantsNA$participant_id)
+      nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
+      message('[', Sys.time(), '] Found ', nNA, ' entries with NA in t_depth ',
+              't_alt_count or t_depth columns in participants: ', 
+              nParticipantsNA, '. The entries will NOT be filtered out. If ',
+              'it is undesirable behaviour, consider adding column(s) ',
+              't_depth and t_alt_count to the corresponding mutational ',
+              'tables and set values to 0.')
+    }
     
     before <- nrow(allVars)
     allVars <- allVars[100 * t_alt_count / t_depth  >= args$min_tumor_vaf |
                          is.na(t_alt_count) | is.na(t_depth)]
-    message('[', Sys.time(), '] Removed ', before - nrow(allVars), ' out of ', 
-            before, ' (', round(100 * (before - nrow(allVars))/ before),  
-            '%) because low (< ', args$min_tumor_vaf, ') tumor VAF')
+    after <- nrow(allVars)
+    if (after != before) {
+      message('[', Sys.time(), '] Removed ', before - after, ' out of ',
+              before, ' (', round(100 * (before - after)/ before),
+              '%) mutations because of low (< ', args$min_tumor_vaf,
+              ') tumor VAF')
+    }
+  } else {
+    if ('t_maxVAF' %in% colnames(allVars)) {
+      # inform about number of entries and participants with NA in t_maxVAF 
+      nNA <- nrow(allVars[is.na(t_maxVAF)])
+      if (nNA > 0) {
+        nParticipantsNA <- unique(allVars[is.na(t_maxVAF)]$participant_id)
+        nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
+        message('[', Sys.time(), '] Found ', nNA, ' entries with NA in ',
+                't_maxVAF column in participants: ',  nParticipantsNA, 
+                '. The entries will NOT be filtered out. If it ',
+                'is undesirable behaviour, consider adding column t_maxVAF ',
+                'to the corresponding mutational tables and set up proper ',
+                'values.')
+      }
+      
+      before <- nrow(allVars)
+      allVars <- allVars[t_maxVAF  >= args$min_tumor_vaf | is.na(t_maxVAF)]
+      after <- nrow(allVars)
+      if (after != before) {
+        message('[', Sys.time(), '] Removed ', before - after, ' out of ', 
+                before, ' (', round(100 * (before - after)/ before),  
+                '%) because low (< ', args$min_tumor_vaf, ') tumor VAF')
+      }
+    } else {
+      warning('[', Sys.time(), '] an argument is given to --min_tumor_vaf, ',
+              'but columns t_alt_count and t_depth or t_maxVAF are not found ',
+              'in the mutation table. Filtering will not be performed.')
+    }
   }
-  
-  if(!is.null(args$min_tumor_vac)) {
-    # inform about number of entries and participants with NA in t_alt_count 
+}
+
+# 3) minimum VAC for tumor mutations
+if (!is.null(args$min_tumor_vac)) {
+  if ('t_alt_count' %in% colnames(allVars)) {
+    # inform about number of entries and participants with NA in t_alt_count
     nNA <- nrow(allVars[is.na(t_alt_count)])
-    nParticipantsNA <- allVars[is.na(t_alt_count)][,.(participant_id, 
-                                                      cohort_name)]
-    nParticipantsNA <- unique(nParticipantsNA)
-    nParticipantsNA <- nParticipantsNA[,.N, by = cohort_name]
-    nParticipantsNA <- apply(nParticipantsNA, 1, 
-                             function(x) paste0(x['N'], ' from ',
-                                                x['cohort_name'], ' cohort'))
-    nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
-    message('[', Sys.time(), '] Found ', nNA, ' entries with NA in ',
-            't_alt_count column in participants: ',  nParticipantsNA, 
-            '. The entries will NOT be filtered out. If it ',
-            'is undesirable behaviour, consider adding column t_alt_count ',
-            'to the corresponding mutational tables and set up proper values.')
+    if (nNA > 0) {
+      nParticipantsNA <- unique(allVars[is.na(t_alt_count)]$participant_id)
+      nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
+      message('[', Sys.time(), '] Found ', nNA, ' entries with NA in ',
+              't_alt_count column in participants: ', nParticipantsNA, '. ',
+              'The entries will NOT be filtered out. If it is undesirable ',
+              'behaviour, consider adding column(s) t_alt_count to the ',
+              'corresponding mutational tables and set values to 0.')
+    }
     
     before <- nrow(allVars)
-    allVars <- allVars[t_alt_count  >= args$min_tumor_vac | is.na(t_alt_count)]
-    message('[', Sys.time(), '] Removed ', before - nrow(allVars), ' out of ', 
-            before, ' (', round(100 * (before - nrow(allVars))/ before),  
-            '%) because low (< ', args$min_tumor_vac, ') tumor VAC')
+    allVars <- allVars[t_alt_count >= args$min_tumor_vac | is.na(t_alt_count)]
+    after <- nrow(allVars)
+    if (after != before) {
+      message('[', Sys.time(), '] Removed ', before - after, ' out of ',
+              before, ' (', round(100 * (before - after)/ before),
+              '%) mutations because of low (< ', args$min_tumor_vac,
+              ') tumor VAC')
+    }
+  } else {
+    warning('[', Sys.time(), '] an argument is given to --min_tumor_vac, but ',
+            'column t_alt_count is not found in the mutation table. ',
+            'Filtering will not be performed.')
   }
-  
-  if(!is.null(args$max_germline_vaf)) {
+}
+
+# 4) maximum germline VAF 
+if(!is.null(args$max_germline_vaf)) {
+  if ('n_alt_count' %in% colnames(allVars) & 
+      'n_depth' %in% colnames(allVars)) {
     # inform about number of entries and participants with NA in n_alt_count or 
     # n_depth
     nNA <- nrow(allVars[is.na(n_alt_count) | is.na(n_depth)])
-    nParticipantsNA <- allVars[is.na(n_alt_count) | 
-                                 is.na(n_depth)][,.(participant_id, 
-                                                    cohort_name)]
-    nParticipantsNA <- unique(nParticipantsNA)
-    nParticipantsNA <- nParticipantsNA[,.N, by = cohort_name]
-    nParticipantsNA <- apply(nParticipantsNA, 1, 
-                             function(x) paste0(x['N'], ' from ',
-                                                x['cohort_name'], ' cohort'))
-    nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
-    message('[', Sys.time(), '] Found ', nNA, ' entries with NA in ',
-            'n_alt_count or n_depth columns in participants: ', 
-            nParticipantsNA, '. The entries will NOT be filtered out. If it ',
-            'is undesirable behaviour, consider adding column(s) ',
-            'n_alt_count and n_depth to the corresponding mutational tables ',
-            'and set up proper values.')
+    if (nNA > 0) {
+      nParticipantsNA <- allVars[is.na(n_alt_count) | is.na(n_depth)]
+      nParticipantsNA <- unique(nParticipantsNA$participant_id)
+      nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
+      message('[', Sys.time(), '] Found ', nNA, ' entries with NA in ',
+              'n_alt_count or n_depth columns in participants: ', 
+              nParticipantsNA, '. The entries will NOT be filtered out. If ',
+              'it is undesirable behaviour, consider adding column(s) ',
+              'n_alt_count and n_depth to the corresponding mutational ',
+              'tables and set up proper values.')
+    }
     
     before <- nrow(allVars)
     allVars <- allVars[100 * n_alt_count / n_depth  <= args$max_germline_vaf | 
                          is.na(n_alt_count) | is.na(n_depth)]
-    message('[', Sys.time(), '] Removed ', before - nrow(allVars), ' out of ', 
-            before, ' (', round(100 * (before - nrow(allVars))/ before),  
-            '%) because high (> ', args$max_germline_vaf, ') germline VAF')
-  }
-  
-  if(!is.null(args$max_germline_vac)) {
-    # inform about number of entries and participants with NA in n_alt_count 
-    nNA <- nrow(allVars[is.na(n_alt_count)])
-    nParticipantsNA <- allVars[is.na(n_alt_count)][,.(participant_id, 
-                                                      cohort_name)]
-    nParticipantsNA <- unique(nParticipantsNA)
-    nParticipantsNA <- nParticipantsNA[,.N, by = cohort_name]
-    nParticipantsNA <- apply(nParticipantsNA, 1, 
-                             function(x) paste0(x['N'], ' from ',
-                                                x['cohort_name'], ' cohort'))
-    nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
-    message('[', Sys.time(), '] Found ', nNA, ' entries with NA in ',
-            'n_alt_count column in participants: ',  nParticipantsNA, 
-            '. The entries will NOT be filtered out. If it ',
-            'is undesirable behaviour, consider adding column n_alt_count ',
-            'to the corresponding mutational tables and set up proper values.')
-    
-    before <- nrow(allVars)
-    allVars <- allVars[n_alt_count  <= args$max_germline_vac | 
-                         is.na(n_alt_count)]
-    message('[', Sys.time(), '] Removed ', before - nrow(allVars), ' out of ', 
-            before, ' (', round(100 * (before - nrow(allVars))/ before),  
-            '%) because high (> ', args$max_germline_vac, ') germline VAC')
+    after <- nrow(allVars)
+    if (after != before) {
+      message('[', Sys.time(), '] Removed ', before - after, ' out of ', 
+              before, ' (', round(100 * (before - after)/ before), '%) ',
+              'mutations because of high (> ', args$max_germline_vaf, 
+              ') germline VAF')
+    }
+  } else {
+    warning('[', Sys.time(), '] an argument is given to --max_germline_vaf, ',
+            'but columns n_alt_count and n_depth are not found in the ',
+            'mutation table. Filtering will not be performed.')
   }
 }
 
-if ('t_maxVAF' %in% colnames(allVars) & !is.null(args$min_tumor_vaf)) {
-  # inform about number of entries and participants with NA in t_maxVAF 
-  nNA <- nrow(allVars[is.na(t_maxVAF)])
-  nParticipantsNA <- allVars[is.na(t_maxVAF)][,.(participant_id, 
-                                                 cohort_name)]
-  nParticipantsNA <- unique(nParticipantsNA)
-  nParticipantsNA <- nParticipantsNA[,.N, by = cohort_name]
-  nParticipantsNA <- apply(nParticipantsNA, 1, 
-                           function(x) paste0(x['N'], ' from ',
-                                              x['cohort_name'], ' cohort'))
-  nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
-  message('[', Sys.time(), '] Found ', nNA, ' entries with NA in ',
-          't_maxVAF column in participants: ',  nParticipantsNA, 
-          '. The entries will NOT be filtered out. If it ',
-          'is undesirable behaviour, consider adding column t_maxVAF ',
-          'to the corresponding mutational tables and set up proper values.')
-  
-  before <- nrow(allVars)
-  allVars <- allVars[t_maxVAF  >= args$min_tumor_vaf | is.na(t_maxVAF)]
-  message('[', Sys.time(), '] Removed ', before - nrow(allVars), ' out of ', 
-          before, ' (', round(100 * (before - nrow(allVars))/ before),  
-          '%) because low (< ', args$min_tumor_vaf, ') tumor VAF')
+# 5) Maximum germline VAC
+if (!is.null(args$max_germline_vac)) {
+  if ('n_alt_count' %in% colnames(allVars)) {
+    # inform about number of entries and participants with NA in n_alt_count
+    nNA <- nrow(allVars[is.na(n_alt_count)])
+    if (nNA > 0) {
+      nParticipantsNA <- unique(allVars[is.na(n_alt_count)]$participant_id)
+      nParticipantsNA <- paste(nParticipantsNA, collapse = '; ')
+      message('[', Sys.time(), '] Found ', nNA, ' entries with NA in ',
+              'n_alt_count column in participants: ', nParticipantsNA, '. ',
+              'The entries will NOT be filtered out. If it is undesirable ',
+              'behaviour, consider adding column(s) n_alt_count to the ',
+              'corresponding mutational tables and set values to 0.')
+    }
+    
+    before <- nrow(allVars)
+    allVars <- allVars[n_alt_count <= args$max_germline_vac | 
+                         is.na(n_alt_count)]
+    after <- nrow(allVars)
+    if (after != before) {
+      message('[', Sys.time(), '] Removed ', before - after, ' out of ',
+              before, ' (', round(100 * (before - after)/before),
+              '%) mutations because of high (> ', args$max_germline_vac,
+              ') germline VAC')
+    }
+  } else {
+    warning('[', Sys.time(), '] an argument is given to --max_germline_vac, ',
+            'but column n_alt_count is not found in the mutation table. ',
+            'Filtering will not be performed.')
+  }
 }
 
 # LIFTOVER variants to target genome ------------------------------------------
