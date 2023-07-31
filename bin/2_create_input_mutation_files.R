@@ -1,11 +1,34 @@
 #!/usr/bin/env Rscript
-# FILE: create_input_mutation_files.R -----------------------------------------
+# FILE: 2_create_input_mutation_files.R ---------------------------------------
 #
-# DESCRIPTION:
+# DESCRIPTION: Creates input mutation files for the requested de-novo cancer 
+# driver genes calling software (i.e. chasm+, digdriver, dndscv, mutpanning, 
+# nbr, oncodrivefml) from submitted patient and analysis inventories. Can
+# filter mutations by tumor and germline MAF, VAC, depth, black&white regions.
+# Also can liftover mutation to the target genome version. Will also output one
+# MAF file containing all mutation in all patients for a tumor subtype.
 #
-# USAGE: 
 #
-# OPTIONS: 
+# USAGE: Rscript --vanilla 2_create_input_mutation_files.R \
+#                --inventory_patients [path to your file] \
+#                --inventory_analysis [path to your file] \
+#                --inventory_blacklisted [path to your file] \ # optional
+#                --cancer_subtype [cancer subtype of interest] \
+#                --min_depth [min coverage of tumor/germline] \
+#                --min_tumor_vac [min tumor VAC] \
+#                --min_tumor_vaf [min tumor VAF] \
+#                --max_germline_vaf [max germline VAC] \
+#                --max_germline_vac [max tumor VAC] \
+#                --max_n_vars [max n variants per patient] \
+#                --target_genome_path [path to fasta file of target genome] \
+#                --target_genome_version hg19 \
+#                --chain [path to chain file for liftover] \
+#                --output [path to folder to write files to] \
+#                --cores [number of cores]
+#
+# OPTIONS: Run 
+#          Rscript --vanilla 2_create_input_mutation_files.R -h
+#          to see the full list of options and their descriptions.
 #
 # REQUIREMENTS: 
 # BUGS: --
@@ -23,13 +46,13 @@
 
 box::use(./custom_functions[...])
 
-suppressPackageStartupMessages(library(argparse))
-suppressPackageStartupMessages(library(data.table))
-suppressPackageStartupMessages(library(GenomicRanges))
-suppressPackageStartupMessages(library(maftools))
-suppressPackageStartupMessages(library(parallel))
-suppressPackageStartupMessages(library(rtracklayer))
-suppressPackageStartupMessages(library(plyr))
+suppressWarnings(suppressPackageStartupMessages(library(argparse)))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressWarnings(suppressPackageStartupMessages(library(GenomicRanges)))
+suppressWarnings(suppressPackageStartupMessages(library(maftools)))
+suppressWarnings(suppressPackageStartupMessages(library(parallel)))
+suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
+suppressWarnings(suppressPackageStartupMessages(library(plyr)))
 options(scipen = 999)
 
 # FUNCTIONS: reading original input files with mutations in ANNOVAR format ----
@@ -500,13 +523,11 @@ parser$add_argument("-l", "--chain", required = F,
 softwareHelp <- paste("Format of the mutational file output (name of the",
                       "software the file will be used with). One or several",
                       "from the list: chasmplus, digdriver, dndscv,",
-                      "mutpanning, nbr, oncodrivefml, maf. If maf is given,",
-                      'only one MAF file containing all variants will be',
-                      'created')
+                      "mutpanning, nbr, oncodrivefml.")
 parser$add_argument("-s", "--software", required = T, type = 'character',
                     nargs = "+", help = softwareHelp,
                     choices = c('chasmplus', 'digdriver', 'dndscv', 
-                                'mutpanning', 'nbr', 'oncodrivefml', 'maf'))
+                                'mutpanning', 'nbr', 'oncodrivefml'))
 
 parser$add_argument("-o", "--output", required = T, type = 'character',
                     help = "Path to the output folder")
@@ -515,28 +536,27 @@ coresHelp <- 'How many cores the script should use. Default: 1.'
 parser$add_argument("-n", "--cores", required = F, type = 'integer', 
                     default = 1, help = coresHelp)
 
-# Test input args -------------------------------------------------------------
-args <- list(inventory_patients = '../data/inventory/inventory_patients_tcga.csv',
-             inventory_analysis = '../data/inventory/inventory_analysis_tcga.csv',
-             blacklist_inventory = '../data/inventory/inventory_blacklist_tcga.csv', 
-             cancer_subtype = 'LUSC', min_depth = 30, 
-             min_tumor_vac = 10, max_germline_vac = 5,
-             min_tumor_vaf = 5.0, max_germline_vaf = 1.0, 
-             max_n_vars = 90000,
-             target_genome_version = 'hg19',
-             target_genome_path = '../data/assets/reference_genome/hg19.fa',
-             chain = '../data/assets/reference_genome/hg38ToHg19.over.chain', 
-             software = list('chasmplus', 'digdriver', 'dndscv',
-                             'mutpanning', 'nbr', 'oncodrivefml'),
-             output = 'test', cores = 2)
-
-# Olala ----------
 args <- parser$parse_args()
 check_input_arguments(args, outputType = 'folder')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 printArgs(args)
+
+# Test input args -------------------------------------------------------------
+# args <- list(inventory_patients = '../data/inventory/inventory_patients_tcga.csv',
+#              inventory_analysis = '../data/inventory/inventory_analysis_tcga.csv',
+#              blacklist_inventory = '../data/inventory/inventory_blacklist_tcga.csv', 
+#              cancer_subtype = 'LUSC', min_depth = 30, 
+#              min_tumor_vac = 10, max_germline_vac = 5,
+#              min_tumor_vaf = 5.0, max_germline_vaf = 1.0, 
+#              max_n_vars = 90000,
+#              target_genome_version = 'hg19',
+#              target_genome_path = '../data/assets/reference_genome/hg19.fa',
+#              chain = '../data/assets/reference_genome/hg38ToHg19.over.chain', 
+#              software = list('chasmplus', 'digdriver', 'dndscv', 'mutpanning',
+#                              'nbr', 'oncodrivefml'),
+#              output = 'test', cores = 2)
 
 # READ inventories ------------------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients, args$cores)
@@ -828,7 +848,7 @@ if(!is.null(args$max_germline_vaf)) {
   }
 }
 
-# 5) Maximum germline VAC
+# 5) maximum germline VAC
 if (!is.null(args$max_germline_vac)) {
   if ('n_alt_count' %in% colnames(allVars)) {
     # inform about number of entries and participants with NA in n_alt_count
@@ -892,6 +912,16 @@ if ('blacklisted_codes' %in% colnames(analysisInv)) {
 
 # FILTER patients: number of variants does not exceed max_n_vars --------------
 varsPerParticip <- allVars[,.N, by = participant_id]
+if (any(varsPerParticip$N > args$max_n_vars)) {
+  hypermutated <- varsPerParticip[N > args$max_n_vars]$participant_id
+  hypermutated <- patientsInv[participant_id %in% hypermutated]
+  # output table with hypermutated samples
+  write.table(hypermutated, append = F, sep = '\t', row.names = F, quote = F,
+              col.names = T,
+              file = paste0(args$output, '/inputMutations-', args$cancer_subtype, 
+                            '-', args$target_genome_version, '.maf'))
+  
+}
 before <- nrow(varsPerParticip)
 removedPatients <- varsPerParticip[N > args$max_n_vars]$participant_id
 varsPerParticip <- varsPerParticip[N <= args$max_n_vars]
@@ -904,7 +934,7 @@ if (after != before) {
 }
 allVars <- allVars[participant_id %in% varsPerParticip$participant_id]
 
-# SAVE annotated cohort data as MAF file & as table ---------------------------
+# SAVE annotated cancer subtype mutation table as MAF file --------------------
 # bring allVars chromosome notation to the one of reference genome, yes, again
 allVars[, chr := gsub('chr', '', chr)] # this covers NCBI
 if (outChrStyle == 'UCSC') {
@@ -930,7 +960,7 @@ if (outChrStyle == 'UCSC') {
 }
 
 # output variants for all formats
-for (software in setdiff('maf', args$software)) {
+for (software in args$software) {
   message('[', Sys.time(), '] Outputting variants for ', software)
   outfile <- paste0(args$output, '/' , software, '/variants/', software, 
                     '-inputMutations-', args$cancer_subtype, '-',
