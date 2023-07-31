@@ -30,24 +30,27 @@ analysis_inventory = Channel.fromPath(params.analysis_inventory, checkIfExists: 
 *----------------------------------------------------------------------------*/
 process check_inventories {
 	debug true
-	
+
 	input:
 	tuple val(patients_inventory_path), val(analysis_inventory_path), 
 	      val(blacklist_inventory_path)
 
+	output:
+	stdout emit: inventories_pass
+
 	script:
 	"""
-	if echo "${blacklist_inventory_path}" | grep -q "EMPTY_FILE.txt"
+	if echo "${blacklist_inventory_path}" | grep -q "NO_FILE"
 	then
 	    1_check_inventories.R --inventory_patients ${patients_inventory_path} \
 	                          --inventory_analysis ${analysis_inventory_path} \
 	                          --target_genome_version ${params.target_genome_version}
-    else
-        1_check_inventories.R --inventory_patients ${patients_inventory_path} \
+	else
+	    1_check_inventories.R --inventory_patients ${patients_inventory_path} \
 	                          --inventory_analysis ${analysis_inventory_path} \
 	                          --target_genome_version ${params.target_genome_version} \
 	                          --inventory_blacklisted ${blacklist_inventory_path} 
-    fi
+	fi
 	
 	"""
 }
@@ -57,10 +60,32 @@ process check_inventories {
 *----------------------------------------------------------------------------*/
 workflow {
     patients_inv = Channel.fromPath(params.patients_inventory)
-    analysis_inv = Channel.fromPath(params.analysis_inventory) 
-    blacklist_inv = Channel.fromPath(params.blacklist_inventory) 
+    analysis_inv = Channel.fromPath(params.analysis_inventory)
+    patients_inv.view()
 
-    patients_inv.combine(analysis_inv)
-                .combine(blacklist_inv) | 
-                check_inventories
+    if (params.blacklist_inventory == '') {
+        def no_file = new File(".NO_FILE")
+        no_file.createNewFile()
+        blacklist_inv = Channel.fromPath(".NO_FILE")
+    } else {
+        blacklist_inv = Channel.fromPath(params.blacklist_inventory) 
+    }
+
+    /* Step 1: check that inventories have all the needed columns and values
+               are acceptable 
+    */
+    inventories_pass = patients_inv.combine(analysis_inv)
+                                   .combine(blacklist_inv) | check_inventories
+
 }
+
+
+
+
+
+
+
+
+
+
+
