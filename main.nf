@@ -260,19 +260,18 @@ process create_rda_for_dndscv_digdriver {
           path(target_genome_fasta), path(chain)
 
     output:
-    tuple val(tumor_subtype), path("*.Rda"), emit: rda
+    tuple val(tumor_subtype), path("*NCBI.Rda"), path("*UCSC.Rda"), emit: rda
     tuple path('*.out'), path('*.err'), emit: logs
     
     script:
     """
-    OUT_FILE=${tumor_subtype}'.Rda'
     gtf_gv=`echo ${gtf_genome_version} | sed 's/\\[//g' | sed 's/,//g' | sed 's/\\]//g'`
     3c_write_regions_for_dndscv.R --gtf ${gtf} --gtf_genomes \$gtf_gv \
                                   --cancer_subtype ${tumor_subtype} \
                                   --target_genome_path ${target_genome_fasta}\
                                   --target_genome_version ${params.target_genome_version} \
                                   --chain ${chain} \
-                                  --cores ${task.cpus} --output \$OUT_FILE \
+                                  --cores ${task.cpus} --output '.' \
                                   1>rda_for_dndscv_digdriver.out \
                                   2>rda_for_dndscv_digdriver.err
     """
@@ -300,6 +299,7 @@ process write_regions_for_digdriver {
         outFileOneGR='inputGR-'${tumor_subtype}'-digdriver-'\$oneGR'-'${params.target_genome_version}'.csv'
         grep -w \$oneGR ${bed} > \$outFileOneGR
         # digdriver requires NCBI region format
+        sed -i 's/^chr//g' \$outFileOneGR
     done
     """
 }
@@ -383,9 +383,8 @@ process digdriver {
 
     input:
     tuple val(tumor_subtype), val(gr_id), val(software), path(regions), 
-          path(rda_ncbi), path(rda_ucsc), path(mutations),
-          path(digdriver_model), path(digdriver_elements),
-          path(target_genome_fasta)
+          path(ncbi_rda), path(ucsc_rda), path(mutations), path(digdriver_model), 
+          path(digdriver_elements), path(target_genome_fasta)
 
     output:
     path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
@@ -397,7 +396,7 @@ process digdriver {
     ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
 
     # a unique ID to use in all further commands
-    RUN_CODE=${tumor_subtype}'_'${gr_id}'_'${params.target_genome_version}
+    RUN_CODE=${tumor_subtype}'-'${gr_id}'-'${params.target_genome_version}
     OUT_FILE=${software}"-results-"\$RUN_CODE'.csv'
 
     # copy model as it will be modified during the run
@@ -415,7 +414,7 @@ process digdriver {
     ANNOT_VARIANTS=${mutations}'-DIGannotated.csv'
     touch \$ANNOT_VARIANTS
     DigPreprocess.py annotMutationFile --n-procs ${task.cpus} \
-        ${mutations} ${rda_ucsc} ${target_genome_fasta} \$ANNOT_VARIANTS \
+        ${mutations} ${ncbi_rda} ${target_genome_fasta} \$ANNOT_VARIANTS \
         1>\$MSG_FILE 2>\$ERR_FILE
 
     # STEP 2: preprocess the nucleotide contexts of the annotations
@@ -717,10 +716,6 @@ workflow {
     oncodrivefml_regions = write_regions_for_oncodrivefml(tumor_subtypes_and_gr)
     dndscv_digdriver_rda = create_rda_for_dndscv_digdriver(gtf_for_rda.combine(target_genome_fasta)
                                                                       .combine(chain))
-
-    /* 
-        Step 4a: run CHASM+
-    */
     /* 
         Step 4b: run DIGdriver
     */
@@ -728,7 +723,7 @@ workflow {
                                  .map { it ->
                                      return(tuple(it.tumor_subtype, it.model_file))
                                  }
-    /*digdriver_results = digdriver(*/digdriver_regions.flatten()
+    digdriver_results = digdriver(digdriver_regions.flatten()
                                                    .map { it ->
                                                             return tuple(infer_tumor_subtype(it),
                                                                          infer_genomic_region(it),
@@ -738,57 +733,7 @@ workflow {
                                                     .combine(digdriver_mutations, by: [0])
                                                     .combine(digdriver_inv, by: [0])
                                                     .combine(digdriver_elements)
-                                                    .combine(target_genome_fasta)
-    /* 
-        Step 4c: run dNdScv
-    */
-    dndscv_results = dndscv(analysis_inv.splitCsv(header: true)
-                                        .map{row -> tuple(row.tumor_subtype, row.software, row.gr_id)}
-                                        .unique()
-                                        .map { it ->
-                                            if (it[1] == 'dndscv') {
-                                                return tuple(it[0], it[2], 'dndscv')
-                                            }
-                                        }
-                                        .combine(dndscv_digdriver_rda.rda, by: [0])
-                                        .combine(dndscv_mutations, by: [0]))
-    /* 
-        Step 4d: run MutPanning
-    */
-    mutpanning_results = mutpanning(analysis_inv.splitCsv(header: true)
-                                                .map{row -> tuple(row.tumor_subtype, row.software, row.gr_id)}
-                                                .unique()
-                                                .map { it ->
-                                                    if (it[1] == 'mutpanning') {
-                                                         return tuple(it[0], it[2], 'mutpanning')
-                                                    }
-                                                }
-                                                .combine(mutpanning_mutations, by: [0]))
-    /* 
-        Step 4e: run NBR
-    */
-    nbr_results = nbr(nbr_regions.flatten()
-                                 .map { it ->
-                                     return tuple(infer_tumor_subtype(it),
-                                                  infer_genomic_region(it), 'nbr',
-                                                  it)
-                                 }
-                                 .combine(nbr_mutations, by: [0])
-                                 .combine(target_genome_fasta)
-                                 .combine(nbr_neutral_bins)
-                                 .combine(nbr_neutral_trinucfreq)
-                                 .combine(nbr_driver_regs))
-    /* 
-        Step 4f: run OncodriveFML
-    */
-    oncodrivefml_results = oncodrivefml(oncodrivefml_regions.flatten()
-                                                            .map { it ->
-                                                               return tuple(infer_tumor_subtype(it),
-                                                                            infer_genomic_region(it),
-                                                                            'oncodrivefml', it)}
-                                                            .combine(oncodrivefml_mutations, by: [0])
-                                                            .combine(oncodrivefml_config))
-
+                                                    .combine(target_genome_fasta))
 }
 
 // inform about completition
