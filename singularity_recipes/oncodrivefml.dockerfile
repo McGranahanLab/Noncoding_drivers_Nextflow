@@ -1,13 +1,12 @@
 FROM ubuntu:18.04
 MAINTAINER Maria Litovchenko m.litovchenko@ucl.ac.uk
  
-RUN apt-get -y update
-RUN apt-get -y upgrade
-RUN apt-get install -y procps libcurl4-openssl-dev libssl-dev gcc libz-dev
 # python 3.6 is default for ubuntu:18.04
-RUN apt-get install -y python3-pip
-
-RUN pip3 install ago==0.0.9 appdirs==1.4.4 bgcache==0.1 bgconfig==0.8 \
+RUN apt-get -y update \
+    && apt-get -y upgrade \
+    && apt-get install -y procps libcurl4-openssl-dev libssl-dev gcc libz-dev\
+    && apt-get install -y python3-pip \
+    && pip3 install ago==0.0.9 appdirs==1.4.4 bgcache==0.1 bgconfig==0.8 \
                  bgdata==2.0.2 bglogs==0.6 bgparsers==0.9 bgreference==0.5 \
                  bgsignature==0.2 bokeh==0.12.4 brotlipy==0.7.0 \
                  certifi==2020.6.20 cffi==1.14.0 chardet==3.0.4 click==6.7 \
@@ -23,8 +22,8 @@ RUN pip3 install ago==0.0.9 appdirs==1.4.4 bgcache==0.1 bgconfig==0.8 \
                  pytz==2020.1 PyYAML==5.3.1 ruamel-yaml==0.15.87 \
                  scikit-learn==0.23.2 scipy==1.1.0 six==1.15.0 \
                  sortedcontainers==2.2.2 statsmodels==0.9.0 \
-                 threadpoolctl==2.1.0 tornado==6.0.4 tqdm==4.42.1
-RUN echo "export LC_ALL=C.UTF-8" >> ~/.bashrc
-RUN echo "export LANG=C.UTF-8" >> ~/.bashrc
+                 threadpoolctl==2.1.0 tornado==6.0.4 tqdm==4.42.1 \
+    && echo "export LC_ALL=C.UTF-8" >> ~/.bashrc \
+    && echo "export LANG=C.UTF-8" >> ~/.bashrc
 
 CMD source /root/.bashrc
