@@ -20,6 +20,7 @@
 
 box::use(argparse[...])
 box::use(data.table[...])
+box::use(rtracklayer[...])
 
 # GLOBAL ARGUMENTS ------------------------------------------------------------
 #' @export
@@ -206,7 +207,7 @@ readAnalysisInventory <- function(inventoryPath, cores = 1) {
   result[, gr_excl_genome := as.character(gr_excl_genome)]
   result[, blacklisted_codes := as.character(blacklisted_codes)]
   blackListsDT <- data.table(blacklisted_codes = unique(result$blacklisted_codes))
-  blackListsDT <- blackListsDT[complete.cases(blackListsDT)]
+  blackListsDT <- blackListsDT[!is.na(blacklisted_codes)]
   if (nrow(blackListsDT) > 0) {
     blackListsDT[, blacklisted_codes_parsed := strsplit(blacklisted_codes,';')]
     colsOrder <- colnames(result)
