@@ -20,7 +20,10 @@
 
 box::use(argparse[...])
 box::use(data.table[...])
+box::use(GenomeInfoDb[...])
+box::use(GenomicRanges[...])
 box::use(rtracklayer[...])
+
 
 # GLOBAL ARGUMENTS ------------------------------------------------------------
 #' @export
@@ -144,16 +147,16 @@ check_input_arguments <- function(argsList, outputType = NULL) {
 #' @return void
 #' @export
 printArgs <- function(argsList) {
-  message("Submitted arguments:")
-  for (argName in names(args)) {
-    oneArg <- args[[argName]]
+  message('[', Sys.time(), '] Submitted arguments: ')
+  for (argName in names(argsList)) {
+    oneArg <- argsList[[argName]]
     if (length(oneArg) > 1 & !is.null(names(oneArg))) {
       msg <- paste(apply(data.table(names(oneArg), oneArg), 1, paste, 
                          collapse = ' - '), collapse = ',')
     } else {
       msg <- paste(oneArg, collapse = ', ')
     }
-    message(argName, ':', msg)
+    message('\t', argName, ':', msg)
   }
 }
 
