@@ -453,9 +453,9 @@ mutTabToMAF <- function(varDT) {
   tmpFile <- do.call(paste0, replicate(20, sample(LETTERS, 1, T), F))
   write.table(result, tmpFile, append = F, quote = F, sep = '\t',
               col.names = T, row.names = F)
-  result <- annovarToMaf(tmpFile, Center = 'GEL', 
+  result <- annovarToMaf(tmpFile, Center = 'NONAME', tsbCol = 'participant_id',
                          refBuild = unique(varDT$somatic_genome),
-                         tsbCol = 'participant_id', table = 'refGene')
+                         table = 'refGene')
   result <- as.data.table(result)
   if (nrow(result[is.na(Variant_Classification)]) != 0) {
     message('[', Sys.time(), '] Found ', 
@@ -537,16 +537,12 @@ writeVarsToFile <- function(varDT, format, outPath) {
                        oncodriveclustl = c("CHROMOSOME", "POSITION", "REF", 
                                            "ALT","SAMPLE"))
   
-  print(head(varDT))
-  
   result <- varDT[, intersect(colsToGet[[format]], colnames(varDT)), with = F]
   if ('chr' %in% colnames(result)) {
     result <- result[order(chr, start)]
   } else {
     result <- result[order(Chromosome, Start_Position)]
   }
-  
-
   
   # whatever or not in the result file chromosome names should be with chr
   # checked in the docs that activedriverwgs, chasmplus, driverpower and nbr
@@ -555,8 +551,7 @@ writeVarsToFile <- function(varDT, format, outPath) {
     message('[', Sys.time(), '] ', format, ' requires chromosomal names in ',
             'UCSC format. Changed chromosomal names to UCSC format.')
     result[, chr := paste0('chr', gsub('chr', '', chr))]
-  }
-  print(head(result))
+  } 
   if (format %in% c('digdriver', 'mutpanning')) {
     message('[', Sys.time(), '] ', format, ' requires chromosomal names in ',
             'NCBI format. Changed chromosomal names to NCBI format.')
@@ -715,7 +710,7 @@ printArgs(args)
 # Test input args -------------------------------------------------------------
 # args <- list(inventory_patients = '../data/inventory/inventory_patients_tcga.csv',
 #              inventory_analysis = '../data/inventory/inventory_analysis_tcga.csv',
-#              blacklist_inventory = '../data/inventory/inventory_blacklist_tcga.csv', 
+#              inventory_blacklisted = '../data/inventory/inventory_blacklist_tcga.csv', 
 #              cancer_subtype = 'LUSC', min_depth = 30, 
 #              min_tumor_vac = 10, max_germline_vac = 5,
 #              min_tumor_vaf = 5.0, max_germline_vaf = 1.0, 
@@ -743,10 +738,10 @@ analysisInv <- readAnalysisInventory(args$inventory_analysis, args$cores)
 message('[', Sys.time(), '] Read --inventory_analysis: ', 
         args$inventory_analysis)
 
-if (!is.null(args$blacklist_inventory)) {
-  bwInv <- readBlacklistInventory(args$blacklist_inventory, args$cores)
-  message('[', Sys.time(), '] Read --blacklist_inventory: ', 
-          args$blacklist_inventory)
+if (!is.null(args$inventory_blacklisted)) {
+  bwInv <- readBlacklistInventory(args$inventory_blacklisted, args$cores)
+  message('[', Sys.time(), '] Read --inventory_blacklisted: ', 
+          args$inventory_blacklisted)
 }
 
 # select cancer subtype
@@ -754,7 +749,7 @@ patientsInv <- patientsInv[tumor_subtype %in% args$cancer_subtype]
 analysisInv <- analysisInv[tumor_subtype %in% args$cancer_subtype]
 
 # select only black&white lists which will be used in the future
-if (!is.null(args$blacklist_inventory)) {
+if (!is.null(args$inventory_blacklisted)) {
   uniqBWcodes <- unlist(unique(analysisInv$blacklisted_codes))
   if (!any(is.na(uniqBWcodes))) {
     if (any(uniqBWcodes != '')) {
