@@ -232,6 +232,10 @@ readAnalysisInventory <- function(inventoryPath, cores = 1) {
 #' @return data table with black&white lists inventory
 #' @export
 readBlacklistInventory <- function(inventoryPath, cores = 1) {
+  if (file.size(inventoryPath) == 0) {
+    return(NULL)
+  }
+  
   # 1) read and check that all needed columns are present
   essenCols <- c('list_name', 'file_path', 'file_genome', 'file_type', 
                  'score_column', 'min_value', 'max_value')

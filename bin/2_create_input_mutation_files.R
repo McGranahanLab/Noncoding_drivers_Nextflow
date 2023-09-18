@@ -740,8 +740,15 @@ message('[', Sys.time(), '] Read --inventory_analysis: ',
 
 if (!is.null(args$inventory_blacklisted)) {
   bwInv <- readBlacklistInventory(args$inventory_blacklisted, args$cores)
-  message('[', Sys.time(), '] Read --inventory_blacklisted: ', 
-          args$inventory_blacklisted)
+  if (is.null(bwInv)) {
+    args$inventory_blacklisted <- NULL
+    print(paste0('[', Sys.time(), '] Black & white lists inventory file ',
+                 '(--inventory_blacklisted) was empty. Proceeding without ',
+                 'it.'))
+  } else {
+    message('[', Sys.time(), '] Read --inventory_blacklisted: ', 
+            args$inventory_blacklisted)
+  }
 }
 
 # select cancer subtype
@@ -1083,14 +1090,17 @@ if ('blacklisted_codes' %in% colnames(analysisInv)) {
 
 # FILTER patients: number of variants does not exceed max_n_vars --------------
 varsPerParticip <- allVars[,.N, by = participant_id]
+print(varsPerParticip)
+
 if (any(varsPerParticip$N > args$max_n_vars)) {
   hypermutated <- varsPerParticip[N > args$max_n_vars]$participant_id
   hypermutated <- patientsInv[participant_id %in% hypermutated]
+  
   # output table with hypermutated samples
   write.table(hypermutated, append = F, sep = '\t', row.names = F, quote = F,
               col.names = T,
-              file = paste0(args$output, '/inputMutations-', args$cancer_subtype, 
-                            '-', args$target_genome_version, '.maf'))
+              file = paste0(args$output, '/hypermutated-', args$cancer_subtype, 
+                            '.csv'))
   
 }
 before <- nrow(varsPerParticip)
