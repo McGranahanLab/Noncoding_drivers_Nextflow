@@ -33,6 +33,8 @@ cores - maybe various options, because requirements may vary
 
 ## Inventory
 
+We do not recommend running both dNdScv and NBR on CDS
+
 ### Participants inventory
 
 Essential file. Recommended name: . It is recommended, no necessary.

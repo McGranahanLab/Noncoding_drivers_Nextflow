@@ -82,16 +82,13 @@ process create_input_mutation_files {
 * Workflows
 *----------------------------------------------------------------------------*/
 workflow {
-	target_genome_fasta = Channel.fromPath(params.target_genome_path, 
-	                                       checkIfExists: true)
-                          .ifEmpty { exit 1, "[ERROR]: target genome fasta file not found" }
+	// create channels to all inventories
     patients_inv = Channel.fromPath(params.patients_inventory, 
                                     checkIfExists: true)
                           .ifEmpty { exit 1, "[ERROR]: patients inventory file not found" }
     analysis_inv = Channel.fromPath(params.analysis_inventory,
                                     checkIfExists: true)
                           .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" }
-
     if (params.blacklist_inventory == '') {
         def no_file = new File(".NO_FILE")
         no_file.createNewFile()
@@ -100,8 +97,14 @@ workflow {
         blacklist_inv = Channel.fromPath(params.blacklist_inventory, checkIfExists: true)
                                .ifEmpty { exit 1, "[ERROR]: black&white lists inventory file not found" }
     }
+    print(blacklist_inv)
 
-    if (params.blacklist_inventory == '') {
+	// create channels to target genome verion and to chain file for
+	// liftover
+	target_genome_fasta = Channel.fromPath(params.target_genome_path, 
+	                                       checkIfExists: true)
+                          .ifEmpty { exit 1, "[ERROR]: target genome fasta file not found" }
+    if (params.chain == '') {
         def no_file = new File(".NO_FILE")
         no_file.createNewFile()
         chain = Channel.fromPath(".NO_FILE")
@@ -132,14 +135,3 @@ workflow {
     	           .combine(tumor_subtypes) | create_input_mutation_files 
     }
 }
-
-
-
-
-
-
-
-
-
-
-
