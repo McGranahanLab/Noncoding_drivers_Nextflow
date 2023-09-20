@@ -21,8 +21,8 @@
 
 box::use(./custom_functions[...])
 
-suppressMessages(library(argparse))
-suppressMessages(library(data.table))
+suppressWarnings(suppressPackageStartupMessages(library(argparse)))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 suppressMessages(library(dndscv))
 suppressMessages(library(dplyr))
 suppressMessages(library(GenomicFeatures))
@@ -32,245 +32,7 @@ suppressMessages(library(rtracklayer))
 suppressMessages(library(strex))
 options(scipen = 999)
 
-# Functions : common ----------------------------------------------------------
-#' summurizeGenomicRegions
-#' @description Puts basic statistics about genomic ranges to data table 
-#' @author Maria Litovchenko
-#' @gr GRanges object to sum up, columns rCode and gene_id are required
-#' @return data table with columns gr_id, n_regions, n_genes, min_reg_len, 
-#' mean_reg_len, max_reg_len, min_gene_len, mean_gene_len, max_gene_len,
-#' total_len, perc_genome
-summurizeGenomicRegions <- function(gr, gr_codename = NULL) {
-  gr_lens <- width(gr)
-  gene_lens <- split(gr, gr$gene_id)
-  gene_lens <- sum(width(gene_lens))
-  result <- data.table(gr_id = gr_codename,
-                       rCodes = paste(unique(gr$rCode), collapse = ','),
-                       n_regions = length(gr), 
-                       n_genes = length(unique(gr$gene_id)), 
-                       min_reg_len = min(gr_lens), 
-                       mean_reg_len = round(mean(gr_lens)),
-                       sd_reg_len = sd(gr_lens),
-                       max_reg_len = max(gr_lens), 
-                       min_gene_len = min(gene_lens),
-                       mean_gene_len = round(mean(gene_lens)),
-                       sd_gene_len = sd(gene_lens),
-                       max_gene_len = max(gene_lens), 
-                       total_len = sum(gr_lens))
-  result[, perc_genome := round(100 * total_len / (3 * 10^9), 2)]
-  result
-}
-
-# Functions : region extraction -----------------------------------------------
-#' extractGeneToIDmap
-#' @description Extracts a data table with columns gene_name, gene_id, 
-#' gene_biotype, transcript_id, transcript_biotype (if available) from GRanges
-#' extracted from gtf. transcript_biotype is not available for earlier versions
-#' of ensemble gtf, i.e. v75 doesn't have it.
-#' @author Maria Litovchenko
-#' @param gtfGR GRanges object, result of import command applied to gtf file
-#' @param tx_biotypes allowed transcript biotypes
-#' @return data table with columns gene_name, gene_id, gene_biotype, 
-#' transcript_id, transcript_biotype (if available). If tx_biotypes is not 
-#' NULL, selection on transcript_biotype/gene_biotype will be performed.
-extractGeneToIDmap <- function(gtfGR, tx_biotypes = NULL) {
-  result <- as.data.table(mcols(gtfGR))
-  result <- result[, intersect(c('gene_name', 'gene_id', 'gene_biotype',
-                                 'transcript_id', 'transcript_biotype'),
-                               colnames(result)), with = F]
-  if ('transcript_biotype' %in% colnames(result)) {
-    result <- result[complete.cases(transcript_biotype)]
-  } else {
-    result <- result[complete.cases(gene_biotype)]
-  }
-  result <- result[!duplicated(result)]
-  
-  if (!is.null(tx_biotypes)) {
-    if ('transcript_biotype' %in% colnames(result)) {
-      result <- result[transcript_biotype %in% tx_biotypes]
-    } else {
-      result <- result[gene_biotype %in% tx_biotypes]
-    }
-  }
-  
-  result
-}
-
-#' extract_ss_txdb
-#' @description Extracts splice sites coordinates from txdb object
-#' @param txdbObj - txdb, result of makeTxDbFromGRanges or similar function
-#' @param upstr length of intronic region upstream of acceptor site
-#' @param downstr length of intronic region downstream of donor site.
-#' @return GRanges
-extract_ss_txdb <- function(txdbObj, upstr, downstr) {
-  # sometimes it can happen that gene has a UTR split between 2 exons. In such
-  # case intronsByTranscript will also give the intron sandwitched by UTR 
-  # pieces. We don't want that, we only want splice sites located betwen 2 
-  # protein coding exons. That's why we're going to extract gaps between CDS.
-  intronsGR <- intronsByTranscript(txdbObj, use.names = T)
-  # remove genes without introns
-  intronsGR <- intronsGR[unique(names(unlist(intronsGR)))]
-  intronsGR <- unlist(intronsGR)
-
-  # extract UTRs
-  utrGR <- c(threeUTRsByTranscript(txdbObj, use.names = T), 
-             fiveUTRsByTranscript(txdbObj, use.names = T))
-  utrGR <- unlist(utrGR)
-  utrGR <- utrGR[which(names(utrGR) %in% 
-                         intersect(names(utrGR), names(intronsGR)))]
-
-  # add 1 base from each side of UTR so they could be overlapped with introns
-  utrGR <- utrGR %>% anchor_5p() %>% mutate(width = width + 1)
-  utrGR <- utrGR %>% anchor_3p() %>% mutate(width = width + 1)
-
-  # find introns between UTRs
-  if (length(utrGR) != 0) {
-    ovrl <- as.data.table(findOverlaps(intronsGR, utrGR))
-    colnames(ovrl) <- c('intronIdx', 'utrIdx')
-    ovrl[, intronID := names(intronsGR)[intronIdx]]
-    ovrl[, utrID := names(utrGR)[utrIdx]]
-    ovrl <- ovrl[intronID == utrID]
-    # remove introns between UTRs
-    intronsGR <- intronsGR[setdiff(1:length(intronsGR), 
-                                   unique(ovrl$intronIdx))]
-  }
-  
-  donor <- intronsGR %>% anchor_5p() %>% mutate(width = downstr)
-  acceptor <- intronsGR %>% anchor_3p() %>% mutate(width = upstr)
-  result <- c(donor, acceptor)
-  result <- unique(result)
-  result$transcript_id <- names(result)
-  result
-}
-
-#' addRegsCount
-#' @description Adds an index within a gene for every region (exon) of a gene,
-#' as well as adds column showing total exon count.
-#' @author Maria Litovchenko
-#' @param gr GRanges object, gene_id column in mcols is needed.
-#' @return GRanges object with added columns n_regs and reg_idx, which contain
-#' number of regions per gene and region's index within the gene respectively.
-addRegsCount <- function(gr) {
-  result <- sort(gr)
-  
-  mcolsUpd <- as.data.table(mcols(result))
-  mcolsUpd[, strand := as.character(strand(result))]
-  # to return mcols in the exact order as before
-  mcolsUpd[, idx := 1:nrow(mcolsUpd)]
-  # number of regions
-  mcolsUpd[, n_regs := .N, by = gene_id]
-  
-  # have to split by strand because for forward strand 1st exon is the most 
-  # left one, and for the reverse strand - the most right one
-  mcolsUpd_F <- mcolsUpd[strand == '+']
-  mcolsUpd_R <- mcolsUpd[strand == '-']
-  mcolsUpd_F[, reg_idx := 1:.N, by = gene_id]  # Forward
-  mcolsUpd_R[, reg_idx := .N:1, by = gene_id]  # Reverse
-  mcolsUpd <- rbind(mcolsUpd_F, mcolsUpd_R, mcolsUpd[!strand %in% c('+', '-')],
-                    fill = T)
-  mcolsUpd <- as.data.table(mcolsUpd)
-  mcolsUpd <- mcolsUpd[order(idx)]
-  mcolsUpd[, idx := NULL]
-  mcolsUpd[, strand := NULL]
-  mcols(result) <- mcolsUpd
-  result
-}
-
-#' extract_ss_Granges
-#' @description Extracts splice sites from GRaneges object
-#' @author Maria Litovchenko
-#' @param gr GRanges object, gene_id column in mcols is needed.
-#' @param upstr length of intronic region upstream of acceptor site
-#' @param downstr length of intronic region downstream of donor site.
-#' @return Granges object with extracted splice sites
-#' @note use this function if and only if txdb version of annotation is not 
-#' available.
-extract_ss_Granges <- function(gr, upstr, downstr) {
-  if (upstr == 0 & downstr == 0) {
-    stop('[', Sys.time(), '] Attempt to extract splice sites with 0 down',
-         'stream and upstream length.')
-  }
-  # check on strand
-  if (any(strand(gr) == '*') & downstr != upstr) {
-    message('[', Sys.time(), '] It is not possible to extract splice sites ',
-            'in case strand is not set and requested downstream and ',
-            'upstream lengths differ. Will remove regions without + or - ',
-            'strand.')
-    nbefore <- length(gr)
-    result <- gr[strand(gr) %in% c('+', '-')]
-    nafter <- length(result)
-    message('[', Sys.time(), '] Removed ', nbefore - nafter, '(',
-            round(100 * (nbefore - nafter) / nbefore, 2), '%) entries ', 
-            'because they did not have assigned strand ')
-  } else {
-    result <- copy(gr)
-  }
-  
-  # add exon count and maximum number of exons. It's faster than though the
-  # loop of GRanges
-  result <- addRegsCount(result)
-  # restrict to genes with > 1 exon
-  result <- result[result$n_regs > 1]
-  
-  # result$reg_idx != result$n_regs because there is no splice  
-  # site after the last exon
-  resultDown <- result[result$reg_idx != result$n_regs]
-  resultDown <- shift_downstream(resultDown, downstr + 1) %>% 
-    anchor_3p() %>% mutate(width = downstr + 1)
-  # result$reg_idx != 1 because there is no splice site before 1st exon
-  resultUp <- result[result$reg_idx != 1]
-  resultUp <- shift_upstream(resultUp, upstr + 1) %>% anchor_5p() %>% 
-    mutate(width = upstr + 1)
-  result <- sort(c(resultDown, resultUp))
-  
-  mcols(result) <- mcols(result)[, !colnames(mcols(result)) %in%
-                                   c('n_regs', 'reg_idx')]
-  result
-}
-
-#' extract_promoters_Granges
-#' @description Extracts promoters from GRaneges object
-#' @author Maria Litovchenko
-#' @param gr GRanges object, gene_id column in mcols is needed.
-#' @param upstr length to take upstream of TSS.
-#' @param downstr length to take downstream of TSS.
-#' @note use this function if and only if txdb version of annotation is not 
-#' available.
-extract_promoters_Granges <- function(gr, upstr, downstr) {
-  if (upstr == 0 & downstr == 0) {
-    stop('[', Sys.time(), '] Attempt to extract promoters with 0 downstream ',
-         'and upstream length.')
-  }
-  
-  if (any(strand(gr) == '*')) {
-    message('[', Sys.time(), '] It is not possible to extract promoters ',
-            'in case strand is not set. Will remove regions without + or - ',
-            'strand.')
-    nbefore <- length(gr)
-    result <- gr[strand(gr) %in% c('+', '-')]
-    nafter <- length(result)
-    message('[', Sys.time(), '] Removed ', nbefore - nafter, '(',
-            round(100 * (nbefore - nafter) / nbefore, 2), '%) entries ', 
-            'because they did not have assigned strand ')
-  } else {
-    result <- copy(gr)
-  }
-  
-  # add exon count and maximum number of exons. It's faster than though the
-  # loop of GRanges
-  result <- addRegsCount(result)
-  # restrict only to the first exon
-  result <- result[result$reg_idx == 1]
-  result <- result %>% anchor_5p() %>% mutate(width = 1) %>% 
-    anchor_5p() %>% stretch(extend = downstr) %>% anchor_3p() %>% 
-    stretch(extend = upstr)
-  
-  result <- sort(result)
-  mcols(result) <- mcols(result)[, !colnames(mcols(result)) %in%
-                                   c('n_regs', 'reg_idx')]
-  result
-}
-
+# FUNCTIONS: liftover ---------------------------------------------------------
 #' liftOverGenomicRegion
 #' @description Lifts over coordinates from original genome to target genome
 #' using chain chainObj
@@ -425,12 +187,47 @@ checkLiftOverByTr <- function(origGR, loGR) {
     message(paste0(capture.output(knitr::kable(msgTab, format = "markdown")),
                    collapse = '\n'))
     message('[', Sys.time(), '] These transcripts will be removed. ')
-
+    
     result <- loGR[!loGR$transcript_id %in% weirdLO$transcript_id]
   } else {
     message('[', Sys.time(), '] No transcript was lifted over to different ',
             'chromosome/strand')
     result <- copy(loGR)
+  }
+  
+  result
+}
+
+# FUNCTIONS: conversion to txdb -----------------------------------------------
+#' extractGeneToIDmap
+#' @description Extracts a data table with columns gene_name, gene_id, 
+#' gene_biotype, transcript_id, transcript_biotype (if available) from GRanges
+#' extracted from gtf. transcript_biotype is not available for earlier versions
+#' of ensemble gtf, i.e. v75 doesn't have it.
+#' @author Maria Litovchenko
+#' @param gtfGR GRanges object, result of import command applied to gtf file
+#' @param tx_biotypes allowed transcript biotypes
+#' @return data table with columns gene_name, gene_id, gene_biotype, 
+#' transcript_id, transcript_biotype (if available). If tx_biotypes is not 
+#' NULL, selection on transcript_biotype/gene_biotype will be performed.
+extractGeneToIDmap <- function(gtfGR, tx_biotypes = NULL) {
+  result <- as.data.table(mcols(gtfGR))
+  result <- result[, intersect(c('gene_name', 'gene_id', 'gene_biotype',
+                                 'transcript_id', 'transcript_biotype'),
+                               colnames(result)), with = F]
+  if ('transcript_biotype' %in% colnames(result)) {
+    result <- result[complete.cases(transcript_biotype)]
+  } else {
+    result <- result[complete.cases(gene_biotype)]
+  }
+  result <- result[!duplicated(result)]
+  
+  if (!is.null(tx_biotypes)) {
+    if ('transcript_biotype' %in% colnames(result)) {
+      result <- result[transcript_biotype %in% tx_biotypes]
+    } else {
+      result <- result[gene_biotype %in% tx_biotypes]
+    }
   }
   
   result
@@ -456,7 +253,7 @@ gtfToTxDB <- function(gtfPath, chrStyle, acceptedChrCodes = NULL,
     stop('[', Sys.time(), '] LiftOver is requested, but chain object for ',
          'lifover is NULL')
   }
-    
+  
   message('[', Sys.time(), '] Started reading ', gtfPath)
   result <- import(gtfPath)
   
@@ -467,7 +264,7 @@ gtfToTxDB <- function(gtfPath, chrStyle, acceptedChrCodes = NULL,
                             pruning.mode = "coarse")
     result <- sort(result)
   }
-
+  
   if (any(c(23, '23', 'chr23') %in% seqlevels(result))) {
     message('[', Sys.time(), '] Found that chr X is coded with 23. Changed it',
             ' to X.')
@@ -558,6 +355,182 @@ bedToGR <- function(bedPath, chrStyle, acceptedChrCodes = NULL, doLiftOver = F,
   result
 }
 
+# FUNCTIONS: region extraction from txdb --------------------------------------
+#' addRegsCount
+#' @description Adds an index within a gene for every region (exon) of a gene,
+#' as well as adds column showing total exon count.
+#' @author Maria Litovchenko
+#' @param gr GRanges object, gene_id column in mcols is needed.
+#' @return GRanges object with added columns n_regs and reg_idx, which contain
+#' number of regions per gene and region's index within the gene respectively.
+addRegsCount <- function(gr) {
+  result <- sort(gr)
+  
+  mcolsUpd <- as.data.table(mcols(result))
+  mcolsUpd[, strand := as.character(strand(result))]
+  # to return mcols in the exact order as before
+  mcolsUpd[, idx := 1:nrow(mcolsUpd)]
+  # number of regions
+  mcolsUpd[, n_regs := .N, by = gene_id]
+  
+  # have to split by strand because for forward strand 1st exon is the most 
+  # left one, and for the reverse strand - the most right one
+  mcolsUpd_F <- mcolsUpd[strand == '+']
+  mcolsUpd_R <- mcolsUpd[strand == '-']
+  mcolsUpd_F[, reg_idx := 1:.N, by = gene_id]  # Forward
+  mcolsUpd_R[, reg_idx := .N:1, by = gene_id]  # Reverse
+  mcolsUpd <- rbind(mcolsUpd_F, mcolsUpd_R, mcolsUpd[!strand %in% c('+', '-')],
+                    fill = T)
+  mcolsUpd <- as.data.table(mcolsUpd)
+  mcolsUpd <- mcolsUpd[order(idx)]
+  mcolsUpd[, idx := NULL]
+  mcolsUpd[, strand := NULL]
+  mcols(result) <- mcolsUpd
+  result
+}
+
+#' extract_ss_txdb
+#' @description Extracts splice sites coordinates from txdb object
+#' @param txdbObj - txdb, result of makeTxDbFromGRanges or similar function
+#' @param upstr length of intronic region upstream of acceptor site
+#' @param downstr length of intronic region downstream of donor site.
+#' @return GRanges
+extract_ss_txdb <- function(txdbObj, upstr, downstr) {
+  # sometimes it can happen that gene has a UTR split between 2 exons. In such
+  # case intronsByTranscript will also give the intron sandwitched by UTR 
+  # pieces. We don't want that, we only want splice sites located betwen 2 
+  # protein coding exons. That's why we're going to extract gaps between CDS.
+  intronsGR <- intronsByTranscript(txdbObj, use.names = T)
+  # remove genes without introns
+  intronsGR <- intronsGR[unique(names(unlist(intronsGR)))]
+  intronsGR <- unlist(intronsGR)
+  
+  # extract UTRs
+  utrGR <- c(threeUTRsByTranscript(txdbObj, use.names = T), 
+             fiveUTRsByTranscript(txdbObj, use.names = T))
+  utrGR <- unlist(utrGR)
+  utrGR <- utrGR[which(names(utrGR) %in% 
+                         intersect(names(utrGR), names(intronsGR)))]
+  
+  # add 1 base from each side of UTR so they could be overlapped with introns
+  utrGR <- utrGR %>% anchor_5p() %>% mutate(width = width + 1)
+  utrGR <- utrGR %>% anchor_3p() %>% mutate(width = width + 1)
+  
+  # find introns between UTRs
+  if (length(utrGR) != 0) {
+    ovrl <- as.data.table(findOverlaps(intronsGR, utrGR))
+    colnames(ovrl) <- c('intronIdx', 'utrIdx')
+    ovrl[, intronID := names(intronsGR)[intronIdx]]
+    ovrl[, utrID := names(utrGR)[utrIdx]]
+    ovrl <- ovrl[intronID == utrID]
+    # remove introns between UTRs
+    intronsGR <- intronsGR[setdiff(1:length(intronsGR), 
+                                   unique(ovrl$intronIdx))]
+  }
+  
+  donor <- intronsGR %>% anchor_5p() %>% mutate(width = downstr)
+  acceptor <- intronsGR %>% anchor_3p() %>% mutate(width = upstr)
+  result <- c(donor, acceptor)
+  result <- unique(result)
+  result$transcript_id <- names(result)
+  result
+}
+
+#' extract_ss_Granges
+#' @description Extracts splice sites from GRaneges object
+#' @author Maria Litovchenko
+#' @param gr GRanges object, gene_id column in mcols is needed.
+#' @param upstr length of intronic region upstream of acceptor site
+#' @param downstr length of intronic region downstream of donor site.
+#' @return Granges object with extracted splice sites
+#' @note use this function if and only if txdb version of annotation is not 
+#' available.
+extract_ss_Granges <- function(gr, upstr, downstr) {
+  if (upstr == 0 & downstr == 0) {
+    stop('[', Sys.time(), '] Attempt to extract splice sites with 0 down',
+         'stream and upstream length.')
+  }
+  # check on strand
+  if (any(strand(gr) == '*') & downstr != upstr) {
+    message('[', Sys.time(), '] It is not possible to extract splice sites ',
+            'in case strand is not set and requested downstream and ',
+            'upstream lengths differ. Will remove regions without + or - ',
+            'strand.')
+    nbefore <- length(gr)
+    result <- gr[strand(gr) %in% c('+', '-')]
+    nafter <- length(result)
+    message('[', Sys.time(), '] Removed ', nbefore - nafter, '(',
+            round(100 * (nbefore - nafter) / nbefore, 2), '%) entries ', 
+            'because they did not have assigned strand ')
+  } else {
+    result <- copy(gr)
+  }
+  
+  # add exon count and maximum number of exons. It's faster than though the
+  # loop of GRanges
+  result <- addRegsCount(result)
+  # restrict to genes with > 1 exon
+  result <- result[result$n_regs > 1]
+  
+  # result$reg_idx != result$n_regs because there is no splice  
+  # site after the last exon
+  resultDown <- result[result$reg_idx != result$n_regs]
+  resultDown <- shift_downstream(resultDown, downstr + 1) %>% 
+    anchor_3p() %>% mutate(width = downstr + 1)
+  # result$reg_idx != 1 because there is no splice site before 1st exon
+  resultUp <- result[result$reg_idx != 1]
+  resultUp <- shift_upstream(resultUp, upstr + 1) %>% anchor_5p() %>% 
+    mutate(width = upstr + 1)
+  result <- sort(c(resultDown, resultUp))
+  
+  mcols(result) <- mcols(result)[, !colnames(mcols(result)) %in%
+                                   c('n_regs', 'reg_idx')]
+  result
+}
+
+#' extract_promoters_Granges
+#' @description Extracts promoters from GRaneges object
+#' @author Maria Litovchenko
+#' @param gr GRanges object, gene_id column in mcols is needed.
+#' @param upstr length to take upstream of TSS.
+#' @param downstr length to take downstream of TSS.
+#' @note use this function if and only if txdb version of annotation is not 
+#' available.
+extract_promoters_Granges <- function(gr, upstr, downstr) {
+  if (upstr == 0 & downstr == 0) {
+    stop('[', Sys.time(), '] Attempt to extract promoters with 0 downstream ',
+         'and upstream length.')
+  }
+  
+  if (any(strand(gr) == '*')) {
+    message('[', Sys.time(), '] It is not possible to extract promoters ',
+            'in case strand is not set. Will remove regions without + or - ',
+            'strand.')
+    nbefore <- length(gr)
+    result <- gr[strand(gr) %in% c('+', '-')]
+    nafter <- length(result)
+    message('[', Sys.time(), '] Removed ', nbefore - nafter, '(',
+            round(100 * (nbefore - nafter) / nbefore, 2), '%) entries ', 
+            'because they did not have assigned strand ')
+  } else {
+    result <- copy(gr)
+  }
+  
+  # add exon count and maximum number of exons. It's faster than though the
+  # loop of GRanges
+  result <- addRegsCount(result)
+  # restrict only to the first exon
+  result <- result[result$reg_idx == 1]
+  result <- result %>% anchor_5p() %>% mutate(width = 1) %>% 
+    anchor_5p() %>% stretch(extend = downstr) %>% anchor_3p() %>% 
+    stretch(extend = upstr)
+  
+  result <- sort(result)
+  mcols(result) <- mcols(result)[, !colnames(mcols(result)) %in%
+                                   c('n_regs', 'reg_idx')]
+  result
+}
+
 #' extractRegionsByCode_txdb
 #' @description Extracts coordinates of desired type of genomic regions (i.e. 
 #' CDS, 3primeUTR, etc) from txdb object
@@ -587,69 +560,33 @@ bedToGR <- function(bedPath, chrStyle, acceptedChrCodes = NULL, doLiftOver = F,
 #' is not available for earlier versions of ensemble gtf, i.e. v75 doesn't have
 #' it.
 extractRegionsByCode_txdb <- function(rCode, txdbObj, geneBiotypeDT, upstr = 0,
-                                      downstr = 0, reduceDisjoin = T, 
-                                      promoterUpStr = -1) {
-  # check validity of the region
-  validCodes <- c("3primeUTR", "5primeUTR", "CDS", "lincRNA", 
-                  "lincRNA_promoter", "lincRNA_ss", "miRNA", "misc_RNA", 
-                  "promoter", "rRNA", "snoRNA", "snRNA", "ss", 'intron',
-                  'upstream', 'downstream')
-  if (!rCode %in% validCodes) {
-    stop("[", Sys.time(), "] Selected region code is not valid: ", rCode, 
-         '. Valid region codes are: ', paste(validCodes, collapse = ', '), '.')
-  }
-  if ((rCode == 'upstream' & upstr <= 0) | 
-      (rCode == 'upstream' & downstr != 0)) {
-    stop("[", Sys.time(), "] Then selected region code is upstream, one ",
-         'have to submit upstr length and set downstr length to 0')
-  }
-  if (rCode == 'upstream' &  promoterUpStr <= 0) {
-    stop("[", Sys.time(), "] Then selected region code is upstream, one ",
-         'have to submit promoterUpStr')
-  }
-  if ((rCode == 'downstream' & downstr <= 0) | 
-      (rCode == 'downstream' & upstr != 0)) {
-    stop("[", Sys.time(), "] Then selected region code is downstream, one ",
-         'have to submit downstr length and set upstr length to 0')
-  }
+                                      downstr = 0, reduceDisjoin = T) {
+  upstr <- as.integer(upstr)
+  downstr <- as.integer(downstr)
   message('[', Sys.time(), '] Extracting ', rCode, ' upstream length: ', 
           upstr, ', downstream length: ', downstr)
   
   # extract regions of interest
   result <- switch(rCode, 
-                   "CDS" = cdsBy(txdbObj, by = 'tx', use.names = T),  # cdsBy returns without 3 and 5 UTR
-                   "3primeUTR" = threeUTRsByTranscript(txdbObj, use.names = T),
-                   "5primeUTR" = fiveUTRsByTranscript(txdbObj, use.names = T),
-                   'ss' = extract_ss_txdb(txdbObj, upstr, downstr),
-                   'intron' = intronsByTranscript(txdbObj, use.names = T),
                    "promoter" = promoters(txdbObj, upstream = upstr, 
                                           downstream = downstr, use.names = T),
-                   'lincRNA' = exonsBy(txdbObj, 'tx', use.names = T),
-                   'lincRNA_ss' = extract_ss_txdb(txdbObj, upstr, downstr),
+                   "5primeUTR" = fiveUTRsByTranscript(txdbObj, use.names = T),
+                   "CDS" = cdsBy(txdbObj, by = 'tx', use.names = T),  # cdsBy returns without 3 and 5 UTR
+                   'ss' = extract_ss_txdb(txdbObj, upstr, downstr),
+                   "3primeUTR" = threeUTRsByTranscript(txdbObj, use.names = T),
                    'lincRNA_promoter' = promoters(txdbObj, upstream = upstr, 
                                                   downstream = downstr,
                                                   use.names = T),
+                   'lincRNA' = exonsBy(txdbObj, 'tx', use.names = T),
+                   'lincRNA_ss' = extract_ss_txdb(txdbObj, upstr, downstr),
                    'miRNA' = exonsBy(txdbObj, 'tx', use.names = T),
                    'misc_RNA' = exonsBy(txdbObj, 'tx', use.names = T),
                    'rRNA' = exonsBy(txdbObj, 'tx', use.names = T),
                    'snoRNA' = exonsBy(txdbObj, 'tx', use.names = T),
-                   'snRNA' = exonsBy(txdbObj, 'tx', use.names = T),
-                   'upstream' = list('protein_coding' = promoters(txdbObj, 
-                                                                  upstream = promoterUpStr, 
-                                                                  downstream = 0,
-                                                                  use.names = T),
-                                     'RNA' = exonsBy(txdbObj, 'tx', 
-                                                     use.names = T)),
-                   'downstream' = list('protein_coding' = threeUTRsByTranscript(txdbObj, 
-                                                                                use.names = T),
-                                     'RNA' = exonsBy(txdbObj, 'tx', 
-                                                     use.names = T)))
-                   
+                   'snRNA' = exonsBy(txdbObj, 'tx', use.names = T))
+  
   if (class(result) == 'CompressedGRangesList') {
     result <- unlist(result)
-  }
-  if (class(result) == 'list') { # upstream & downstream only
-    result <- lapply(result, function(x) unlist(GRangesList(x)))
   }
   if (length(result) == 0) {
     message('[', Sys.time(), '] 0 regions is extracted! Returning empty ',
@@ -658,52 +595,19 @@ extractRegionsByCode_txdb <- function(rCode, txdbObj, geneBiotypeDT, upstr = 0,
   }
   
   # select proper transcript biotype
-  trBioType <- switch(rCode, "CDS" = 'protein_coding', 
-                      "3primeUTR" = 'protein_coding', 
-                      "5primeUTR" = 'protein_coding',
-                      'ss' = 'protein_coding', 
-                      'intron' = c('protein_coding', 'lincRNA'),
-                      "promoter" = 'protein_coding', 'lincRNA' = 'lincRNA', 
-                      'lincRNA_ss' = 'lincRNA', 'lincRNA_promoter' = 'lincRNA',
-                      'miRNA' = 'miRNA', 'misc_RNA' = 'misc_RNA', 
-                      'rRNA' = 'rRNA', 'snoRNA' = 'snoRNA', 'snRNA' = 'snRNA',
-                      'upstream' = c('protein_coding', 'lincRNA', 'miRNA', 
-                                     'misc_RNA', 'rRNA', 'snoRNA', 'snRNA'),
-                      'downstream' = c('protein_coding', 'lincRNA', 'miRNA', 
-                                       'misc_RNA', 'rRNA', 'snoRNA', 'snRNA'))
+  trBioType <- switch(rCode, "promoter" = 'protein_coding',
+                      "5primeUTR" = 'protein_coding', "CDS" = 'protein_coding', 
+                      'ss' = 'protein_coding', "3primeUTR" = 'protein_coding', 
+                      'lincRNA_promoter' = 'lincRNA', 'lincRNA' = 'lincRNA', 
+                      'lincRNA_ss' = 'lincRNA', 'miRNA' = 'miRNA', 
+                      'misc_RNA' = 'misc_RNA', 'rRNA' = 'rRNA', 
+                      'snoRNA' = 'snoRNA', 'snRNA' = 'snRNA')
   if ('transcript_biotype' %in% colnames(geneBiotypeDT)) {
     mcolsResult <- geneBiotypeDT[transcript_biotype %in% trBioType]
   } else {
     mcolsResult <- geneBiotypeDT[gene_biotype %in% trBioType]
   }
-  if (class(result) != 'list') {
-    result <- result[names(result) %in% mcolsResult$transcript_id]
-  } else {# upstream & downstream only
-    if (rCode == 'upstream') {
-      trIDsToGet <- mcolsResult[gene_biotype %in% c('protein_coding', 'lincRNA')]
-    } else {
-      trIDsToGet <- mcolsResult[gene_biotype %in% c('protein_coding')]
-    }
-    trIDsToGet <- trIDsToGet$transcript_id
-    protCodAndLincRNA <- copy(result$protein_coding)
-    protCodAndLincRNA <- protCodAndLincRNA[names(protCodAndLincRNA) %in% 
-                                             trIDsToGet]
-    rm(trIDsToGet)
-    
-    if (rCode == 'upstream') {
-      trIDsToGet <- mcolsResult[!gene_biotype %in% c('protein_coding', 'lincRNA')]
-    } else {
-      trIDsToGet <- mcolsResult[!gene_biotype %in% c('protein_coding')]
-    }
-    trIDsToGet <- trIDsToGet$transcript_id
-    otherRNA <- copy(result$RNA)
-    otherRNA <- otherRNA[names(otherRNA) %in% trIDsToGet]
-    rm(trIDsToGet)
-    
-    mcols(protCodAndLincRNA) <- NULL
-    mcols(otherRNA) <- NULL
-    result <- c(protCodAndLincRNA, otherRNA)
-  }
+  result <- result[names(result) %in% mcolsResult$transcript_id]
   
   if (length(result) == 0) {
     message('[', Sys.time(), '] 0 regions is extracted! Returning empty ',
@@ -711,7 +615,7 @@ extractRegionsByCode_txdb <- function(rCode, txdbObj, geneBiotypeDT, upstr = 0,
     return(result)
   }
   
-  # add upstream and downstream, if requested (except ss and promoter)
+  # add upstream and downstream bases, if requested (except ss and promoter)
   if (!rCode %in% c('ss', 'promoter', 'lincRNA_promoter', 'lincRNA_ss',
                     'upstream', 'downstream') & 
       (upstr != 0 | downstr != 0)) {
@@ -741,35 +645,6 @@ extractRegionsByCode_txdb <- function(rCode, txdbObj, geneBiotypeDT, upstr = 0,
   result$rCode <- rCode
   result <- split(result, result$gene_id)
   
-  # for upstream and downstream rCode, we want to select upstream and 
-  # downstream of GENE, rather than transcript to avoid clushes with introns
-  # of the same gene. Therefore, we need to select most upstream/downstream
-  # element per gene and then get upstr or downstr of it.
-  if (rCode == 'upstream') {
-    result <- unlist(GRangesList(result))
-    result <- split(result, as.character(strand(result)))
-    result$`-` <- sort(result$`-`, decreasing = T)
-    result <- unlist(GRangesList(result))
-    result <- result[!duplicated(result$gene_id)]
-    # now we can perform the shift
-    result <- shift_upstream(result, upstr) %>% anchor_5p() %>% 
-      mutate(width = upstr)
-    names(result) <- NULL
-    result <- split(result, result$gene_id)
-  }
-  if (rCode == 'downstream') {
-    result <- unlist(GRangesList(result))
-    result <- split(result, as.character(strand(result)))
-    result$`+` <- sort(result$`+`, decreasing = T)
-    result <- unlist(GRangesList(result))
-    result <- result[!duplicated(result$gene_id)]
-    # now we can perform the shift
-    result <- shift_downstream(result, downstr) %>% anchor_3p() %>% 
-      mutate(width = downstr)
-    names(result) <- NULL
-    result <- split(result, result$gene_id)
-  }
-
   # reduce and disjoin, if needed
   if (reduceDisjoin) {
     result <- unlist(disjoin(reduce(result)))
@@ -784,7 +659,7 @@ extractRegionsByCode_txdb <- function(rCode, txdbObj, geneBiotypeDT, upstr = 0,
   
   # remove chr from chromosome names for simplicity of handling
   seqlevelsStyle(result) <- "NCBI"
- 
+  
   result
 }
 
@@ -807,6 +682,8 @@ extractRegionsByCode_txdb <- function(rCode, txdbObj, geneBiotypeDT, upstr = 0,
 #' gene_id, gene_name, rCode
 extractRegionsByCode_gr <- function(rCode, grObj, upstr = 0, downstr = 0, 
                                     reduceDisjoin = T) {
+  upstr <- as.integer(upstr)
+  downstr <- as.integer(downstr)
   message('[', Sys.time(), '] Extracting ', rCode, ' upstream length: ', 
           upstr, ', downstream length: ', downstr)
   msg <-  paste0('[', Sys.time(), '] Special code (', rCode ,') is used on ',
@@ -875,6 +752,7 @@ extractRegionsByCode_gr <- function(rCode, grObj, upstr = 0, downstr = 0,
   result
 }
 
+# FUNCTIONS: removing regions to exclude  -------------------------------------
 #' reduceGRkeepMcols 
 #' @description Performs reduce & disjoin of list of genomic regions on by gene
 #' bases, keeping mcols information
@@ -1118,7 +996,7 @@ filterBWregions <- function(bwGRs, bwScoreCol = NA, bwScoreMin = NA,
   result
 }
 
-# Functions : identification & processing of overlapping regions --------------
+# FUNCTIONS : identification & processing of overlapping regions --------------
 #' calcPercOverlap
 #' @description Calculates percentage of bases of a region from targetGR 
 #'              overlapping with any region in backgroundGR. In case targetGR
@@ -1600,6 +1478,158 @@ process_overlapping_gregions <- function(inGR, ignore.strand = T,
   result <- sort(result)
   result
 }
+
+# FUNCTIONS: informing user ---------------------------------------------------
+#' summurizeGenomicRegions
+#' @description Puts basic statistics about genomic ranges to data table 
+#' @author Maria Litovchenko
+#' @gr GRanges object to sum up, columns rCode and gene_id are required
+#' @return data table with columns gr_id, n_regions, n_genes, min_reg_len, 
+#' mean_reg_len, max_reg_len, min_gene_len, mean_gene_len, max_gene_len,
+#' total_len, perc_genome
+summurizeGenomicRegions <- function(gr, gr_codename = NULL) {
+  gr_lens <- width(gr)
+  gene_lens <- split(gr, gr$gene_id)
+  gene_lens <- sum(width(gene_lens))
+  result <- data.table(gr_id = gr_codename,
+                       rCodes = paste(unique(gr$rCode), collapse = ','),
+                       n_regions = length(gr), 
+                       n_genes = length(unique(gr$gene_id)), 
+                       min_reg_len = min(gr_lens), 
+                       mean_reg_len = round(mean(gr_lens)),
+                       sd_reg_len = sd(gr_lens),
+                       max_reg_len = max(gr_lens), 
+                       min_gene_len = min(gene_lens),
+                       mean_gene_len = round(mean(gene_lens)),
+                       sd_gene_len = sd(gene_lens),
+                       max_gene_len = max(gene_lens), 
+                       total_len = sum(gr_lens))
+  result[, perc_genome := round(100 * total_len / (3 * 10^9), 2)]
+  result
+}
+# FUNCTIONS: writing ---------------------------------------------------------
+#' gRangesToBed12
+#' @description Converts GRanges object to bed12-formatted data table
+#' @author Maria Litovchenko
+#' @param gr GRanges object with additional columns gene_id, gene_name, rCode,
+#' gr_id. gr_id should have one and only one value.
+#' @param genomeversion genome version of regions' genome
+#' @return data table with columns chr, start, end, name, score, strand,
+#' thickStart (same value as start), thickEnd (same value as end), itemRgb 
+#' (always 0), blockCount, blockSizes, blockStarts. name will be constructed as
+#' genomeversion-gr_id-gene_id-gene_name. score will be 1000, unless rCode is
+#' CDS, 3primeUTR, 5primeUTR.
+#' @note https://genome.ucsc.edu/FAQ/FAQformat.html#format1
+gRangesToBed12 <- function(gr, genomeversion) {
+  grList <- unlist(GRangesList(gr))
+  if (length(unique(grList$gr_id)) != 1) {
+    stop('[', Sys.time(), '] Can not handle > 1 gr_id')
+  }
+  
+  # get data table with scores
+  scoresDT <- as.data.table(mcols(grList)[, c('gene_id', 'gene_name', 
+                                              'rCode', 'gr_id')])
+  scoresDT <- scoresDT[!duplicated(scoresDT)]
+  scoresDT[, score := ifelse(rCode %in% c('3primeUTR', '5primeUTR', 'CDS'), 
+                             0, 1000)]
+  scoresDT[, rCode := NULL]
+  
+  # re-split by gene
+  grList <- split(grList, grList$gene_id)
+  
+  # construct result
+  result <- data.table(chr = unlist(unique(seqnames(grList))), 
+                       start = min(start(grList)), end = max(end(grList)),
+                       strand = unlist(unique(strand(grList))),
+                       gene_id = names(grList))
+  result[, blocksStart := paste(start(grList) - min(start(grList)), 
+                                collapse = ',')]
+  result[, blocksStart := paste0(blocksStart, ',')]
+  result[, blockSizes := paste(end(grList) - start(grList) + 1, 
+                               collapse = ',')]
+  result[, blockSizes := paste0(blockSizes, ',')]
+  result[, nBlocks := sapply(start(grList) - min(start(grList)), length)]
+  result <- merge(result, scoresDT, by = 'gene_id')
+  result[, gene_id := apply(result[,.(gr_id, gene_id, gene_name)], 1,
+                            paste, collapse = '--')]
+  result[, gene_id := paste0(genomeversion, '--', gene_id)]
+  result[, itemRgb := 0]
+  result <- result[,.(chr, start, end, gene_id, score, strand, start, 
+                      end, itemRgb, nBlocks, blockSizes, blocksStart)]
+  colnames(result) <- c('chr', 'start', 'end', 'name', 'score', 'strand',
+                        'thickStart', 'thickEnd', 'itemRgb', 'blockCount', 
+                        'blockSizes', 'blockStarts')
+  
+  result
+}
+
+#' writeGRegionsToFile
+#' @description Function to write genomic regions of interest to the file 
+#' suitable to submit to activedriverwgs, nbr, oncodrivefml or oncodriveclustl
+#' @author Maria Litovchenko
+#' @param targetGR GRanges object
+#' @param format string, one of activedriverwgs, oncodrivefml, oncodriveclustl,
+#' nbr
+#' @param output_file path to the output file
+writeGRegionsToFile <- function(targetGR, format, targetGenomeVersion, 
+                                output_file) {
+  if (!format %in% c('activedriverwgs', 'digdriver', 'oncodrivefml', 
+                     'oncodriveclustl', 'nbr')) {
+    stop(paste('Inacceptable output format! Please use one of: ',
+               'activedriverwgs, digdriver, nbr, oncodrivefm, ',
+               'oncodriveclustl'))
+  }
+  # because NBR wants chromosome names in 'chr1' format
+  if (format %in% c('nbr', 'activedriverwgs')) { 
+    message('[', Sys.time(), '] Output of genomic regions in activedriverwgs',
+            '/NBR format is requested. activedriverwgs/NBR requires ',
+            'chromosomal names be in format "chr1", seting up output to that ',
+            'format.')
+    seqlevelsStyle(targetGR) <- 'UCSC'
+  }
+  targetDT <- as.data.table(sort(targetGR))
+  
+  # columns, required for each software
+  colsToGet <- switch(format, 
+                      'activedriverwgs' = c('seqnames', 'start', 'end',
+                                            'gene_id'),
+                      'nbr' = c("seqnames", "start", "end", "gene_id"),
+                      'oncodrivefml' = c("seqnames", "start", "end", "gene_id",
+                                         "strand", "gene_name"),
+                      'oncodriveclustl' = c("seqnames", "start", "end",
+                                            "gene_id", "strand", "gene_name"))
+  result <- targetDT[, colsToGet, with = F]
+  
+  if (format == 'activedriverwgs') {
+    printColNames <- T
+    colnames(result) <- c('chr', 'start', 'end', 'id')
+  }
+  
+  if (format == 'nbr') {
+    printColNames <- F
+    message('[', Sys.time(), '] NBR needs 0-based regions! Converting regions',
+            ' to 0-base. Convert to hg19 on the next step.')
+    result[, start := start - 1]
+    result[, end := end - 1]
+  }
+  
+  if (format %in% c('oncodrivefml', 'oncodriveclustl')) {
+    printColNames <- T
+    colnames(result) <- c('CHROMOSOME', 'START', 'END', 'ELEMENT', 'STRAND',
+                          'SYMBOL')
+  }
+  
+  if (format == 'digdriver') {
+    result <- gRangesToBed12(sort(targetGR), targetGenomeVersion)
+    result <- result[order(chr, start)]
+    printColNames <- F
+  }
+  
+  suppressWarnings(dir.create(dirname(output_file), recursive = T))
+  write.table(result, output_file, col.names = printColNames, row.names = F,
+              quote = F, sep = '\t')
+}
+
 # Functions : dNdScv ----------------------------------------------------------
 #' create_dNdScv_RefCDS
 #' Creates reference table for dNdScv from GTF file
@@ -1778,129 +1808,6 @@ adjust_dNdScv_RefCDS_toDIGdriver <- function(refSeqPath, outfile) {
   suppressWarnings(rm(RefCDS))
 }
 
-# Functions : writing ---------------------------------------------------------
-#' gRangesToBed12
-#' @description Converts GRanges object to bed12-formatted data table
-#' @author Maria Litovchenko
-#' @param gr GRanges object with additional columns gene_id, gene_name, rCode,
-#' gr_id. gr_id should have one and only one value.
-#' @param genomeversion genome version of regions' genome
-#' @return data table with columns chr, start, end, name, score, strand,
-#' thickStart (same value as start), thickEnd (same value as end), itemRgb 
-#' (always 0), blockCount, blockSizes, blockStarts. name will be constructed as
-#' genomeversion-gr_id-gene_id-gene_name. score will be 1000, unless rCode is
-#' CDS, 3primeUTR, 5primeUTR.
-#' @note https://genome.ucsc.edu/FAQ/FAQformat.html#format1
-gRangesToBed12 <- function(gr, genomeversion) {
-  grList <- unlist(GRangesList(gr))
-  if (length(unique(grList$gr_id)) != 1) {
-    stop('[', Sys.time(), '] Can not handle > 1 gr_id')
-  }
-  
-  # get data table with scores
-  scoresDT <- as.data.table(mcols(grList)[, c('gene_id', 'gene_name', 
-                                              'rCode', 'gr_id')])
-  scoresDT <- scoresDT[!duplicated(scoresDT)]
-  scoresDT[, score := ifelse(rCode %in% c('3primeUTR', '5primeUTR', 'CDS'), 
-                             0, 1000)]
-  scoresDT[, rCode := NULL]
-  
-  # re-split by gene
-  grList <- split(grList, grList$gene_id)
-  
-  # construct result
-  result <- data.table(chr = unlist(unique(seqnames(grList))), 
-                       start = min(start(grList)), end = max(end(grList)),
-                       strand = unlist(unique(strand(grList))),
-                       gene_id = names(grList))
-  result[, blocksStart := paste(start(grList) - min(start(grList)), 
-                                collapse = ',')]
-  result[, blocksStart := paste0(blocksStart, ',')]
-  result[, blockSizes := paste(end(grList) - start(grList) + 1, 
-                               collapse = ',')]
-  result[, blockSizes := paste0(blockSizes, ',')]
-  result[, nBlocks := sapply(start(grList) - min(start(grList)), length)]
-  result <- merge(result, scoresDT, by = 'gene_id')
-  result[, gene_id := apply(result[,.(gr_id, gene_id, gene_name)], 1,
-                            paste, collapse = '--')]
-  result[, gene_id := paste0(genomeversion, '--', gene_id)]
-  result[, itemRgb := 0]
-  result <- result[,.(chr, start, end, gene_id, score, strand, start, 
-                      end, itemRgb, nBlocks, blockSizes, blocksStart)]
-  colnames(result) <- c('chr', 'start', 'end', 'name', 'score', 'strand',
-                        'thickStart', 'thickEnd', 'itemRgb', 'blockCount', 
-                        'blockSizes', 'blockStarts')
-  
-  result
-}
-
-#' writeGRegionsToFile
-#' @description Function to write genomic regions of interest to the file 
-#' suitable to submit to activedriverwgs, nbr, oncodrivefml or oncodriveclustl
-#' @author Maria Litovchenko
-#' @param targetGR GRanges object
-#' @param format string, one of activedriverwgs, oncodrivefml, oncodriveclustl,
-#' nbr
-#' @param output_file path to the output file
-writeGRegionsToFile <- function(targetGR, format, targetGenomeVersion, 
-                                output_file) {
-  if (!format %in% c('activedriverwgs', 'digdriver', 'oncodrivefml', 
-                     'oncodriveclustl', 'nbr')) {
-    stop(paste('Inacceptable output format! Please use one of: ',
-               'activedriverwgs, digdriver, nbr, oncodrivefm, ',
-               'oncodriveclustl'))
-  }
-  # because NBR wants chromosome names in 'chr1' format
-  if (format %in% c('nbr', 'activedriverwgs')) { 
-    message('[', Sys.time(), '] Output of genomic regions in activedriverwgs',
-            '/NBR format is requested. activedriverwgs/NBR requires ',
-            'chromosomal names be in format "chr1", seting up output to that ',
-            'format.')
-    seqlevelsStyle(targetGR) <- 'UCSC'
-  }
-  targetDT <- as.data.table(sort(targetGR))
-  
-  # columns, required for each software
-  colsToGet <- switch(format, 
-                      'activedriverwgs' = c('seqnames', 'start', 'end',
-                                            'gene_id'),
-                      'nbr' = c("seqnames", "start", "end", "gene_id"),
-                      'oncodrivefml' = c("seqnames", "start", "end", "gene_id",
-                                         "strand", "gene_name"),
-                      'oncodriveclustl' = c("seqnames", "start", "end",
-                                            "gene_id", "strand", "gene_name"))
-  result <- targetDT[, colsToGet, with = F]
-
-  if (format == 'activedriverwgs') {
-    printColNames <- T
-    colnames(result) <- c('chr', 'start', 'end', 'id')
-  }
-  
-  if (format == 'nbr') {
-    printColNames <- F
-    message('[', Sys.time(), '] NBR needs 0-based regions! Converting regions',
-            ' to 0-base. Convert to hg19 on the next step.')
-    result[, start := start - 1]
-    result[, end := end - 1]
-  }
-  
-  if (format %in% c('oncodrivefml', 'oncodriveclustl')) {
-    printColNames <- T
-    colnames(result) <- c('CHROMOSOME', 'START', 'END', 'ELEMENT', 'STRAND',
-                          'SYMBOL')
-  }
-  
-  if (format == 'digdriver') {
-    result <- gRangesToBed12(sort(targetGR), targetGenomeVersion)
-    result <- result[order(chr, start)]
-    printColNames <- F
-  }
-  
-  suppressWarnings(dir.create(dirname(output_file), recursive = T))
-  write.table(result, output_file, col.names = printColNames, row.names = F,
-              quote = F, sep = '\t')
-}
-
 # Parse input arguments -------------------------------------------------------
 # create parser object
 parser <- ArgumentParser(prog = 'create_input_genomic_regions_files.R')
@@ -1969,7 +1876,7 @@ args <- list(inventory_analysis = '../data/inventory/inventory_analysis_tcga.csv
              inventory_blacklisted = '../data/inventory/inventory_blacklist_tcga.csv', 
              target_genome_version = 'hg19',
              target_genome_path = '../data/assets/reference_genome/hg19.fa',
-             chain = '../data/assets/chain_files/hg38ToHg19.over.chain',
+             chain = '../data/assets/reference_genome/hg38ToHg19.over.chain',
              ignore_strand = T, min_reg_len = 5, cores = 2, output = 'test/')
 
 # READ inventories ------------------------------------------------------------
@@ -1981,7 +1888,6 @@ if (any(!unique(c(analysisInv$gr_genome, analysisInv$gr_excl_genome)) %in%
   stop('[', Sys.time(), '] genome version of some genomic regions is not ',
        'the same as --target_genome_version, but no chain file is provided')
 }
-
 message('[', Sys.time(), '] Read --inventory_analysis: ', 
         args$inventory_analysis)
 
@@ -1989,9 +1895,8 @@ if (!is.null(args$inventory_blacklisted)) {
   bwInv <- readBlacklistInventory(args$inventory_blacklisted, args$cores)
   if (is.null(bwInv)) {
     args$inventory_blacklisted <- NULL
-    print(paste0('[', Sys.time(), '] Black & white lists inventory file ',
-                 '(--inventory_blacklisted) was empty. Proceeding without ',
-                 'it.'))
+    message('[', Sys.time(), '] Black & white lists inventory file ',
+            '(--inventory_blacklisted) was empty. Proceeding without it.')
   } else {
     message('[', Sys.time(), '] Read --inventory_blacklisted: ', 
             args$inventory_blacklisted)
@@ -2042,8 +1947,8 @@ if (!is.null(bwInv)) {
                               setNames(bwInv[,.(file_path, file_genome)],
                                        c('filePath', 'genomeVersion')))
 }
-filesGenomeVersion <- filesGenomeVersion[!duplicated(filesGenomeVersion) & 
-                                           !is.na(filePath)]
+filesGenomeVersion <- unique(filesGenomeVersion)
+filesGenomeVersion <- filesGenomeVersion[!is.na(filePath)]
 if (all(filesGenomeVersion$genomeVersion == args$target_genome_version)) {
   liftOverIsNeeded <- 'not'
 } else {
@@ -2054,7 +1959,7 @@ if (all(filesGenomeVersion$genomeVersion == args$target_genome_version)) {
   }
 }
 
-# Extract target and exclusion genomic regions --------------------------------
+# EXTRACT target and exclusion genomic regions --------------------------------
 # get unique combos of files and gr_code so that if in one analysis a region,
 # i.e. CDS is target, and in the other it is excluded we wouldn't extract it 
 # twice.
@@ -2067,8 +1972,8 @@ grIDtoFileDT <- rbind(setNames(analysisInv[,.(gr_code, gr_file, gr_upstr,
                                               gr_excl_genome)],
                                c('gr_code', 'filePath', 'upLen', 'downLen', 
                                  'gr_genome')))
+grIDtoFileDT <- unique(grIDtoFileDT)
 grIDtoFileDT <- grIDtoFileDT[!is.na(filePath)]
-grIDtoFileDT <- grIDtoFileDT[!duplicated(grIDtoFileDT)]
 # add file extension = file type
 grIDtoFileDT[, file_type := gsub('.*[.]', '', gsub('.gz$', '', filePath))]
 # add unique id for regions
@@ -2083,7 +1988,7 @@ grIDtoFileDT <- split(grIDtoFileDT, grIDtoFileDT$filePath)
 allGenomicRegions <- list()
 for (fileIdx in 1:length(grIDtoFileDT)) {
   # check, that file needs liftover now
-  fileNeedsLiftOver <- unique(grIDtoFileDT[[fileIdx]]$gr_genome) 
+  fileNeedsLiftOver <- unique(grIDtoFileDT[[fileIdx]]$gr_genome)
   fileNeedsLiftOver <- fileNeedsLiftOver != args$target_genome_version
   fileNeedsLiftOver <- fileNeedsLiftOver & liftOverIsNeeded == 'start'
   # read file
@@ -2104,24 +2009,16 @@ for (fileIdx in 1:length(grIDtoFileDT)) {
     regInfo <- unlist(grIDtoFileDT[[fileIdx]][regIdx, ])
     
     if (grIDtoFileDT[[fileIdx]]$file_type[1] == 'gtf') {
-      if (regInfo["gr_code"] == 'upstream') {
-        promoterUpStr <- grIDtoFileDT[[fileIdx]]
-        promoterUpStr <- max(promoterUpStr[gr_code == 'promoter']$upLen)
-      } else {
-        promoterUpStr <- -1
-      }
-      
       regs[[regIdx]] <- extractRegionsByCode_txdb(rCode = regInfo['gr_code'], 
                                                   txdbObj = genomeAnno$gtfTxdb,
                                                   geneBiotypeDT = genomeAnno$geneMap,
-                                                  upstr = as.integer(regInfo['upLen']),
-                                                  downstr = as.integer(regInfo['downLen']),
-                                                  promoterUpStr = promoterUpStr)
+                                                  upstr = regInfo['upLen'],
+                                                  downstr = regInfo['downLen'])
     } else {
       regs[[regIdx]] <- extractRegionsByCode_gr(rCode = regInfo['gr_code'], 
                                                 grObj = genomeAnno,
-                                                upstr = as.integer(regInfo['upLen']),
-                                                downstr = as.integer(regInfo['downLen']))
+                                                upstr = regInfo['upLen'],
+                                                downstr = regInfo['downLen'])
       
     }
     # add source column - where the region came from 
@@ -2136,7 +2033,7 @@ for (fileIdx in 1:length(grIDtoFileDT)) {
 }
 names(allGenomicRegions) <- names(grIDtoFileDT)
 
-# Subtract exclusion regions from target regions ------------------------------
+# SUBSTRACT exclusion regions from target regions -----------------------------
 analysisInv <- split(analysisInv, analysisInv$gr_id)
 cleanTargets <- lapply(analysisInv, getCleanRegions, allGenomicRegions,
                        args$ignore_strand)
@@ -2145,7 +2042,7 @@ for (i in 1:length(cleanTargets)) {
   cleanTargets[[i]]$gr_id <- names(cleanTargets)[i]
 }
 
-# Remove black-/include only white- listed regions from/into target regions----
+# REMOVE black-/include only white- listed regions from/into target regions----
 # read all black- and white- listed files
 if (!is.null(bwInv)) {
   setkey(bwInv, 'list_name')
@@ -2195,7 +2092,7 @@ if (!is.null(bwInv)) {
   }
 }
 
-# Perform union or intersection of overlapping regions of different genes -----
+# Perform UNION or INTERSECTION of overlapping regions of different genes -----
 doUnionIntersect <- sapply(analysisInv, 
                            function(x) any(c(!is.na(x$union_percentage), 
                                              c(!is.na(x$intersect_percentage)))))
@@ -2236,7 +2133,7 @@ if (args$min_reg_len > 1) {
 }
 
 # Liftover (if all files were on other than target genome) --------------------
-# ... if it was not the case, liftover was perfromed at the reading of all 
+# ... if it was not the case, liftover was performed at the reading of all 
 # files.
 if (liftOverIsNeeded == 'end') {
   cleanTargets <- lapply(cleanTargets,
@@ -2298,9 +2195,7 @@ tumSubtV <- sort(unique(unlist(tumSubtV)))
 outBed12inv <- unique(outBed12inv[,.(tumor_subtype, gr_id_comb)])
 setkey(outBed12inv, 'tumor_subtype')
 bedFilePrefix <- 'inputGR'
-if (args$inventory_type != 'analysis') {
-  bedFilePrefix <- 'backgroundGR'
-}
+ 
 for (tumSubt in tumSubtV) {
   outfile <- paste0(args$output, '/', bedFilePrefix, '-', tumSubt, '-', 
                     args$target_genome_version, '.bed')
@@ -2308,12 +2203,6 @@ for (tumSubt in tumSubtV) {
               col.names = F, row.names = F, quote = F, sep = '\t')
 }
 rm(tumSubtV)
-
-if (!args$inventory_type == 'analysis') {
-  opt <- options(show.error.messages = FALSE)
-  on.exit(options(opt))
-  stop()
-}
 
 # [output] for NBR, DIGdriver and OncodriveFML --------------------------------
 softV <- unique(do.call(rbind, analysisInv)$software)
@@ -2379,8 +2268,9 @@ if (refRdaRequested) {
   refRdaInv <- lapply(analysisInv, 
                       function(x) x[software %in% c('dndscv', 'digdriver')])
   refRdaInv <- do.call(rbind, refRdaInv)
-  refRdaInv <- refRdaInv[,.(tumor_subtype, software, gr_id, gr_code, is_coding,
+  refRdaInv <- refRdaInv[,.(tumor_subtype, software, gr_id, gr_code, 
                             gr_genome, gr_file)]
+  refRdaInv <- refRdaInv[gr_code == 'CDS']
   refRdaInv <- unique(refRdaInv)
   # final file names
   refRdaInv$outfile_noCovs <- apply(refRdaInv, 1,
@@ -2400,8 +2290,7 @@ if (refRdaRequested) {
   # a combination of gtf file(s) for creation of refcds object
   hasGTF <- split(refRdaInv, by = c('software', 'tumor_subtype'), drop = T)
   hasGTF <- lapply(hasGTF,
-                   function(x) x[is_coding == T & 
-                                   grepl('gtf$|gtf.gz$', gr_file)]$gr_file)
+                   function(x) x[grepl('gtf$|gtf.gz$', gr_file)]$gr_file)
   hasGTF <- sapply(hasGTF, length) != 0
   if (any(!hasGTF)) {
     stop('[', Sys.time(), '] Following tumor_subtype - software combinations ',
@@ -2413,7 +2302,7 @@ if (refRdaRequested) {
   
   # assign a temporary files (with and without covariates) for every unique
   # combo of gtf files
-  gtfCombs <- refRdaInv[is_coding == T & grepl('gtf$|gtf.gz$', gr_file)]
+  gtfCombs <- refRdaInv[grepl('gtf$|gtf.gz$', gr_file)]
   gtfCombs <- gtfCombs[!duplicated(gtfCombs)]
   gtfCombs <- unique(gtfCombs[,.(gr_id, gr_code, gr_genome, gr_file)])
   gtfCombs[, tmp_noCovs := paste(c('.', sample(LETTERS, 20, replace = T)),
@@ -2473,7 +2362,6 @@ if (refRdaRequested) {
                                                         unique(gtfCombs[x]$dd_tmp_wCovs)))
   }
   
-  # PATCH - I don't think this section can handle multiple gtf files per gr_id
   # do copying for dndscv
   refRdaInv_dndscv <- merge(refRdaInv[software == 'dndscv'], gtfCombs,
                             by = c('gr_id', 'gr_code', 'gr_genome', 'gr_file'))
@@ -2494,8 +2382,6 @@ if (refRdaRequested) {
   message('[', Sys.time(), '] Finished outputting genomic regions into ',
           'dNdScv format')
   
-  
-  # PATCH
   # do copying for digdriver
   if ('dd_tmp_noCovs' %in% colnames(gtfCombs)) {
     refRdaInv_digdriver <- cbind(refRdaInv[software == 'digdriver'], 
@@ -2516,113 +2402,6 @@ if (refRdaRequested) {
             'digdriver format')
   }
 }
-
-# [driverpower output] generation (if required) -------------------------------
-# determine, if driverpower (dp) is requested
-dpRequested <- unique(do.call(rbind, analysisInv)$software)
-dpRequested <- 'driverpower' %in% dpRequested
-
-if (dpRequested) {
-  dpInv <- lapply(analysisInv, function(x) x[software == 'driverpower'])
-  dpInv <- dpInv[sapply(dpInv, function(x) nrow(x) != 0)]
-  dpInv <- lapply(dpInv, function(x) x[,.(tumor_subtype, gr_id)])
-  dpInv <- lapply(dpInv, function(x) x[!duplicated(x)])
-  
-  # since for driverpower all regions are merged together, we'll need to 
-  # produce just one file per tumor_subtype
-  dpInv <- do.call(rbind, dpInv)
-  dpInv <- split(dpInv, dpInv$tumor_subtype)
-  
-  # write to bed6 so that we can submit that file to extract features values
-  message('[', Sys.time(), '] for driverpower all regions are concatenated ',
-          'together in one file per tumour type! Outputting first into bed6 ', 
-          'to use for feature extraction.')
-  driverpowerRegsBed6 <- unique(unlist(lapply(dpInv, function(x) x$gr_id)))
-  driverpowerRegsBed6 <- cleanTargets[driverpowerRegsBed6]
-  for (i in 1:length(driverpowerRegsBed6)) {
-    # driverpower wants chr at chromosome start
-    seqlevelsStyle(driverpowerRegsBed6[[i]]) <- 'UCSC'
-    dpRegNames_i <- mcols(driverpowerRegsBed6[[i]])[, c('gr_id', 'gene_id',
-                                                        'gene_name')]
-    dpRegNames_i <- as.data.table(dpRegNames_i)
-    dpRegNames_i[, name := apply(dpRegNames_i, 1, paste, collapse = '--')]
-    dpRegNames_i <- dpRegNames_i[,.(name)]
-    dpRegNames_i[, name := paste0(args$target_genome_version, '--', name)]
-    dpRegNames_i[, chr := as.character(seqnames(driverpowerRegsBed6[[i]]))]
-    dpRegNames_i[, start := start(driverpowerRegsBed6[[i]])]
-    dpRegNames_i[, end := end(driverpowerRegsBed6[[i]])]
-    driverpowerRegsBed6[[i]] <- dpRegNames_i
-    rm(dpRegNames_i)
-  }
-  driverpowerRegsBed6 <- lapply(dpInv, 
-                                function(x) do.call(rbind, 
-                                                    driverpowerRegsBed6[x$gr_id]))
-  driverpowerRegsBed6 <- lapply(driverpowerRegsBed6, setcolorder, 
-                                c('chr', 'start', 'end', 'name'))
-  suppressWarnings(dir.create(paste0(args$output, 
-                                     '/driverpower/genomic_regions/'), 
-                              recursive = T))
-  for (tumSubt in names(driverpowerRegsBed6)) {
-    outfile <- paste0(args$output, '/driverpower/genomic_regions/', 
-                      'driverpower-inputGR-', tumSubt, '--',  
-                      args$target_genome_version, '.bed6')
-    write.table(driverpowerRegsBed6[[tumSubt]], outfile, col.names = F, 
-                row.names = F, quote = F, sep = '\t')
-  }
-                              
-  # convert to driverpower bed12
-  message('[', Sys.time(), '] for driverpower all regions are concatenated ',
-          'together in one file per tumour type!')
-  driverpowerRegs <- lapply(dpInv, 
-                            function(x) apply(x, 1, 
-                                              function(y) gRangesToBed12(cleanTargets[[y['gr_id']]], 
-                                                                         args$target_genome_version)))
-  driverpowerRegs <- lapply(driverpowerRegs, function(x) do.call(rbind, x))
-  driverpowerRegs <- lapply(driverpowerRegs, function(x) x[order(chr, start)])
-  message('[', Sys.time(), '] DriverPower requires chromosomal names to ',
-          'follow UCSC notation. Adding chr for chromosomal names.')
-  driverpowerRegs <- lapply(driverpowerRegs, 
-                            function(x) x[, chr := paste0('chr', 
-                                                          gsub('^chr', '', 
-                                                               chr))])
-    
-  for (tumSubt in names(driverpowerRegs)) {
-    outfile <- paste0(args$output, '/driverpower/genomic_regions/', 
-                      'driverpower-inputGR-', tumSubt, '--',  
-                      args$target_genome_version, '.bed')
-    write.table(driverpowerRegs[[tumSubt]], outfile, col.names = F, 
-                row.names = F, quote = F, sep = '\t')
-  }
-}
-
-# [driverpower output] create a file with train regions for driverpower -------
-if ('driverpower' %in% do.call(rbind, analysisInv)$software) {
-  message('[', Sys.time(), '] Driverpower is requested. Will generate random ',
-          'regions across the genome to serve as training set.')
-  # read in chromosomal length
-  chrLens <- fread(args$target_genome_chr_len, header = F, 
-                   stringsAsFactors = F, col.names = c('chr', 'end'))
-  message('[', Sys.time(), '] As many features do not have chrY in them, it ',
-          'will be excluded from generation of training features.')
-  chrLens <- chrLens[!chr %in% c('chrY', 'Y')]
-  chrLens[, start := 1]
-  
-  trainRegs <- generateTrainRegsDriverpower(GRangesList(cleanTargets), 
-                                            lenMultFactor = args$random_regs_mult_fact, 
-                                            minGenomeCover = args$random_regs_coverage,
-                                            chrLensDT = chrLens)
-  message('[', Sys.time(), '] DriverPower requires chromosomal names to ',
-          'follow UCSC notation. Adding chr for chromosomal names of ',
-          'training regions.')
-  trainRegs[, chr := paste0('chr', gsub('^chr', '', chr))]
-  
-  outfile <- paste0(args$output, '/driverpower/genomic_regions/', 
-                    'driverpower-trainGR-', '---', args$target_genome_version,
-                    '.bed')
-  write.table(trainRegs, outfile, col.names = F, row.names = F, quote = F,
-              sep = '\t')
-}
-
 
 message("End time of run: ", Sys.time())
 message('Total execution time: ',  
