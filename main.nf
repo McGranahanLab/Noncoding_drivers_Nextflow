@@ -18,8 +18,9 @@ process check_inventories {
 	debug true
 
 	input:
-	tuple val(patients_inventory_path), val(analysis_inventory_path), 
-	      val(blacklist_inventory_path)
+	path patients_inventory_path
+	path analysis_inventory_path
+	path blacklist_inventory_path
 
 	output:
 	stdout emit: inventories_pass
@@ -37,13 +38,13 @@ process create_input_mutation_files {
 	debug true
 
 	input:
-	tuple val(patients_inventory_path), val(analysis_inventory_path), 
-	      val(blacklist_inventory_path), val(target_genome_fasta),
-	      val(chain), val(tumor_subtype), val(software), 
-	      val(inventory_check_res)
+	tuple val(tumor_subtype), val(software), val(inventory_check_res),
+	      path(patients_inventory_path), path(analysis_inventory_path),
+	      path(blacklist_inventory_path), path(target_genome_fasta),
+	      path(chain)
 
 	output:
-	tuple val(tumor_subtype), path ${params.output}'/inputs/inputMutations-*'
+	tuple val(tumor_subtype), path('inputs/inputMutations-*')
 
 	script:
 	"""
@@ -62,31 +63,34 @@ process create_input_mutation_files {
 	                                --target_genome_path ${target_genome_fasta} \
 	                                --target_genome_version ${params.target_genome_version} \
 	                                --chain ${chain} \
-	                                --output ${params.output}'/inputs/' \
+	                                --output 'inputs/' \
 	                                --cores ${params.cores}
 	
 	"""
 }
 
 process create_input_genomic_regions_files {
-	debug true
+    debug true
 
-	input:
-	tuple val(analysis_inventory_path), val(blacklist_inventory_path), 
-	      val(target_genome_fasta), val(chain), val(inventory_check_res)
+    input:
+    val inventory_check_res
+    path analysis_inventory_path
+    path blacklist_inventory_path
+    path target_genome_fasta
+    path chain
 
-	script:
-	"""
-	3_create_input_genomic_regions_files.R --inventory_analysis ${analysis_inventory_path} \
-	                                       --inventory_blacklisted ${blacklist_inventory_path} \
-	                                       --target_genome_path ${target_genome_fasta} \
-	                                	   --target_genome_version ${params.target_genome_version} \
-	                                       --chain ${chain} \
-	                                       --ignore_strand ${params.ignore_strand} \
-	                                       --min_reg_len ${params.min_reg_len} \
-	                                       --output ${params.output}'inputs/' \
-	                                       --cores ${params.cores}
-	"""
+    script:
+    """
+    3_create_input_genomic_regions_files.R --inventory_analysis ${analysis_inventory_path} \
+                                           --inventory_blacklisted ${blacklist_inventory_path} \
+                                           --target_genome_path ${target_genome_fasta} \
+                                           --target_genome_version ${params.target_genome_version} \
+                                           --chain ${chain} \
+                                           --ignore_strand ${params.ignore_strand} \
+                                           --min_reg_len ${params.min_reg_len} \
+                                           --output ${params.output}'inputs/' \
+                                           --cores ${params.cores}
+    """
 }
 
 
@@ -127,11 +131,8 @@ workflow {
     	Step 1: check that inventories have all the needed columns and values
                 are acceptable 
     */
-    inventories = patients_inv.combine(analysis_inv)
-                              .combine(blacklist_inv)
-    inventories_pass = inventories | check_inventories
+    inventories_pass =  check_inventories(patients_inv, analysis_inv, blacklist_inv)
     inventories_pass = inventories_pass.collect()
-
 
     /* 
        Step 2: create input mutations files for all requested software, 
@@ -141,20 +142,21 @@ workflow {
     tumor_subtypes = analysis_inv.splitCsv(header: true)
     	                         .map(row -> tuple(row.tumor_subtype, row.software))
     	                         .unique().groupTuple()
-    inventories.combine(target_genome_fasta)
-    	       .combine(chain)
-    	       .combine(tumor_subtypes)
-    	       .combine(inventories_pass) | create_input_mutation_files
-
-	/* 
+    input_mutations =  create_input_mutation_files(tumor_subtypes.combine(inventories_pass)
+                  												 .combine(patients_inv)
+                  												 .combine(analysis_inv)
+                  												 .combine(blacklist_inv)
+                  												 .combine(target_genome_fasta)
+                  												 .combine(chain))
+    input_mutations.view()
+    /* 
        Step 3: create input mutations genomic region files for all requested
        		   software, parallelize by cancer subtype. This will not be run if
        		   inventories do not pass the check.
-    
-    analysis_inv.combine(blacklist_inv)
-    			.combine(target_genome_fasta)
-    	        .combine(chain).combine(inventories_pass) | create_input_genomic_regions_files
-*/
+     */
+    input_genomic_regions = create_input_genomic_regions_files(inventories_pass, analysis_inv,
+                                                               blacklist_inv, target_genome_fasta,
+                                                               chain)
 
 
 }
