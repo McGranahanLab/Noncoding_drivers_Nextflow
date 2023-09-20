@@ -26,18 +26,10 @@ process check_inventories {
 
 	script:
 	"""
-	if echo "${blacklist_inventory_path}" | grep -q "NO_FILE"
-	then
-	    1_check_inventories.R --inventory_patients ${patients_inventory_path} \
-	                          --inventory_analysis ${analysis_inventory_path} \
-	                          --target_genome_version ${params.target_genome_version}
-	else
-	    1_check_inventories.R --inventory_patients ${patients_inventory_path} \
-	                          --inventory_analysis ${analysis_inventory_path} \
-	                          --target_genome_version ${params.target_genome_version} \
-	                          --inventory_blacklisted ${blacklist_inventory_path} 
-	fi
-	
+	1_check_inventories.R --inventory_patients ${patients_inventory_path} \
+	                      --inventory_analysis ${analysis_inventory_path} \
+	                      --target_genome_version ${params.target_genome_version} \
+	                      --inventory_blacklisted ${blacklist_inventory_path}
 	"""
 }
 
@@ -51,29 +43,24 @@ process create_input_mutation_files {
 
 	script:
 	"""
-	if echo "${blacklist_inventory_path}" | grep -q "EMPTY_FILE.txt"
-	then
-		echo 'olala'
-	else
-		software_flatten=`echo ${software} | sed 's/\\[//g' | sed 's/\\]//g' | sed 's/,//g'`
-	    2_create_input_mutation_files.R --inventory_patients ${patients_inventory_path} \
-	                                    --inventory_analysis ${analysis_inventory_path} \
-	                                    --inventory_blacklisted ${blacklist_inventory_path} \
-	                                    --cancer_subtype ${tumor_subtype} \
-	                                    --software \$software_flatten \
-	                                    --min_depth ${params.min_depth} \
-	                                    --min_tumor_vac ${params.min_tumor_vac} \
-	                                    --min_tumor_vaf ${params.min_tumor_vaf} \
-	                                    --max_germline_vaf ${params.max_germline_vaf} \
-	                                    --max_germline_vac ${params.max_germline_vac} \
-	                                    --max_n_vars ${params.max_n_vars} \
-	                                    --target_genome_path ${target_genome_fasta} \
-	                                    --target_genome_version ${params.target_genome_version} \
-	                                    --chain ${chain} \
-	                                    --output ${params.output}'inputs/' \
-	                                    --cores ${params.cores}
-
-	fi
+	software_flatten=`echo ${software} | sed 's/\\[//g' | sed 's/\\]//g' | sed 's/,//g'`
+	2_create_input_mutation_files.R --inventory_patients ${patients_inventory_path} \
+									--inventory_analysis ${analysis_inventory_path} \
+	                                --inventory_blacklisted ${blacklist_inventory_path} \
+	                                --cancer_subtype ${tumor_subtype} \
+	                                --software \$software_flatten \
+	                                --min_depth ${params.min_depth} \
+	                                --min_tumor_vac ${params.min_tumor_vac} \
+	                                --min_tumor_vaf ${params.min_tumor_vaf} \
+	                                --max_germline_vaf ${params.max_germline_vaf} \
+	                                --max_germline_vac ${params.max_germline_vac} \
+	                                --max_n_vars ${params.max_n_vars} \
+	                                --target_genome_path ${target_genome_fasta} \
+	                                --target_genome_version ${params.target_genome_version} \
+	                                --chain ${chain} \
+	                                --output ${params.output}'inputs/' \
+	                                --cores ${params.cores}
+	
 	"""
 }
 
@@ -82,6 +69,9 @@ process create_input_mutation_files {
 * Workflows
 *----------------------------------------------------------------------------*/
 workflow {
+	// check that target genome version is hg19 and 
+	//params.target_genome_version
+
 	// create channels to all inventories
     patients_inv = Channel.fromPath(params.patients_inventory, 
                                     checkIfExists: true)
