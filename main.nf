@@ -79,6 +79,9 @@ process create_input_genomic_regions_files {
     path target_genome_fasta
     path chain
 
+    output:
+    path('inputs/*inputGR*')
+
     script:
     """
     3_create_input_genomic_regions_files.R --inventory_analysis ${analysis_inventory_path} \
@@ -88,7 +91,7 @@ process create_input_genomic_regions_files {
                                            --chain ${chain} \
                                            --ignore_strand ${params.ignore_strand} \
                                            --min_reg_len ${params.min_reg_len} \
-                                           --output ${params.output}'inputs/' \
+                                           --output 'inputs/' \
                                            --cores ${params.cores}
     """
 }
@@ -157,6 +160,6 @@ workflow {
     input_genomic_regions = create_input_genomic_regions_files(inventories_pass, analysis_inv,
                                                                blacklist_inv, target_genome_fasta,
                                                                chain)
-
+    input_genomic_regions.view()
 
 }

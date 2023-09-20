@@ -1871,13 +1871,19 @@ parser$add_argument("-o", "--output", required = T, type = 'character',
 args <- parser$parse_args()
 args$ignore_strand <- as.logical(args$ignore_strand)
 
+timeStart <- Sys.time()
+message('[', Sys.time(), '] Start time of run')
+printArgs(args)
+
+dir.create(args$output, recursive = T)
+
 # Test arguments --------------------------------------------------------------
-args <- list(inventory_analysis = '../data/inventory/inventory_analysis_tcga.csv',
-             inventory_blacklisted = '../data/inventory/inventory_blacklist_tcga.csv', 
-             target_genome_version = 'hg19',
-             target_genome_path = '../data/assets/reference_genome/hg19.fa',
-             chain = '../data/assets/reference_genome/hg38ToHg19.over.chain',
-             ignore_strand = T, min_reg_len = 5, cores = 2, output = 'test/')
+# args <- list(inventory_analysis = '../data/inventory/inventory_analysis_tcga.csv',
+#              inventory_blacklisted = '../data/inventory/inventory_blacklist_tcga.csv', 
+#              target_genome_version = 'hg19',
+#              target_genome_path = '../data/assets/reference_genome/hg19.fa',
+#              chain = '../data/assets/reference_genome/hg38ToHg19.over.chain',
+#              ignore_strand = T, min_reg_len = 5, cores = 2, output = 'test/')
 
 # READ inventories ------------------------------------------------------------
 analysisInv <- readAnalysisInventory(args$inventory_analysis, args$cores)
@@ -2194,10 +2200,9 @@ tumSubtV <- lapply(analysisInv, function(x) x$tumor_subtype)
 tumSubtV <- sort(unique(unlist(tumSubtV)))
 outBed12inv <- unique(outBed12inv[,.(tumor_subtype, gr_id_comb)])
 setkey(outBed12inv, 'tumor_subtype')
-bedFilePrefix <- 'inputGR'
  
 for (tumSubt in tumSubtV) {
-  outfile <- paste0(args$output, '/', bedFilePrefix, '-', tumSubt, '-', 
+  outfile <- paste0(args$output, '/inputGR-', tumSubt, '-', 
                     args$target_genome_version, '.bed')
   write.table(bed12Regs[[outBed12inv[tumSubt]$gr_id_comb]], outfile, 
               col.names = F, row.names = F, quote = F, sep = '\t')
@@ -2235,9 +2240,7 @@ if (length(softV) != 0) {
                                      by = c('software', 'gr_id'))
   grID_soft_tumorType_combs$outfile <- apply(grID_soft_tumorType_combs, 1, 
                                              function(x) 
-                                               paste0(args$output, '/' , 
-                                                x['software'], 
-                                                '/genomic_regions/', 
+                                               paste0(args$output, '/' ,
                                                 x['software'], '-inputGR-', 
                                                 x['tumor_subtype'], '-', 
                                                 x['gr_id'], '-',
@@ -2245,6 +2248,8 @@ if (length(softV) != 0) {
                                                 '.csv'))
   message('[', Sys.time(), '] Started outputting genomic regions into ',
           'different formats (NBR/DIGdriver/OncodriveFML)')
+  sapply(unique(dirname(grID_soft_tumorType_combs$outfile)), dir.create,
+         recursive = T)
   apply(grID_soft_tumorType_combs, 1, 
         function(x) file.copy(x['tmp_file'], x['outfile'], overwrite = T))
   message('[', Sys.time(), '] Finished outputting genomic regions into ',

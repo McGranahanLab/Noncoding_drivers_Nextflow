@@ -707,6 +707,8 @@ timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
+dir.create(args$output, recursive = T)
+
 # Test input args -------------------------------------------------------------
 # args <- list(inventory_patients = '../data/inventory/inventory_patients_tcga.csv',
 #              inventory_analysis = '../data/inventory/inventory_analysis_tcga.csv',
@@ -1090,7 +1092,6 @@ if ('blacklisted_codes' %in% colnames(analysisInv)) {
 
 # FILTER patients: number of variants does not exceed max_n_vars --------------
 varsPerParticip <- allVars[,.N, by = participant_id]
-print(varsPerParticip)
 
 if (any(varsPerParticip$N > args$max_n_vars)) {
   hypermutated <- varsPerParticip[N > args$max_n_vars]$participant_id
