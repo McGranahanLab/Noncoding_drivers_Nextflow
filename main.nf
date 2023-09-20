@@ -42,6 +42,9 @@ process create_input_mutation_files {
 	      val(chain), val(tumor_subtype), val(software), 
 	      val(inventory_check_res)
 
+	output:
+	tuple val(tumor_subtype), path ${params.output}'/inputs/inputMutations-*'
+
 	script:
 	"""
 	software_flatten=`echo ${software} | sed 's/\\[//g' | sed 's/\\]//g' | sed 's/,//g'`
@@ -59,7 +62,7 @@ process create_input_mutation_files {
 	                                --target_genome_path ${target_genome_fasta} \
 	                                --target_genome_version ${params.target_genome_version} \
 	                                --chain ${chain} \
-	                                --output ${params.output}'inputs/' \
+	                                --output ${params.output}'/inputs/' \
 	                                --cores ${params.cores}
 	
 	"""
@@ -147,11 +150,11 @@ workflow {
        Step 3: create input mutations genomic region files for all requested
        		   software, parallelize by cancer subtype. This will not be run if
        		   inventories do not pass the check.
-    */
+    
     analysis_inv.combine(blacklist_inv)
     			.combine(target_genome_fasta)
     	        .combine(chain).combine(inventories_pass) | create_input_genomic_regions_files
+*/
 
 
-    
 }
