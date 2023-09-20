@@ -39,7 +39,8 @@ process create_input_mutation_files {
 	input:
 	tuple val(patients_inventory_path), val(analysis_inventory_path), 
 	      val(blacklist_inventory_path), val(target_genome_fasta),
-	      val(chain), val(tumor_subtype), val(software)
+	      val(chain), val(tumor_subtype), val(software), 
+	      val(inventory_check_res)
 
 	script:
 	"""
@@ -64,14 +65,32 @@ process create_input_mutation_files {
 	"""
 }
 
+process create_input_genomic_regions_files {
+	debug true
+
+	input:
+	tuple val(analysis_inventory_path), val(blacklist_inventory_path), 
+	      val(target_genome_fasta), val(chain), val(inventory_check_res)
+
+	script:
+	"""
+	3_create_input_genomic_regions_files.R --inventory_analysis ${analysis_inventory_path} \
+	                                       --inventory_blacklisted ${blacklist_inventory_path} \
+	                                       --target_genome_path ${target_genome_fasta} \
+	                                	   --target_genome_version ${params.target_genome_version} \
+	                                       --chain ${chain} \
+	                                       --ignore_strand ${params.ignore_strand} \
+	                                       --min_reg_len ${params.min_reg_len} \
+	                                       --output ${params.output}'inputs/' \
+	                                       --cores ${params.cores}
+	"""
+}
+
 
 /* ----------------------------------------------------------------------------
 * Workflows
 *----------------------------------------------------------------------------*/
 workflow {
-	// check that target genome version is hg19 and 
-	//params.target_genome_version
-
 	// create channels to all inventories
     patients_inv = Channel.fromPath(params.patients_inventory, 
                                     checkIfExists: true)
@@ -86,11 +105,9 @@ workflow {
     } else {
         blacklist_inv = Channel.fromPath(params.blacklist_inventory, checkIfExists: true)
                                .ifEmpty { exit 1, "[ERROR]: black&white lists inventory file not found" }
-    }
-    print(blacklist_inv)
+    } 
 
-	// create channels to target genome verion and to chain file for
-	// liftover
+	// create channels to target genome verion and to chain file for liftover
 	target_genome_fasta = Channel.fromPath(params.target_genome_path, 
 	                                       checkIfExists: true)
                           .ifEmpty { exit 1, "[ERROR]: target genome fasta file not found" }
@@ -110,18 +127,31 @@ workflow {
     inventories = patients_inv.combine(analysis_inv)
                               .combine(blacklist_inv)
     inventories_pass = inventories | check_inventories
+    inventories_pass = inventories_pass.collect()
 
 
     /* 
        Step 2: create input mutations files for all requested software, 
-       parallelize by cancer subtype
+       		   parallelize by cancer subtype. This will not be run if 
+       		   inventories do not pass the check.
     */
-    if (inventories_pass.collect()) {
-    	tumor_subtypes = analysis_inv.splitCsv(header: true)
-    	                             .map(row -> tuple(row.tumor_subtype, row.software))
-    	                             .unique().groupTuple()
-    	inventories.combine(target_genome_fasta)
-    	           .combine(chain)
-    	           .combine(tumor_subtypes) | create_input_mutation_files 
-    }
+    tumor_subtypes = analysis_inv.splitCsv(header: true)
+    	                         .map(row -> tuple(row.tumor_subtype, row.software))
+    	                         .unique().groupTuple()
+    inventories.combine(target_genome_fasta)
+    	       .combine(chain)
+    	       .combine(tumor_subtypes)
+    	       .combine(inventories_pass) | create_input_mutation_files
+
+	/* 
+       Step 3: create input mutations genomic region files for all requested
+       		   software, parallelize by cancer subtype. This will not be run if
+       		   inventories do not pass the check.
+    */
+    analysis_inv.combine(blacklist_inv)
+    			.combine(target_genome_fasta)
+    	        .combine(chain).combine(inventories_pass) | create_input_genomic_regions_files
+
+
+    
 }
