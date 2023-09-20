@@ -27,9 +27,9 @@ box::use(rtracklayer[...])
 
 # GLOBAL ARGUMENTS ------------------------------------------------------------
 #' @export
-GR_CODES <- c('protein_coding', "3primeUTR", "5primeUTR", "CDS", "lincRNA", 
-              "lincRNA_promoter", "lincRNA_ss", "miRNA", "misc_RNA", 
-              "promoter", "rRNA", "snoRNA", "snRNA", "ss")
+GR_CODES <- c("promoter", "5primeUTR", "CDS", "ss", "3primeUTR", 
+              "lincRNA_promoter", "lincRNA", "lincRNA_ss",
+              "miRNA", "misc_RNA", "rRNA", "snoRNA", "snRNA")
 
 #' @export
 SOFTWARE_GR_CODES <- list('activedriverwgs' = NULL, 'dndscv' = c('CDS'),
@@ -193,10 +193,11 @@ readAnalysisInventory <- function(inventoryPath, cores = 1) {
   essenCols <- c('tumor_subtype', 'software', 'gr_id', 'gr_code', 'gr_file',
                  'gr_upstr', 'gr_downstr', 'gr_genome', 'gr_excl_id',
                  'gr_excl_code', 'gr_excl_file', 'gr_excl_upstr',
-                 'gr_excl_downstr', 'gr_excl_genome', 'blacklisted_codes')
+                 'gr_excl_downstr', 'gr_excl_genome', 'blacklisted_codes',
+                 'union_percentage', 'intersect_percentage')
   result <- fread(inventoryPath, sep = ',', header = T, stringsAsFactors = F,
                   select = essenCols, nThread = cores)
-  
+
   result[, tumor_subtype := as.character(tumor_subtype)]
   result[, gr_id := as.character(gr_id)]
   result[, gr_code := as.character(gr_code)]
@@ -219,6 +220,12 @@ readAnalysisInventory <- function(inventoryPath, cores = 1) {
     setnames(result, 'blacklisted_codes_parsed', 'blacklisted_codes')
     setcolorder(result, colsOrder)
     rm(colsOrder, blackListsDT)
+  }
+  if (!'union_percentage' %in% colnames(result)) {
+    result[, union_percentage := NA]
+  }
+  if (!'intersect_percentage' %in% colnames(result)) {
+    result[, intersect_percentage := NA]
   }
   
   result
