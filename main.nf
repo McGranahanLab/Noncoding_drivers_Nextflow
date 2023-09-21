@@ -44,7 +44,7 @@ process create_input_mutation_files {
 	      path(chain)
 
 	output:
-	tuple val(tumor_subtype), path('inputs/inputMutations-*')
+	path('inputs/*inputMutations*')
 
 	script:
 	"""
@@ -95,7 +95,6 @@ process create_input_genomic_regions_files {
                                            --cores ${params.cores}
     """
 }
-
 
 /* ----------------------------------------------------------------------------
 * Workflows
@@ -151,7 +150,17 @@ workflow {
                   												 .combine(blacklist_inv)
                   												 .combine(target_genome_fasta)
                   												 .combine(chain))
-    input_mutations.view()
+                  												 .flatten()
+    // split on csv which will go to be processed by driver calling software and bed files
+    // which will go to estimation of mutation rates
+    input_mutations.branch {
+    	csv: it.name.toString().endsWith('csv')
+			return it
+		maf: true
+			return it
+    }.set{ input_mutations_split }
+
+
     /* 
        Step 3: create input mutations genomic region files for all requested
        		   software, parallelize by cancer subtype. This will not be run if
@@ -160,6 +169,40 @@ workflow {
     input_genomic_regions = create_input_genomic_regions_files(inventories_pass, analysis_inv,
                                                                blacklist_inv, target_genome_fasta,
                                                                chain)
-    input_genomic_regions.view()
+                                                               .flatten()
+    // split on csv which will go to be processed by driver calling software and bed files
+    // which will go to estimation of mutation rates
+	input_genomic_regions.branch {
+		csv: it.toString().endsWith('csv')
+			return it
+		bed: true
+			return it
+	}.set{ input_genomic_regions_split }
 
+    /* 
+       Step 4: prepare channel input_to_soft which will contain pairs of 
+       genomic regions and mutations for all the software
+    */
+	input_genomic_regions_split.csv.map { file ->
+    	def splitted_name = file.name.toString().tokenize('-')
+        def tumor_subtype = splitted_name.get(2)
+        def gr_id = splitted_name.get(3)
+        def software = splitted_name.get(0)
+        return tuple(tumor_subtype, software, gr_id, file)
+     }.set{ input_genomic_regions_to_soft }
+
+    input_mutations_split.csv.map { file ->
+    	def splitted_name = file.name.toString().tokenize('-')
+        def tumor_subtype = splitted_name.get(2)
+    	def software = splitted_name.get(0)
+    	return tuple(tumor_subtype, software, file)
+    }.set{ input_mutations_split_to_soft }
+    input_mutations_split_to_soft = analysis_inv.splitCsv(header: true)
+                                                .map(row -> tuple(row.tumor_subtype, row.software, 
+                                                                   row.gr_id))
+                                                .unique()
+                                                .combine(input_mutations_split_to_soft, 
+                                                         by: [0, 1])
+    input_to_soft = input_mutations_split_to_soft.join(input_genomic_regions_to_soft,
+                                                       by: [0, 1, 2], remainder: true)
 }
