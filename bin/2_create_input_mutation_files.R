@@ -1144,9 +1144,9 @@ if (outChrStyle == 'UCSC') {
 # output variants for all formats
 for (software in args$software) {
   message('[', Sys.time(), '] Outputting variants for ', software)
-  outfile <- paste0(args$output, '/' , software, '/variants/', software, 
-                    '-inputMutations-', args$cancer_subtype, '-',
-                    args$target_genome_version, '.csv')
+  outfile <- paste0(args$output, '/', software, '-inputMutations-',
+                    args$cancer_subtype, '-', args$target_genome_version,
+                    '.csv')
   
   if (software != 'mutpanning') {
     writeVarsToFile(allVars, software, outfile)
@@ -1161,9 +1161,9 @@ for (software in args$software) {
     mutpanInvent[, Cohort := 'custom']
     
     # output to file
-    outfile <- paste0(args$output, '/', software, '/variants/',
-                      software, '-patientsInv-', args$cancer_subtype, '-',
-                      args$target_genome_version, '.csv')
+    outfile <- paste0(args$output, '/', software, '-patientsInv-',
+                      args$cancer_subtype, '-', args$target_genome_version,
+                      '.csv')
     write.table(mutpanInvent, append = F, quote = F, row.names = F, outfile,
                 col.names = T, sep = '\t')
   }
