@@ -51,8 +51,8 @@ suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 suppressWarnings(suppressPackageStartupMessages(library(GenomicRanges)))
 suppressWarnings(suppressPackageStartupMessages(library(maftools)))
 suppressWarnings(suppressPackageStartupMessages(library(parallel)))
-suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
 suppressWarnings(suppressPackageStartupMessages(library(plyr)))
+suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
 options(scipen = 999)
 
 # FUNCTIONS: reading original input files with mutations in ANNOVAR format ----
