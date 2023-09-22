@@ -96,11 +96,37 @@ process create_input_genomic_regions_files {
     """
 }
 
+process mutpanning {
+	debug true
+
+	input:
+	tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), path(mutpan_inv)
+
+	script:
+	"""
+	mpPath=/bin/MutPanningV2/commons-math3-3.6.1.jar:/bin/MutPanningV2/jdistlib-0.4.5-bin.jar:/bin/MutPanningV2
+    java -Xmx2G -classpath \$mpPath MutPanning
+	"""
+}
+
+process oncodrivefml {
+	debug true
+
+	input:
+	tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), val(regions)
+
+	script:
+	"""
+	echo ${mutations}
+	echo ${regions} 
+	"""
+}
+
 /* ----------------------------------------------------------------------------
 * Workflows
 *----------------------------------------------------------------------------*/
 workflow {
-	// create channels to all inventories
+    // create channels to all inventories
     patients_inv = Channel.fromPath(params.patients_inventory, 
                                     checkIfExists: true)
                           .ifEmpty { exit 1, "[ERROR]: patients inventory file not found" }
@@ -129,62 +155,62 @@ workflow {
                        .ifEmpty { exit 1, "[ERROR]: chain file not found" }
     }
 
-    /* 
-    	Step 1: check that inventories have all the needed columns and values
+    /*
+        Step 1: check that inventories have all the needed columns and values
                 are acceptable 
     */
     inventories_pass =  check_inventories(patients_inv, analysis_inv, blacklist_inv)
     inventories_pass = inventories_pass.collect()
 
     /* 
-       Step 2: create input mutations files for all requested software, 
-       		   parallelize by cancer subtype. This will not be run if 
-       		   inventories do not pass the check.
+        Step 2: create input mutations files for all requested software, 
+       	        parallelize by cancer subtype. This will not be run if 
+                inventories do not pass the check.
     */
     tumor_subtypes = analysis_inv.splitCsv(header: true)
-    	                         .map(row -> tuple(row.tumor_subtype, row.software))
+    	                         .map{row -> tuple(row.tumor_subtype, row.software)}
     	                         .unique().groupTuple()
     input_mutations =  create_input_mutation_files(tumor_subtypes.combine(inventories_pass)
-                  												 .combine(patients_inv)
-                  												 .combine(analysis_inv)
-                  												 .combine(blacklist_inv)
-                  												 .combine(target_genome_fasta)
-                  												 .combine(chain))
-                  												 .flatten()
+                                                                 .combine(patients_inv)
+                                                                 .combine(analysis_inv)
+                                                                 .combine(blacklist_inv)
+                                                                 .combine(target_genome_fasta)
+                                                                 .combine(chain))
+                                                                 .flatten()
     // split on csv which will go to be processed by driver calling software and bed files
     // which will go to estimation of mutation rates
     input_mutations.branch {
     	csv: it.name.toString().endsWith('csv')
-			return it
-		maf: true
-			return it
+              return it
+         maf: true
+              return it
     }.set{ input_mutations_split }
 
 
-    /* 
-       Step 3: create input mutations genomic region files for all requested
-       		   software, parallelize by cancer subtype. This will not be run if
-       		   inventories do not pass the check.
-     */
+    /*
+        Step 3: create input mutations genomic region files for all requested
+                software, parallelize by cancer subtype. This will not be run if
+                inventories do not pass the check.
+    */
     input_genomic_regions = create_input_genomic_regions_files(inventories_pass, analysis_inv,
                                                                blacklist_inv, target_genome_fasta,
                                                                chain)
                                                                .flatten()
     // split on csv which will go to be processed by driver calling software and bed files
     // which will go to estimation of mutation rates
-	input_genomic_regions.branch {
-		csv: it.toString().endsWith('csv')
-			return it
-		bed: true
-			return it
-	}.set{ input_genomic_regions_split }
+    input_genomic_regions.branch {
+        csv: it.toString().endsWith('csv')
+             return it
+        bed: true
+             return it
+    }.set{ input_genomic_regions_split }
 
-    /* 
-       Step 4: prepare channel input_to_soft which will contain pairs of 
-       genomic regions and mutations for all the software
+    /*
+        Step 4: prepare channel input_to_soft which will contain pairs of 
+                genomic regions and mutations for all the software
     */
-	input_genomic_regions_split.csv.map { file ->
-    	def splitted_name = file.name.toString().tokenize('-')
+    input_genomic_regions_split.csv.map { file ->
+        def splitted_name = file.name.toString().tokenize('-')
         def tumor_subtype = splitted_name.get(2)
         def gr_id = splitted_name.get(3)
         def software = splitted_name.get(0)
@@ -192,17 +218,29 @@ workflow {
      }.set{ input_genomic_regions_to_soft }
 
     input_mutations_split.csv.map { file ->
-    	def splitted_name = file.name.toString().tokenize('-')
+        def splitted_name = file.name.toString().tokenize('-')
         def tumor_subtype = splitted_name.get(2)
-    	def software = splitted_name.get(0)
-    	return tuple(tumor_subtype, software, file)
+        def software = splitted_name.get(0)
+        return tuple(tumor_subtype, software, file)
     }.set{ input_mutations_split_to_soft }
+
     input_mutations_split_to_soft = analysis_inv.splitCsv(header: true)
-                                                .map(row -> tuple(row.tumor_subtype, row.software, 
-                                                                   row.gr_id))
+                                                .map{row -> tuple(row.tumor_subtype, row.software, 
+                                                                  row.gr_id)}
                                                 .unique()
                                                 .combine(input_mutations_split_to_soft, 
                                                          by: [0, 1])
     input_to_soft = input_mutations_split_to_soft.join(input_genomic_regions_to_soft,
                                                        by: [0, 1, 2], remainder: true)
+    input_to_soft.branch {
+        mutpanning: it[1].toString() == 'mutpanning'
+            return it
+        oncodrivefml: it[1].toString() == 'oncodrivefml'
+            return it
+    }.set{ input_to_soft_split }
+
+    input_to_soft_split.mutpanning.map { it ->
+        def mutpan_inv = it[3].toString().replace("inputMutations", "patientsInv")
+        return tuple(it[0], it[1], it[2], it[3], mutpan_inv)
+    } | mutpanning
 }
