@@ -15,8 +15,6 @@ nextflow.enable.dsl=2
 * Processes
 *----------------------------------------------------------------------------*/
 process check_inventories {
-	debug true
-
 	input:
 	path patients_inventory_path
 	path analysis_inventory_path
@@ -35,7 +33,7 @@ process check_inventories {
 }
 
 process create_input_mutation_files {
-	debug true
+    tag "$tumor_subtype"
 
 	input:
 	tuple val(tumor_subtype), val(software), val(inventory_check_res),
@@ -70,8 +68,6 @@ process create_input_mutation_files {
 }
 
 process create_input_genomic_regions_files {
-    debug true
-
     input:
     val inventory_check_res
     path analysis_inventory_path
@@ -97,7 +93,7 @@ process create_input_genomic_regions_files {
 }
 
 process mutpanning {
-	debug true
+    tag "$tumor_subtype"-"gr_id"
 
 	input:
 	tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), path(mutpan_inv)
@@ -109,16 +105,58 @@ process mutpanning {
 	"""
 }
 
+process nbr {
+    tag "$tumor_subtype"-"gr_id"
+
+    input:
+    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), path(regions)
+    path target_genome_fasta
+    
+    output:
+    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*"
+
+    script:
+    """
+    OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
+
+    NBR_create_intervals.R --region_bed ${regions} --genomeFile ${target_genome_fasta}
+    regionsFile=`echo ${regions}| sed 's/.csv\$/.csv.regions/g'`
+    triNuclregionsFile=`echo ${regions} | sed 's/.csv\$/.csv.txt/g'`
+
+    NBR.R --mutations_file ${mutations} --target_regions_path \$regionsFile \
+          --target_regions_trinucfreqs_path \$triNuclregionsFile \
+          --genomeFile ${target_genome_fasta} \
+          --max_num_muts_perRegion_perSample 2 --unique_indelsites_FLAG 1 \
+          --gr_drivers ${params.assets_dir}"/NBR/GRanges_driver_regions_hg19.txt" \
+          --regions_neutralbins_file ${params.assets_dir}"/NBR/Neutral_regions_within_100kb_bins_hg19.txt" \
+          --trinucfreq_neutralbins_file ${params.assets_dir}"/NBR/Trinucfreqs_within_100kb_bins_hg19.txt" \
+          --out_prefix \$OUT_FILE
+    mv $OUT_FILE"-Selection_output.txt" \$OUT_FILE 
+    OUT_FILE_BASE=`echo \$OUT_FILE | sed 's/.csv//g'`
+    mv \$OUT_FILE"-global_mle_subs.Rds" \$OUT_FILE_BASE"-global_mle_subs.Rds" 
+    mv \$OUT_FILE"-globalRates.csv" \$OUT_FILE_BASE"-globalRates.csv"
+    """
+}
+
 process oncodrivefml {
-	debug true
+    tag "$tumor_subtype"-"gr_id"
 
 	input:
-	tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), val(regions)
+	tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), path(regions)
 
 	script:
 	"""
 	echo ${mutations}
 	echo ${regions} 
+
+    oncodrivefml -i ${mutations} -e ${regions} --sequencing wgs \
+                 --configuration 'conf/oncodrivefml_'${params.target_genome_version}'.config' \
+                 --output '.'  --cores $CORES_TO_USE
+    oncodrBaseName="oncodrivefml-inputMutations-"$TUMOR"-"$TARGET_GENOME
+    mv $oncodrBaseName"-oncodrivefml.tsv" $OUT_FILE
+    OUT_FILE_BASE=`echo $OUT_FILE | sed 's/.csv//g'`
+    mv $oncodrBaseName"-oncodrivefml.png" $OUT_FILE_BASE".png"
+    mv $oncodrBaseName"-oncodrivefml.html" $OUT_FILE_BASE".html"
 	"""
 }
 
@@ -239,8 +277,8 @@ workflow {
             return it
     }.set{ input_to_soft_split }
 
-    input_to_soft_split.mutpanning.map { it ->
+    /*input_to_soft_split.mutpanning.map { it ->
         def mutpan_inv = it[3].toString().replace("inputMutations", "patientsInv")
         return tuple(it[0], it[1], it[2], it[3], mutpan_inv)
-    } | mutpanning
+    } | mutpanning*/
 }
