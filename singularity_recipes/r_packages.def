@@ -66,4 +66,4 @@ From: ubuntu:22.04
   # installation of dNdScv package from github
   Rscript -e "Sys.setenv(TAR = '/bin/tar');devtools::install_github('im3sanger/dndscv@1b39f8267d320a9fbbd7547c7e71e2d5e133ba3e')"
   # installation of DISCOVER package from github
-  Rscript -e "devtools::install_github("NKI-CCB/DISCOVER/R@r_v0.9.4")"
+  Rscript -e "devtools::install_github('NKI-CCB/DISCOVER/R@r_v0.9.4')"
