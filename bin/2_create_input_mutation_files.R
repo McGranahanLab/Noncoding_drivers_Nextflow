@@ -55,6 +55,8 @@ suppressWarnings(suppressPackageStartupMessages(library(plyr)))
 suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
 options(scipen = 999)
 
+print('ici')
+
 # FUNCTIONS: reading original input files with mutations in ANNOVAR format ----
 #' getVarStructTypeFromAnnovar
 #' @description Gets structural type of a variant, i.e. SNP, MNP, INS, DEL.
@@ -803,6 +805,7 @@ if (outChrStyle == 'UCSC') {
   allVars[, chr := paste0('chr', chr)] 
 }
 
+gc()
 # FILTER variants: noncanonical chr, duplicated, N var/ref, same alt/ref ------
 # 1) Non canonical chr
 before <- nrow(allVars)
@@ -844,6 +847,7 @@ if (after != before) {
           'of ref = alt')
 }
 
+gc()
 # FILTER variants : VAF, ALT counts, etc --------------------------------------
 # 1) minimum depth of coverage for mutations
 if (!is.null(args$min_depth)) {
@@ -1060,6 +1064,7 @@ if (!is.null(args$max_germline_vac)) {
   }
 }
 
+gc()
 # LIFTOVER variants to target genome ------------------------------------------
 if (any(unique(allVars$somatic_genome) != args$target_genome_version)) {
   # read in chain file
@@ -1073,6 +1078,7 @@ if (any(unique(allVars$somatic_genome) != args$target_genome_version)) {
   message('[', Sys.time(), '] Finished liftover')
 }
 
+gc()
 # FILTER variants: location in black-/white- listed regions -------------------
 if ('blacklisted_codes' %in% colnames(analysisInv)) {
   if (!is.null(bwInv)) {
@@ -1090,6 +1096,7 @@ if ('blacklisted_codes' %in% colnames(analysisInv)) {
   }
 }
 
+gc()
 # FILTER patients: number of variants does not exceed max_n_vars --------------
 varsPerParticip <- allVars[,.N, by = participant_id]
 
@@ -1116,6 +1123,7 @@ if (after != before) {
 }
 allVars <- allVars[participant_id %in% varsPerParticip$participant_id]
 
+gc()
 # SAVE annotated cancer subtype mutation table as MAF file --------------------
 # bring allVars chromosome notation to the one of reference genome, yes, again
 allVars[, chr := gsub('chr', '', chr)] # this covers NCBI

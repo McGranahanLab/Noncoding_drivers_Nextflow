@@ -4,14 +4,14 @@
 # DESCRIPTION: a script for creating input genomic regions for various cancer
 #              driver programs.
 #
-# USAGE: Rscript --vanilla 
+# USAGE: Rscript --vanilla
 #
-# OPTIONS: 
+# OPTIONS:
 #
 # EXAMPLE:
 #
 #
-# REQUIREMENTS: 
+# REQUIREMENTS:
 # BUGS: --
 # NOTES:  ---
 # AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk
@@ -19,6 +19,8 @@
 # VERSION:  1
 # CREATED:  08.10.2020
 # REVISION: 18.09.2023
+
+print('I AM HERE')
 
 box::use(./custom_functions[...])
 
@@ -1905,6 +1907,7 @@ dir.create(args$output, recursive = T)
 #              chain = '../data/assets/reference_genome/hg38ToHg19.over.chain',
 #              ignore_strand = T, min_reg_len = 5, cores = 2, output = 'test/')
 
+
 # READ inventories ------------------------------------------------------------
 analysisInv <- readAnalysisInventory(args$inventory_analysis, args$cores)
 # check that if gr_genome in analysisInv is not the same as target one
@@ -2056,6 +2059,10 @@ for (fileIdx in 1:length(grIDtoFileDT)) {
   }
   names(regs) <- grIDtoFileDT[[fileIdx]]$id
   allGenomicRegions[[fileIdx]] <- regs
+  
+  rm(genomeAnno)
+  rm(regs)
+  gc()
 }
 names(allGenomicRegions) <- names(grIDtoFileDT)
 
@@ -2067,6 +2074,9 @@ cleanTargets <- lapply(analysisInv, getCleanRegions, allGenomicRegions,
 for (i in 1:length(cleanTargets)) {
   cleanTargets[[i]]$gr_id <- names(cleanTargets)[i]
 }
+
+rm(allGenomicRegions)
+gc()
 
 # REMOVE black-/include only white- listed regions from/into target regions----
 # read all black- and white- listed files
@@ -2116,6 +2126,9 @@ if (!is.null(bwInv)) {
       }
     }
   }
+  
+  rm(bwGR)
+  gc()
 }
 
 # Perform UNION or INTERSECTION of overlapping regions of different genes -----
@@ -2144,6 +2157,8 @@ if (length(doUnionIntersect) != 0) {
   }
 }
 
+gc()
+
 # Remove too short regions ----------------------------------------------------
 if (args$min_reg_len > 1) {
   for (grID in names(cleanTargets)) {
@@ -2155,6 +2170,7 @@ if (args$min_reg_len > 1) {
             round(100 * (nbefore - nafter) / nbefore, 2), '%) regions from ', 
             grID, ' due length < ', args$min_reg_len)
     
+    gc()
   }
 }
 
