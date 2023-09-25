@@ -2,8 +2,9 @@
 # FILE: create_genomic_regions.R ----------------------------------------------
 #
 # DESCRIPTION: a script for creating input genomic regions for various cancer
-#              driver programs
-# USAGE: 
+#              driver programs.
+#
+# USAGE: Rscript --vanilla 
 #
 # OPTIONS: 
 #
@@ -212,9 +213,28 @@ checkLiftOverByTr <- function(origGR, loGR) {
 #' NULL, selection on transcript_biotype/gene_biotype will be performed.
 extractGeneToIDmap <- function(gtfGR, tx_biotypes = NULL) {
   result <- as.data.table(mcols(gtfGR))
-  result <- result[, intersect(c('gene_name', 'gene_id', 'gene_biotype',
-                                 'transcript_id', 'transcript_biotype'),
+  result <- result[, intersect(c('gene_name', 'gene_id', 
+                                 'gene_type', 'gene_biotype',
+                                 'transcript_id', 
+                                 'transcript_type', 'transcript_biotype'),
                                colnames(result)), with = F]
+  
+  # gene_type and gene_biotype were included above in order to access gene 
+  # biotype. In some GTF files the column name is gene_type and in the others
+  # it is gene_biotype. However, they never should be both in the same file.
+  if ('gene_type' %in% colnames(result) & 
+      'gene_biotype' %in% colnames(result)) {
+    stop('[', Sys.time(), '] Malformed GFT: both columns gene_type and ',
+         'gene_biotype are found.')
+  }
+  if ('transcript_type' %in% colnames(result) & 
+      'transcript_biotype' %in% colnames(result)) {
+    stop('[', Sys.time(), '] Malformed GFT: both columns transcript_type and ',
+         'transcript_biotype are found.')
+  }
+  setnames(result, c('transcript_type', 'gene_type'), 
+           c('transcript_biotype', 'gene_biotype'), skip_absent = T)
+  
   if ('transcript_biotype' %in% colnames(result)) {
     result <- result[complete.cases(transcript_biotype)]
   } else {
@@ -2118,7 +2138,7 @@ if (length(doUnionIntersect) != 0) {
                                                             ignore.strand = args$ignore_strand,
                                                             unionTreshold = unique(analysisInv[[gr_id_i]]$union_percentage),
                                                             intersectTreshold = unique(analysisInv[[gr_id_i]]$intersect_percentage))
-
+    
     message('[', Sys.time(), '] Finished performing union or intersection of ',
             'overlapping regions of different genes on ', gr_id_i)
   }
@@ -2200,7 +2220,7 @@ tumSubtV <- lapply(analysisInv, function(x) x$tumor_subtype)
 tumSubtV <- sort(unique(unlist(tumSubtV)))
 outBed12inv <- unique(outBed12inv[,.(tumor_subtype, gr_id_comb)])
 setkey(outBed12inv, 'tumor_subtype')
- 
+
 for (tumSubt in tumSubtV) {
   outfile <- paste0(args$output, '/inputGR-', tumSubt, '-', 
                     args$target_genome_version, '.bed')
@@ -2241,11 +2261,11 @@ if (length(softV) != 0) {
   grID_soft_tumorType_combs$outfile <- apply(grID_soft_tumorType_combs, 1, 
                                              function(x) 
                                                paste0(args$output, '/' ,
-                                                x['software'], '-inputGR-', 
-                                                x['tumor_subtype'], '-', 
-                                                x['gr_id'], '-',
-                                                args$target_genome_version,
-                                                '.csv'))
+                                                      x['software'], '-inputGR-', 
+                                                      x['tumor_subtype'], '-', 
+                                                      x['gr_id'], '-',
+                                                      args$target_genome_version,
+                                                      '.csv'))
   message('[', Sys.time(), '] Started outputting genomic regions into ',
           'different formats (NBR/DIGdriver/OncodriveFML)')
   sapply(unique(dirname(grID_soft_tumorType_combs$outfile)), dir.create,
@@ -2311,10 +2331,10 @@ if (refRdaRequested) {
   gtfCombs <- gtfCombs[!duplicated(gtfCombs)]
   gtfCombs <- unique(gtfCombs[,.(gr_id, gr_code, gr_genome, gr_file)])
   gtfCombs[, tmp_noCovs := paste(c('.', sample(LETTERS, 20, replace = T)),
-                                     collapse = ''),
+                                 collapse = ''),
            by = c('gr_id', 'gr_code')]
   gtfCombs[, tmp_wCovs := paste(c('.', sample(LETTERS, 20, replace = T)), 
-                                       collapse = ''),
+                                collapse = ''),
            by = c('gr_id', 'gr_code')]
   
   # create RefRda without covariates
