@@ -48,7 +48,7 @@ process create_input_mutation_files {
 	"""
 	software_flatten=`echo ${software} | sed 's/\\[//g' | sed 's/\\]//g' | sed 's/,//g'`
 	2_create_input_mutation_files.R --inventory_patients ${patients_inventory_path} \
-									--inventory_analysis ${analysis_inventory_path} \
+				       --inventory_analysis ${analysis_inventory_path} \
 	                                --inventory_blacklisted ${blacklist_inventory_path} \
 	                                --cancer_subtype ${tumor_subtype} \
 	                                --software \$software_flatten \
@@ -101,7 +101,7 @@ process mutpanning {
 	script:
 	"""
 	mpPath=/bin/MutPanningV2/commons-math3-3.6.1.jar:/bin/MutPanningV2/jdistlib-0.4.5-bin.jar:/bin/MutPanningV2
-    java -Xmx2G -classpath \$mpPath MutPanning
+        java -Xmx2G -classpath \$mpPath MutPanning
 	"""
 }
 
@@ -141,13 +141,13 @@ process nbr {
 process oncodrivefml {
     tag "$tumor_subtype"-"gr_id"
 
-	input:
-	tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), path(regions)
+    input:
+    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), path(regions)
 
-	script:
-	"""
-	echo ${mutations}
-	echo ${regions} 
+    script:
+    """
+    echo ${mutations}
+    echo ${regions} 
 
     oncodrivefml -i ${mutations} -e ${regions} --sequencing wgs \
                  --configuration 'conf/oncodrivefml_'${params.target_genome_version}'.config' \
@@ -157,7 +157,7 @@ process oncodrivefml {
     OUT_FILE_BASE=`echo $OUT_FILE | sed 's/.csv//g'`
     mv $oncodrBaseName"-oncodrivefml.png" $OUT_FILE_BASE".png"
     mv $oncodrBaseName"-oncodrivefml.html" $OUT_FILE_BASE".html"
-	"""
+    """
 }
 
 /* ----------------------------------------------------------------------------
@@ -180,10 +180,11 @@ workflow {
                                .ifEmpty { exit 1, "[ERROR]: black&white lists inventory file not found" }
     } 
 
-	// create channels to target genome verion and to chain file for liftover
-	target_genome_fasta = Channel.fromPath(params.target_genome_path, 
-	                                       checkIfExists: true)
-                          .ifEmpty { exit 1, "[ERROR]: target genome fasta file not found" }
+    // create channels to target genome verion and to chain file for liftover
+    target_genome_fasta = Channel.fromPath(params.target_genome_path,
+                                           checkIfExists: true)
+                                 .ifEmpty { exit 1, 
+                                            "[ERROR]: target genome fasta file not found" }
     if (params.chain == '') {
         def no_file = new File(".NO_FILE")
         no_file.createNewFile()
@@ -202,12 +203,12 @@ workflow {
 
     /* 
         Step 2: create input mutations files for all requested software, 
-       	        parallelize by cancer subtype. This will not be run if 
+                parallelise by cancer subtype. This will not be run if 
                 inventories do not pass the check.
     */
     tumor_subtypes = analysis_inv.splitCsv(header: true)
-    	                         .map{row -> tuple(row.tumor_subtype, row.software)}
-    	                         .unique().groupTuple()
+                                 .map{row -> tuple(row.tumor_subtype, row.software)}
+                                 .unique().groupTuple()
     input_mutations =  create_input_mutation_files(tumor_subtypes.combine(inventories_pass)
                                                                  .combine(patients_inv)
                                                                  .combine(analysis_inv)
@@ -218,10 +219,10 @@ workflow {
     // split on csv which will go to be processed by driver calling software and bed files
     // which will go to estimation of mutation rates
     input_mutations.branch {
-    	csv: it.name.toString().endsWith('csv')
-              return it
-         maf: true
-              return it
+        csv: it.name.toString().endsWith('csv')
+            return it
+        maf: true
+            return it
     }.set{ input_mutations_split }
 
 
@@ -242,6 +243,9 @@ workflow {
         bed: true
              return it
     }.set{ input_genomic_regions_split }
+
+    input_genomic_regions_split.bed.view()
+    input_mutations_split.maf.view()
 
     /*
         Step 4: prepare channel input_to_soft which will contain pairs of 
