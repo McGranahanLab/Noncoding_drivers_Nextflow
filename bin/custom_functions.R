@@ -384,7 +384,7 @@ readInAndFilterBWregions <- function(bwFile, chrStyle, bwScoreCol = NA,
 #' @export
 getSeqlevelsStyle <- function(fastaPath) {
   # read just the first line
-  result <- fread(fastaPath, nrows = 1, header = F)$V1
+  result <- readLines(fastaPath, n = 1)
   result <- ifelse(grepl('>chr', result), 'UCSC', 'NCBI')
   result
 }
