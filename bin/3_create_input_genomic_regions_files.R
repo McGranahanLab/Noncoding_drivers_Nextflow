@@ -20,7 +20,6 @@
 # CREATED:  08.10.2020
 # REVISION: 18.09.2023
 
-print('I AM HERE')
 
 box::use(./custom_functions[...])
 

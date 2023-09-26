@@ -55,8 +55,6 @@ suppressWarnings(suppressPackageStartupMessages(library(plyr)))
 suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
 options(scipen = 999)
 
-print('ici')
-
 # FUNCTIONS: reading original input files with mutations in ANNOVAR format ----
 #' getVarStructTypeFromAnnovar
 #' @description Gets structural type of a variant, i.e. SNP, MNP, INS, DEL.
