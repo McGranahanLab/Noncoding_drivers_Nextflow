@@ -52,13 +52,10 @@ process create_input_mutation_files {
     tag "$tumor_subtype"
 
     input:
-    tuple val(tumor_subtype), val(software)
-    val inventory_check_res 
-    path patients_inventory_path
-    path analysis_inventory_path
-    path blacklist_inventory_path
-    path target_genome_fasta
-    path chain
+    tuple val(tumor_subtype), val(software), val(inventory_check_res), 
+          path(patients_inventory_path), path(analysis_inventory_path),
+          path(blacklist_inventory_path), path(target_genome_fasta),
+          path(chain)
 
     output:
     path('inputs/*inputMutations*')
@@ -88,11 +85,9 @@ process create_input_mutation_files {
 
 process create_input_genomic_regions_files {
     input:
-    val  inventory_check_res
-    path analysis_inventory_path
-    path blacklist_inventory_path
-    path target_genome_fasta
-    path chain
+    tuple val(inventory_check_res), path(analysis_inventory_path),
+          path(blacklist_inventory_path), path(target_genome_fasta),
+          path(chain)
 
     output:
     path('inputs/*inputGR*')
@@ -115,10 +110,9 @@ process calculate_mutation_rates {
     tag "$tumor_subtype"
 
     input:
-    tuple val(tumor_subtype), path(bed_path), path(maf_path)
-    path target_genome_chr_len
-    path gene_name_synonyms
-    path varanno_conversion_table
+    tuple val(tumor_subtype), path(bed_path), path(maf_path), 
+          path(target_genome_chr_len), path(gene_name_synonyms),
+          path(varanno_conversion_table)
 
     output:
     tuple val(tumor_subtype), path('*meanMutRatePerGR.csv'), 
@@ -143,10 +137,11 @@ process calculate_mutation_rates {
 }
 
 process mutpanning {
-    tag "$tumor_subtype"-"gr_id"
+    tag "$tumor_subtype"
 
     input:
-    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), path(mutpan_inv)
+    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations),
+          path(mutpan_inv)
 
     script:
     """
@@ -156,11 +151,12 @@ process mutpanning {
 }
 
 process nbr {
-    tag "$tumor_subtype"-"gr_id"
+    tag "$tumor_subtype-$gr_id"
 
     input:
-    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), path(regions)
-    path target_genome_fasta
+    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations),
+          path(regions), path(target_genome_fasta), path(nbr_neutral_bins),
+          path(nbr_neutral_trinucfreq), path(nbr_driver_regs)
     
     output:
     path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*"
@@ -177,11 +173,11 @@ process nbr {
           --target_regions_trinucfreqs_path \$triNuclregionsFile \
           --genomeFile ${target_genome_fasta} \
           --max_num_muts_perRegion_perSample 2 --unique_indelsites_FLAG 1 \
-          --gr_drivers ${params.assets_dir}"/NBR/GRanges_driver_regions_hg19.txt" \
-          --regions_neutralbins_file ${params.assets_dir}"/NBR/Neutral_regions_within_100kb_bins_hg19.txt" \
-          --trinucfreq_neutralbins_file ${params.assets_dir}"/NBR/Trinucfreqs_within_100kb_bins_hg19.txt" \
+          --gr_drivers ${nbr_driver_regs} \
+          --regions_neutralbins_file ${nbr_neutral_bins} \
+          --trinucfreq_neutralbins_file ${nbr_neutral_trinucfreq} \
           --out_prefix \$OUT_FILE
-    mv $OUT_FILE"-Selection_output.txt" \$OUT_FILE 
+    mv \$OUT_FILE"-Selection_output.txt" \$OUT_FILE 
     OUT_FILE_BASE=`echo \$OUT_FILE | sed 's/.csv//g'`
     mv \$OUT_FILE"-global_mle_subs.Rds" \$OUT_FILE_BASE"-global_mle_subs.Rds" 
     mv \$OUT_FILE"-globalRates.csv" \$OUT_FILE_BASE"-globalRates.csv"
@@ -189,7 +185,7 @@ process nbr {
 }
 
 process oncodrivefml {
-    tag "$tumor_subtype"-"gr_id"
+    tag "$tumor_subtype"-"$gr_id"
 
     input:
     tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), path(regions)
@@ -236,6 +232,11 @@ workflow {
     gene_name_synonyms = channel_from_params_path(params.gene_name_synonyms)
     varanno_conversion_table = channel_from_params_path(params.varanno_conversion_table)
 
+    // NBR specific files
+    nbr_neutral_bins = channel_from_params_path(params.nbr_regions_neutralbins_file)
+    nbr_neutral_trinucfreq = channel_from_params_path(params.nbr_trinucfreq_neutralbins_file)
+    nbr_driver_regs = channel_from_params_path(params.nbr_driver_regs_file)
+
     /*
         Step 1: check that inventories have all the needed columns and values
                 are acceptable 
@@ -251,13 +252,16 @@ workflow {
     tumor_subtypes = analysis_inv.splitCsv(header: true)
                                  .map{row -> tuple(row.tumor_subtype, row.software)}
                                  .unique().groupTuple()
-    input_mutations =  create_input_mutation_files(tumor_subtypes, 
-                                                   inventories_pass,
-                                                   patients_inv, analysis_inv,
-                                                   blacklist_inv, 
-                                                   target_genome_fasta, chain)
+    input_mutations =  create_input_mutation_files(tumor_subtypes
+                                                   .combine(inventories_pass)
+                                                   .combine(patients_inv)
+                                                   .combine(analysis_inv)
+                                                   .combine(blacklist_inv)
+                                                   .combine(target_genome_fasta)
+                                                   .combine(chain))
                                                    .flatten()
-    // split on csv which will go to be processed by driver calling software and bed files
+
+     // split on csv which will go to be processed by driver calling software and bed files
     // which will go to estimation of mutation rates
     input_mutations.branch {
         csv: it.name.toString().endsWith('csv')
@@ -272,9 +276,11 @@ workflow {
                 software, parallelize by cancer subtype. This will not be run if
                 inventories do not pass the check.
     */
-    input_genomic_regions = create_input_genomic_regions_files(inventories_pass, analysis_inv,
-                                                               blacklist_inv, target_genome_fasta,
-                                                               chain)
+    input_genomic_regions = create_input_genomic_regions_files(inventories_pass
+                                                               .combine(analysis_inv)
+                                                               .combine(blacklist_inv)
+                                                               .combine(target_genome_fasta)
+                                                               .combine(chain))
                                                                .flatten()
     // split on csv which will go to be processed by driver calling software and bed files
     // which will go to estimation of mutation rates
@@ -285,10 +291,8 @@ workflow {
              return it
     }.set{ input_genomic_regions_split }
 
-
     /*
         Step 4: calculate local mutation rates (used for filtering of drivers)
-    */
     input_genomic_regions_split.bed.map { file ->
         def splitted_name = file.name.toString().tokenize('-')
         def tumor_subtype = splitted_name.get(1)
@@ -300,9 +304,10 @@ workflow {
         return tuple(tumor_subtype, file)
     }.set{muts_maf_files}
 
-    mut_rates = calculate_mutation_rates(regions_bed_files.join(muts_maf_files, by: [0]),
-                                         target_genome_chr_len, gene_name_synonyms,
-                                         varanno_conversion_table)
+    mut_rates = calculate_mutation_rates(regions_bed_files.join(muts_maf_files, by: [0])
+                                                          .combine(target_genome_chr_len)
+                                                          .combine(gene_name_synonyms)
+                                                          .combine(varanno_conversion_table)) */
 
     /*
         Step 5: prepare channel input_to_soft which will contain pairs of 
@@ -329,19 +334,37 @@ workflow {
                                                 .unique()
                                                 .combine(input_mutations_split_to_soft, 
                                                          by: [0, 1])
-    input_to_soft = input_mutations_split_to_soft.join(input_genomic_regions_to_soft,
-                                                       by: [0, 1, 2], remainder: true)
+    input_to_soft = input_mutations_split_to_soft.combine(input_genomic_regions_to_soft,
+                                                          by: [0, 1, 2])
+
     input_to_soft.branch {
+        digdriver: it[1].toString() == 'digdriver'
+            return it
+        dndscv: it[1].toString() == 'dndscv'
+            return it
         mutpanning: it[1].toString() == 'mutpanning'
+            return it
+        nbr: it[1].toString() == 'nbr'
             return it
         oncodrivefml: it[1].toString() == 'oncodrivefml'
             return it
     }.set{ input_to_soft_split }
 
-    /*input_to_soft_split.mutpanning.map { it ->
+    /*
+        Step 6: run NBR
+    */
+    nbr_results = nbr(input_to_soft_split.nbr.combine(target_genome_fasta)
+                                             .combine(nbr_neutral_bins)
+                                             .combine(nbr_neutral_trinucfreq)
+                                             .combine(nbr_driver_regs))
+
+    /*
+        Step 7: run mutpanning
+    
+    input_to_soft_split.mutpanning.map { it ->
         def mutpan_inv = it[3].toString().replace("inputMutations", "patientsInv")
         return tuple(it[0], it[1], it[2], it[3], mutpan_inv)
-    } | mutpanning*/
+    }//.view()*/
 }
 
 // inform about completition
