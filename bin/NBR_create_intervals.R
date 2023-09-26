@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 # FILE: NBR_create_intervals.R ------------------------------------------------
 #
 # DESCRIPTION: Creates input .region and .txt files containing region of 

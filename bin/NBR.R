@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 # FILE: NBR.R -----------------------------------------------------------------
 # DESCRIPTION: Non-coding driver detection with precomputed trinucleotide 
 # composition and using the local density of putatively neutral mutations as 
