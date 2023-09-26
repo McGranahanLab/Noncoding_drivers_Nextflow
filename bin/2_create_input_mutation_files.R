@@ -1090,6 +1090,7 @@ if ('blacklisted_codes' %in% colnames(analysisInv)) {
                                             bwScoreMin = bwInv$min_value[i],
                                             bwScoreMax = bwInv$max_value[i],
                                             cores = args$cores)
+      gc()
     }
   }
 }
