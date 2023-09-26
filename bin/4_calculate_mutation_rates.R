@@ -825,11 +825,10 @@ calcMutRate <- function(mutsToGRmap, allParticipantsID, GRs,
 #'         matchVariantsToRegions function, mutRatesDT and synMutRatesDT -
 #'         optional.
 mutRate_wrapper <- function(varsDT, GRs, checkAnnoMatch = F, 
-                            synonymsDT = NULL, 
-                            calc_synonymous = F, cdsAcceptedClass = NULL, 
-                            ncAcceptedClass = NULL, specieCode = NULL,
-                            targetGenomeVersion = NULL, 
-                            codesConversionDT = NULL,
+                            synonymsDT = NULL, calc_synonymous = F, 
+                            cdsAcceptedClass = NULL, ncAcceptedClass = NULL, 
+                            specieCode = NULL, targetGenomeVersion = NULL, 
+                            codesConversionDT = NULL, 
                             annoFailedCode = 'Unknown') {
   if (checkAnnoMatch & (is.null(cdsAcceptedClass) | is.null(ncAcceptedClass))) {
     stop('[', Sys.time(), '] checkAnnoMatch is requested, but ',
@@ -1062,7 +1061,7 @@ parser$add_argument("-s", "--calc_synonymous", required = F, default = T,
 targetGenomeChrHelp <- paste('Path to the tab-separated file containing ', 
                              'chromosomal lengths of the target genome. ',
                              'Must have 2 columns: chr and length. No header.')
-parser$add_argument("-l", "--target_genome_chr_len", required = T, 
+parser$add_argument("-l", "--target_genome_chr_len", required = F,
                     default = '', type = 'character', 
                     help = targetGenomeChrHelp)
 
@@ -1112,37 +1111,51 @@ parser$add_argument("-p", "--output", required = T, type = 'character',
                     help = outputHelp)
 args <- parser$parse_args()
 
-# Test arguments --------------------------------------------------------------
-args <- list('variants' = '../work/46/4f35fcb3f86675007be24a347c6f5b/inputs/inputMutations-LUSC-hg19.maf',
-             'genomic_regions' = '../work/8c/3bb3b24a9af0a805dc0cc73ca1a6de/inputs/inputGR-LUSC-hg19.bed',
-             'tumor_subtype' = 'LUSC', 'target_genome_version' = 'hg19',
-             'target_genome_chr_len' = '../data/assets/reference_genome/Homo_sapiens_assembly19.chrom.sizes',
-             'gene_name_synonyms' = '../data/assets/gene_names_synonyms/hgnc_complete_set_2022-07-01_proc.csv',
-             'varanno_conversion_table' = '../data/assets/variantAnnotation_to_annovar_conversion.txt',
-             'bin_len' = 5*(10^4), 'calc_synonymous' = T,
-             'cdsAcceptedClass' = list("Frame_Shift_Del", "Frame_Shift_Ins",
-                                       "In_Frame_Del", "In_Frame_Ins", 
-                                       "Missense_Mutation", 
-                                       "Nonsense_Mutation", "Silent", 
-                                       "Translation_Start_Site", 
-                                       "Nonstop_Mutation", 
-                                       "De_novo_Start_InFrame", 
-                                       "De_novo_Start_OutOfFrame", 
-                                       "Unknown"),
-             'ncAcceptedClass' = list("3'UTR", "3'Flank", "5'UTR", 
-                                      "5'Flank", "IGR", "Intron", "RNA", 
-                                      "Targeted_Region", "Splice_Site", 
-                                      'Unknown'), 
-             'annotation_failed_code' = 'Unknown',
-             'output' = 'mutRate-MET_PANCAN-hg19-')
- 
 args$ncAcceptedClass <- gsub('prime', "'", args$ncAcceptedClass)
+if (args$target_genome_chr_len == '') {
+  args$target_genome_chr_len <- NULL
+}
+if (args$gene_name_synonyms == '') {
+  args$gene_name_synonyms <- NULL
+}
+if (args$varanno_conversion_table == '') {
+  args$varanno_conversion_table <- NULL
+}
+if (is.null(args$target_genome_chr_len) & args$bin_len > 1) {
+  stop('[', Sys.time(), '] Filtering by local mutation rate is requested (',
+       '--bin_len =', args$bin_len, '), but --target_genome_chr_len is not ',
+       'given.')
+}
 
 check_input_arguments(args, outputType = 'file')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 printArgs(args)
+
+# Test arguments --------------------------------------------------------------
+# args <- list('variants' = '../work/46/4f35fcb3f86675007be24a347c6f5b/inputs/inputMutations-LUSC-hg19.maf',
+#              'genomic_regions' = '../work/8c/3bb3b24a9af0a805dc0cc73ca1a6de/inputs/inputGR-LUSC-hg19.bed',
+#              'tumor_subtype' = 'LUSC', 'target_genome_version' = 'hg19',
+#              'target_genome_chr_len' = '../data/assets/reference_genome/Homo_sapiens_assembly19.chrom.sizes',
+#              'gene_name_synonyms' = '../data/assets/gene_names_synonyms/hgnc_complete_set_2022-07-01_proc.csv',
+#              'varanno_conversion_table' = '../data/assets/variantAnnotation_to_annovar_conversion.txt',
+#              'bin_len' = 5*(10^4), 'calc_synonymous' = T,
+#              'cdsAcceptedClass' = list("Frame_Shift_Del", "Frame_Shift_Ins",
+#                                        "In_Frame_Del", "In_Frame_Ins", 
+#                                        "Missense_Mutation", 
+#                                        "Nonsense_Mutation", "Silent", 
+#                                        "Translation_Start_Site", 
+#                                        "Nonstop_Mutation", 
+#                                        "De_novo_Start_InFrame", 
+#                                        "De_novo_Start_OutOfFrame", 
+#                                        "Unknown"),
+#              'ncAcceptedClass' = list("3'UTR", "3'Flank", "5'UTR", 
+#                                       "5'Flank", "IGR", "Intron", "RNA", 
+#                                       "Targeted_Region", "Splice_Site", 
+#                                       'Unknown'), 
+#              'annotation_failed_code' = 'Unknown',
+#              'output' = 'mutRate-MET_PANCAN-hg19-')
 
 # READ in mutation, genome region and chr lengths files -----------------------
 message('[', Sys.time(), '] Started reading input mutation file')
@@ -1175,12 +1188,15 @@ message('[', Sys.time(), '] rtracklayer import function while reading ',
 start(GR) <- start(GR) - 1
 end(GR) <- end(GR) - 1
 
-message('[', Sys.time(), '] Started reading chromosomal length file')
-chrLensDT <- fread(args$target_genome_chr_len, header = F, 
-                   stringsAsFactors = F)
-chrLensVect <- chrLensDT$V2
-names(chrLensVect) <- chrLensDT$V1
-message('[', Sys.time(), '] Finished reading chromosomal length file')
+if (args$bin_len > 1) {
+  message('[', Sys.time(), '] Started reading chromosomal length file')
+  chrLensDT <- fread(args$target_genome_chr_len, header = F, 
+                     stringsAsFactors = F)
+  chrLensVect <- chrLensDT$V2
+  names(chrLensVect) <- chrLensDT$V1
+  message('[', Sys.time(), '] Finished reading chromosomal length file')
+  rm(chrLensDT)
+}
 
 # READ in table with gene name synonyms & variant codes conversion ------------
 symbolSynsDT <- NULL
@@ -1201,12 +1217,24 @@ if (!is.null(args$varanno_conversion_table)) {
           'table')
 }
 
-# Calculate number of variants per participant ---------------------------------
-nMutsPerPart <- allVars[,.N, by = participant_id][order(N)]
-nMutsPerPart[, tumor_subtype := args$tumor_subtype]
+# Match mutations to genomic regions, calculate mut.rates ---------------------
+# for custom genomic regions
+message('[', Sys.time(), '] Working with genomic regions from bed12 file')
+mutRates_GR <- mutRate_wrapper(varsDT = allVars, GRs = GR, 
+                               checkAnnoMatch = T, 
+                               synonymsDT = symbolSynsDT,
+                               calc_synonymous = args$calc_synonymous,
+                               cdsAcceptedClass = args$cdsAcceptedClass, 
+                               ncAcceptedClass = args$ncAcceptedClass, 
+                               specieCode = 'Hsapiens',
+                               targetGenomeVersion = args$target_genome_version,
+                               codesConversionDT = codesConvertDT, 
+                               annoFailedCode = args$annotation_failed_code)
 
-# Bin genome on tiles ---------------------------------------------------------
-if (!is.null(args$bin_len)) {
+
+# Calculate local (bin-wise) mut.rates ----------------------------------------
+if (args$bin_len > 1) {
+  # Bin genome on tiles
   message('[', Sys.time(), '] Started binning genome on bins sized ', 
           args$bin_len, 'bp.')
   # bin genome 
@@ -1219,32 +1247,21 @@ if (!is.null(args$bin_len)) {
   mcols(genomeTilesGR)$gr_name <- gsub(' ', '', mcols(genomeTilesGR)$gr_name)
   message('[', Sys.time(), '] Finished binning genome on bins sized ', 
           args$bin_len, 'bp.')
+  
+  message('[', Sys.time(), '] Working with genomic regions created as bins')
+  mutRates_GenomeTiles <- mutRate_wrapper(varsDT = allVars, checkAnnoMatch = F,
+                                          GRs = genomeTilesGR, 
+                                          calc_synonymous = args$calc_synonymous)
+} else {
+  message('[', Sys.time(), '] --bin_len is not given. Will not calculate ',
+          'local mutation rates.')
 }
 
-# Match mutations to genomic regions, calculate mut.rates ---------------------
-if (!is.null(args$bin_len)) {# for tiles over genome
-  message('[', Sys.time(), '] Working with genomic regions created as bins')
-  mutRates_GenomeTiles <- mutRate_wrapper(varsDT = allVars, 
-                                          GRs = genomeTilesGR, 
-                                          checkAnnoMatch = F, 
-                                          calc_synonymous = T)
-}
-if (!is.null(args$genomic_regions)) {# for custom genomic regions
-  message('[', Sys.time(), '] Working with genomic regions from bed12 file')
-  mutRates_GR <- mutRate_wrapper(varsDT = allVars, GRs = GR, 
-                                 checkAnnoMatch = T, 
-                                 synonymsDT = symbolSynsDT,
-                                 calc_synonymous = T,
-                                 cdsAcceptedClass = args$cdsAcceptedClass, 
-                                 ncAcceptedClass = args$ncAcceptedClass, 
-                                 specieCode = 'Hsapiens',
-                                 targetGenomeVersion = args$target_genome_version,
-                                 codesConversionDT = codesConvertDT, 
-                                 annoFailedCode = args$annotation_failed_code)
-}
+rm(allVars)
+gc()
 
 # Matched local mut.rates(tiled genome) to custom regions ---------------------
-if (!is.null(args$genomic_regions) & !is.null(args$bin_len)) {
+if (args$bin_len > 1) {
   GR <- matchLocalMutRateToRegions(GR, genomeTilesGR, 
                                    unique(mutRates_GenomeTiles$mutRatesDT[,.(gr_name,
                                                                              meanMutRate)]))
@@ -1256,47 +1273,32 @@ if (!is.null(args$genomic_regions) & !is.null(args$bin_len)) {
   GRdt <- unique(GRdt)
   mutRates_GR$varsToRegsMap <- merge(mutRates_GR$varsToRegsMap, GRdt,
                                      by = 'gr_name', all.x = T)
+  
+  rm(genomeTilesGR, GRdt)
 }
+
+rm(GR)
+gc()
 
 # Check if there is a significant enrichment of variant types (i.e.INDELs)-----
-if (!is.null(args$genomic_regions)) {
-  message('[', Sys.time(), '] Started calculations of variant types ',
-          'enrichment across genes')
-  varCatEnrich <- checkVarTypeEnrichment(mutRates_GR$varsToRegsMap)
-  message('[', Sys.time(), '] Finished calculations of variant types ',
-          'enrichment across genes')
-}
+message('[', Sys.time(), '] Started calculations of variant types enrichment ',
+        'across genes')
+varCatEnrich <- checkVarTypeEnrichment(mutRates_GR$varsToRegsMap)
+message('[', Sys.time(), '] Finished calculations of variant types ',
+        'enrichment across genes')
 
-# [OUTPUT] to files -----------------------------------------------------------
-write.table(nMutsPerPart, quote = F, sep = '\t', row.names = F, col.names = T,
-            paste0(args$output, '-nMutsPerParticipant.csv'), append = F)
-
-if (!is.null(args$bin_len)) {
-  write.table(cbind('tumor_subtype' = args$tumor_subtype, 
-                    mutRates_GenomeTiles$mutRatesDT), 
-              sep = '\t', col.names = T, row.names = F, append = F, quote = F,
-              file = paste0(args$output, '-meanMutRatePerBin.csv'))
-  
-  
-  write.table(cbind('tumor_subtype' = args$tumor_subtype, 
-                    mutRates_GenomeTiles$varsToRegsMap), 
-              sep = '\t', col.names = T, row.names = F, append = F, quote = F,
-              file = paste0(args$output, '-mutMapToGenomeBins.csv'))
-}
-
-if (!is.null(args$genomic_regions)) {
-  write.table(cbind('tumor_subtype' = args$tumor_subtype, 
-                    mutRates_GR$mutRatesDT), 
-              sep = '\t', row.names = F, col.names = T, append = F, quote = F,
-              file = paste0(args$output, '-meanMutRatePerGR.csv'))
-  write.table(cbind('tumor_subtype' = args$tumor_subtype, 
-                    mutRates_GR$varsToRegsMap), 
-              sep = '\t', row.names = F, col.names = T, append = F, quote = F,
-              file = paste0(args$output, '-mutMapToGR.csv'))
-  write.table(cbind('tumor_subtype' = args$tumor_subtype, varCatEnrich), 
-              sep = '\t', row.names = F, col.names = T, append = F, quote = F,
-              file = paste0(args$output, '-varCatEnrich.csv'))
-}
+# OUTPUT to files -------------------------------------------------------------
+write.table(cbind('tumor_subtype' = args$tumor_subtype, 
+                  mutRates_GR$mutRatesDT), 
+            sep = '\t', row.names = F, col.names = T, append = F, quote = F,
+            file = paste0(args$output, '-meanMutRatePerGR.csv'))
+write.table(cbind('tumor_subtype' = args$tumor_subtype, 
+                  mutRates_GR$varsToRegsMap), 
+            sep = '\t', row.names = F, col.names = T, append = F, quote = F,
+            file = paste0(args$output, '-mutMapToGR.csv'))
+write.table(cbind('tumor_subtype' = args$tumor_subtype, varCatEnrich), 
+            sep = '\t', row.names = F, col.names = T, append = F, quote = F,
+            file = paste0(args$output, '-varCatEnrich.csv'))
 
 message("End time of run: ", Sys.time())
 message('Total execution time: ', 
