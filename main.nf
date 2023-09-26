@@ -81,7 +81,7 @@ process create_input_mutation_files {
                                     --target_genome_version ${params.target_genome_version} \
                                     --chain ${chain} \
                                     --output 'inputs/' \
-                                    --cores ${params.cores}
+                                    --cores ${task.cpus}
     
     """
 }
@@ -107,7 +107,38 @@ process create_input_genomic_regions_files {
                                            --ignore_strand ${params.ignore_strand} \
                                            --min_reg_len ${params.min_reg_len} \
                                            --output 'inputs/' \
-                                           --cores ${params.cores}
+                                           --cores ${task.cpus}
+    """
+}
+
+process calculate_mutation_rates {
+    tag "$tumor_subtype"
+
+    input:
+    tuple val(tumor_subtype), path(bed_path), path(maf_path)
+    path target_genome_chr_len
+    path gene_name_synonyms
+    path varanno_conversion_table
+
+    output:
+    tuple val(tumor_subtype), path('*meanMutRatePerGR.csv'), 
+          path('*mutMapToGR.csv'), path('*varCatEnrich.csv')
+
+    script:
+    """
+    4_calculate_mutation_rates.R --tumor_subtype ${tumor_subtype} \
+                                 --variants ${maf_path} \
+                                 --genomic_regions ${bed_path} \
+                                 --gene_name_synonyms ${gene_name_synonyms} \
+                                 --bin_len ${params.bin_len} \
+                                 --target_genome_version ${params.target_genome_version} \
+                                 --target_genome_chr_len ${target_genome_chr_len} \
+                                 --calc_synonymous ${params.calc_synonymous} \
+                                 --cdsAcceptedClass ${params.cdsAcceptedClass} \
+                                 --ncAcceptedClass ${params.ncAcceptedClass} \
+                                 --varanno_conversion_table ${varanno_conversion_table} \
+                                 --annotation_failed_code ${params.annotation_failed_code} \
+                                 --output 'mutRate-'${tumor_subtype}'-'
     """
 }
 
@@ -170,7 +201,7 @@ process oncodrivefml {
 
     oncodrivefml -i ${mutations} -e ${regions} --sequencing wgs \
                  --configuration 'conf/oncodrivefml_'${params.target_genome_version}'.config' \
-                 --output '.'  --cores $CORES_TO_USE
+                 --output '.'  --cores ${task.cpus}
     oncodrBaseName="oncodrivefml-inputMutations-"$TUMOR"-"$TARGET_GENOME
     mv $oncodrBaseName"-oncodrivefml.tsv" $OUT_FILE
     OUT_FILE_BASE=`echo $OUT_FILE | sed 's/.csv//g'`
@@ -254,6 +285,24 @@ workflow {
              return it
     }.set{ input_genomic_regions_split }
 
+
+    /*
+        Step 4: calculate local mutation rates (used for filtering of drivers)
+    */
+    input_genomic_regions_split.bed.map { file ->
+        def splitted_name = file.name.toString().tokenize('-')
+        def tumor_subtype = splitted_name.get(1)
+        return tuple(tumor_subtype, file)
+    }.set{regions_bed_files}
+    input_mutations_split.maf.map { file ->
+        def splitted_name = file.name.toString().tokenize('-')
+        def tumor_subtype = splitted_name.get(1)
+        return tuple(tumor_subtype, file)
+    }.set{muts_maf_files}
+
+    mut_rates = calculate_mutation_rates(regions_bed_files.join(muts_maf_files, by: [0]),
+                                         target_genome_chr_len, gene_name_synonyms,
+                                         varanno_conversion_table)
 
     /*
         Step 5: prepare channel input_to_soft which will contain pairs of 
