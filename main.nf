@@ -2,74 +2,93 @@
 nextflow.enable.dsl=2
 
 /*
-	Organization: UCL Cancer Institute
-	Laboratory: Cancer Genome Evolution
-	Authors: Maria Litovchenko
-	Purpose: 
-	Results:
-	Notes:
+    Organization: UCL Cancer Institute
+    Laboratory: Cancer Genome Evolution
+    Authors: Maria Litovchenko
+    Purpose: 
+    Results:
+    Notes:
 */
 
+/* ----------------------------------------------------------------------------
+* Custom functions
+*----------------------------------------------------------------------------*/
+def channel_from_params_path (staticPath) {
+    // create an empty dummy file
+    def no_file = new File(".NO_FILE")
+    no_file.createNewFile()
+
+    if (staticPath == '') {
+        result = Channel.fromPath(".NO_FILE")
+    } else {
+        result = Channel.fromPath(staticPath, checkIfExists: true)
+                        .ifEmpty { exit 1, "[ERROR]: " + staticPath + "file not found"}
+    } 
+    return result
+}
 
 /* ----------------------------------------------------------------------------
 * Processes
 *----------------------------------------------------------------------------*/
 process check_inventories {
-	input:
-	path patients_inventory_path
-	path analysis_inventory_path
-	path blacklist_inventory_path
+    input:
+    path patients_inventory_path
+    path analysis_inventory_path
+    path blacklist_inventory_path
 
-	output:
-	stdout emit: inventories_pass
+    output:
+    stdout emit: inventories_pass
 
-	script:
-	"""
-	1_check_inventories.R --inventory_patients ${patients_inventory_path} \
-	                      --inventory_analysis ${analysis_inventory_path} \
-	                      --target_genome_version ${params.target_genome_version} \
-	                      --inventory_blacklisted ${blacklist_inventory_path}
-	"""
+    script:
+    """
+    1_check_inventories.R --inventory_patients ${patients_inventory_path} \
+                          --inventory_analysis ${analysis_inventory_path} \
+                          --target_genome_version ${params.target_genome_version} \
+                          --inventory_blacklisted ${blacklist_inventory_path}
+    """
 }
 
 process create_input_mutation_files {
     tag "$tumor_subtype"
 
-	input:
-	tuple val(tumor_subtype), val(software), val(inventory_check_res),
-	      path(patients_inventory_path), path(analysis_inventory_path),
-	      path(blacklist_inventory_path), path(target_genome_fasta),
-	      path(chain)
+    input:
+    tuple val(tumor_subtype), val(software)
+    val inventory_check_res 
+    path patients_inventory_path
+    path analysis_inventory_path
+    path blacklist_inventory_path
+    path target_genome_fasta
+    path chain
 
-	output:
-	path('inputs/*inputMutations*')
+    output:
+    path('inputs/*inputMutations*')
 
-	script:
-	"""
-	software_flatten=`echo ${software} | sed 's/\\[//g' | sed 's/\\]//g' | sed 's/,//g'`
-	2_create_input_mutation_files.R --inventory_patients ${patients_inventory_path} \
-				       --inventory_analysis ${analysis_inventory_path} \
-	                                --inventory_blacklisted ${blacklist_inventory_path} \
-	                                --cancer_subtype ${tumor_subtype} \
-	                                --software \$software_flatten \
-	                                --min_depth ${params.min_depth} \
-	                                --min_tumor_vac ${params.min_tumor_vac} \
-	                                --min_tumor_vaf ${params.min_tumor_vaf} \
-	                                --max_germline_vaf ${params.max_germline_vaf} \
-	                                --max_germline_vac ${params.max_germline_vac} \
-	                                --max_n_vars ${params.max_n_vars} \
-	                                --target_genome_path ${target_genome_fasta} \
-	                                --target_genome_version ${params.target_genome_version} \
-	                                --chain ${chain} \
-	                                --output 'inputs/' \
-	                                --cores ${params.cores}
-	
-	"""
+    script:
+    """
+    software_flatten=`echo ${software} | sed 's/\\[//g' | sed 's/\\]//g' | sed 's/,//g'`
+    2_create_input_mutation_files.R --inventory_patients ${patients_inventory_path} \
+                                    --inventory_analysis ${analysis_inventory_path} \
+                                    --inventory_blacklisted ${blacklist_inventory_path} \
+                                    --cancer_subtype ${tumor_subtype} \
+                                    --software \$software_flatten \
+                                    --min_depth ${params.min_depth} \
+                                    --min_tumor_vac ${params.min_tumor_vac} \
+                                    --min_tumor_vaf ${params.min_tumor_vaf} \
+                                    --max_germline_vaf ${params.max_germline_vaf} \
+                                    --max_germline_vac ${params.max_germline_vac} \
+                                    --max_n_vars ${params.max_n_vars} \
+                                    --target_genome_path ${target_genome_fasta} \
+                                    --target_genome_version ${params.target_genome_version} \
+                                    --chain ${chain} \
+                                    --output 'inputs/' \
+                                    --cores ${params.cores}
+    
+    """
 }
 
 process create_input_genomic_regions_files {
     input:
-    val inventory_check_res
+    val  inventory_check_res
     path analysis_inventory_path
     path blacklist_inventory_path
     path target_genome_fasta
@@ -95,14 +114,14 @@ process create_input_genomic_regions_files {
 process mutpanning {
     tag "$tumor_subtype"-"gr_id"
 
-	input:
-	tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), path(mutpan_inv)
+    input:
+    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), path(mutpan_inv)
 
-	script:
-	"""
-	mpPath=/bin/MutPanningV2/commons-math3-3.6.1.jar:/bin/MutPanningV2/jdistlib-0.4.5-bin.jar:/bin/MutPanningV2
+    script:
+    """
+    mpPath=/bin/MutPanningV2/commons-math3-3.6.1.jar:/bin/MutPanningV2/jdistlib-0.4.5-bin.jar:/bin/MutPanningV2
         java -Xmx2G -classpath \$mpPath MutPanning
-	"""
+    """
 }
 
 process nbr {
@@ -171,34 +190,26 @@ workflow {
     analysis_inv = Channel.fromPath(params.analysis_inventory,
                                     checkIfExists: true)
                           .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" }
-    if (params.blacklist_inventory == '') {
-        def no_file = new File(".NO_FILE")
-        no_file.createNewFile()
-        blacklist_inv = Channel.fromPath(".NO_FILE")
-    } else {
-        blacklist_inv = Channel.fromPath(params.blacklist_inventory, checkIfExists: true)
-                               .ifEmpty { exit 1, "[ERROR]: black&white lists inventory file not found" }
-    } 
+    blacklist_inv = channel_from_params_path(params.blacklist_inventory)
+
 
     // create channels to target genome verion and to chain file for liftover
     target_genome_fasta = Channel.fromPath(params.target_genome_path,
                                            checkIfExists: true)
                                  .ifEmpty { exit 1, 
                                             "[ERROR]: target genome fasta file not found" }
-    if (params.chain == '') {
-        def no_file = new File(".NO_FILE")
-        no_file.createNewFile()
-        chain = Channel.fromPath(".NO_FILE")
-    } else {
-        chain = Channel.fromPath(params.chain, checkIfExists: true)
-                       .ifEmpty { exit 1, "[ERROR]: chain file not found" }
-    }
+    target_genome_chr_len = channel_from_params_path(params.target_genome_chr_len)
+    chain = channel_from_params_path(params.chain)
+
+    // create channels to gene name synonyms (needed for mutation rate calc)
+    gene_name_synonyms = channel_from_params_path(params.gene_name_synonyms)
+    varanno_conversion_table = channel_from_params_path(params.varanno_conversion_table)
 
     /*
         Step 1: check that inventories have all the needed columns and values
                 are acceptable 
     */
-    inventories_pass =  check_inventories(patients_inv, analysis_inv, blacklist_inv)
+    inventories_pass = check_inventories(patients_inv, analysis_inv, blacklist_inv)
     inventories_pass = inventories_pass.collect()
 
     /* 
@@ -209,13 +220,12 @@ workflow {
     tumor_subtypes = analysis_inv.splitCsv(header: true)
                                  .map{row -> tuple(row.tumor_subtype, row.software)}
                                  .unique().groupTuple()
-    input_mutations =  create_input_mutation_files(tumor_subtypes.combine(inventories_pass)
-                                                                 .combine(patients_inv)
-                                                                 .combine(analysis_inv)
-                                                                 .combine(blacklist_inv)
-                                                                 .combine(target_genome_fasta)
-                                                                 .combine(chain))
-                                                                 .flatten()
+    input_mutations =  create_input_mutation_files(tumor_subtypes, 
+                                                   inventories_pass,
+                                                   patients_inv, analysis_inv,
+                                                   blacklist_inv, 
+                                                   target_genome_fasta, chain)
+                                                   .flatten()
     // split on csv which will go to be processed by driver calling software and bed files
     // which will go to estimation of mutation rates
     input_mutations.branch {
@@ -244,11 +254,9 @@ workflow {
              return it
     }.set{ input_genomic_regions_split }
 
-    input_genomic_regions_split.bed.view()
-    input_mutations_split.maf.view()
 
     /*
-        Step 4: prepare channel input_to_soft which will contain pairs of 
+        Step 5: prepare channel input_to_soft which will contain pairs of 
                 genomic regions and mutations for all the software
     */
     input_genomic_regions_split.csv.map { file ->
@@ -285,4 +293,10 @@ workflow {
         def mutpan_inv = it[3].toString().replace("inputMutations", "patientsInv")
         return tuple(it[0], it[1], it[2], it[3], mutpan_inv)
     } | mutpanning*/
+}
+
+// inform about completition
+workflow.onComplete {
+    println "Pipeline completed at: $workflow.complete"
+    println "Execution status: ${ workflow.success ? 'OK' : 'failed' }"
 }
