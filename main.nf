@@ -179,8 +179,8 @@ process nbr {
           --out_prefix \$OUT_FILE
     mv \$OUT_FILE"-Selection_output.txt" \$OUT_FILE 
     OUT_FILE_BASE=`echo \$OUT_FILE | sed 's/.csv//g'`
-    mv \$OUT_FILE"-global_mle_subs.Rds" \$OUT_FILE_BASE"-global_mle_subs.Rds" 
-    mv \$OUT_FILE"-globalRates.csv" \$OUT_FILE_BASE"-globalRates.csv"
+    # mv \$OUT_FILE"-global_mle_subs.Rds" \$OUT_FILE_BASE"-global_mle_subs.Rds" 
+    # mv \$OUT_FILE"-globalRates.csv" \$OUT_FILE_BASE"-globalRates.csv"
     """
 }
 
@@ -369,6 +369,9 @@ workflow {
 
 // inform about completition
 workflow.onComplete {
-    println "Pipeline completed at: $workflow.complete"
-    println "Execution status: ${ workflow.success ? 'OK' : 'failed' }"
+    if ( workflow.success ) {
+      log.info "[$workflow.complete] >> Script finished SUCCESSFULLY after $workflow.duration"
+    } else {
+      log.info "[$workflow.complete] >> Script finished with ERRORS after $workflow.duration"
+    }
 }
