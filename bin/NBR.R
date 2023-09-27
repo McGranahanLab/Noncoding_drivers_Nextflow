@@ -79,26 +79,14 @@
 #    to choose your own output naming choices.
 #
 
-suppressPackageStartupMessages(library(argparse))
-suppressPackageStartupMessages(library(data.table))
-suppressPackageStartupMessages(library(GenomicRanges))
-suppressPackageStartupMessages(library(Rsamtools))
-suppressPackageStartupMessages(library(MASS))
+box::use(./custom_functions[...])
+suppressWarnings(suppressPackageStartupMessages(library(argparse)))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressWarnings(suppressPackageStartupMessages(library(GenomicRanges)))
+suppressWarnings(suppressPackageStartupMessages(library(Rsamtools)))
+suppressWarnings(suppressPackageStartupMessages(library(MASS)))
 
 # Functions -------------------------------------------------------------------
-#' getSeqlevelsStyle
-#' @description Detemines a seqlevelstyle (aka chromosome naming style) from
-#' the reference genome
-#' @author Maria Litovchenko
-#' @param fastaPath path to fasta file
-#' @return UCSC, in case naming format is chr1, and NCBI otherwise
-getSeqlevelsStyle <- function(fastaPath) {
-  # read just the first line
-  result <- fread(fastaPath, nrows = 1, header = F)$V1
-  result <- ifelse(grepl('>chr', result), 'UCSC', 'NCBI')
-  result
-}
-
 map_mutations = function(mutations, intervals, chrStyle) {
   rangesREGS = GRanges(intervals[,2], IRanges(as.numeric(intervals[,3]), 
                                               as.numeric(intervals[,4])))
@@ -273,7 +261,8 @@ ci95nbr = function(n_obs,n_exp,nb_size) {
 }
 
 #' returnNULL
-#' @description Returns null data table which emulates ActiveDriverWGS results
+#' @description Returns null data table which emulates NBR results
+#' @author Maria Litovchenko
 #' @param c error message
 #' @return data table 
 returnNULL <- function(c) {
@@ -313,11 +302,46 @@ returnNULL <- function(c) {
 
 #' stop_quietly
 #' @description Stops script without error
+#' @author Maria Litovchenko
 #' @return void
 stop_quietly <- function() {
   opt <- options(show.error.messages = FALSE)
   on.exit(options(opt))
-  stop()
+  quit(save = 'no', status = 0)
+}
+
+#' set_seqlevelsStyle_table
+#' @description Sets style of chromosome names (i.e. NCBI or UCSC) to the data
+#' frame
+#' @author Maria Litovchenko
+#' @param df data frame with one of columns chr, segments, seqnames
+#' @param styleName sequencing style name, one of "NCBI" or "UCSC"
+set_seqlevelsStyle_table <- function(df, styleName) {
+  colNameReplaced <- F
+  originalColName <- ''
+  if ('chr' %in% colnames(df) | 'segments' %in% colnames(df)) {
+    originalColName <- grep('chr|segments', colnames(df), value = T)
+    colnames(df) <- gsub('^chr$', 'seqnames', colnames(df))
+    colnames(df) <- gsub('^segments$', 'seqnames', colnames(df))
+    colNameReplaced <- T
+  }
+  
+  original_seqStyle <- ifelse(grepl('^chr', df$seqnames[1]), 'UCSC', 'NCBI')
+  if (original_seqStyle != styleName) {
+    if (styleName == 'UCSC') {
+      df$seqnames <- paste0('chr', df$seqnames)
+      df$seqnames <- gsub(',', ',chr', df$seqnames)
+    } else {
+      df$seqnames <- gsub('^chr', '', df$seqnames)
+      df$seqnames <- gsub(',chr', ',', df$seqnames)
+    }
+  } 
+  
+  if (colNameReplaced) {
+    colnames(df) <- gsub('^seqnames$', originalColName, colnames(df))
+  }
+  
+  return(df)
 }
 
 # Inputs ----------------------------------------------------------------------
@@ -360,15 +384,15 @@ trinucfreq_neutralbins_file = args$trinucfreq_neutralbins_file
 out_prefix = args$out_prefix
 
 message('Inputs: ')
-message('mutations_file: ', mutations_file)
-message('target_regions_path: ', target_regions_path)
-message('target_regions_trinucfreqs_path: ', target_regions_trinucfreqs_path)
-message('genomeFile: ', genomeFile)
+message('mutations_file: ', mutations_file) # +
+message('target_regions_path: ', target_regions_path) # +
+message('target_regions_trinucfreqs_path: ', target_regions_trinucfreqs_path) # ??
+message('genomeFile: ', genomeFile) # +
 message('max_num_muts_perRegion_perSample: ', max_num_muts_perRegion_perSample)
 message('unique_indelsites_FLAG: ', unique_indelsites_FLAG)
-message('gr_drivers: ', args$gr_drivers)
-message('regions_neutralbins_file: ', regions_neutralbins_file)
-message('trinucfreq_neutralbins_file: ', trinucfreq_neutralbins_file)
+message('gr_drivers: ', args$gr_drivers) # +
+message('regions_neutralbins_file: ', regions_neutralbins_file)  # +
+message('trinucfreq_neutralbins_file: ', trinucfreq_neutralbins_file)  # +
 message('out_prefix: ', out_prefix)
 
 message('Started at: ', Sys.time())
@@ -382,20 +406,29 @@ if (grepl('rdata', tolower(args$gr_drivers))) {
   gr_drivers <- fread(args$gr_drivers, header = T, stringsAsFactors = F)
   colnames(gr_drivers) <- c('chr', 'start', 'end')
   gr_drivers <- makeGRangesFromDataFrame(gr_drivers)
-  seqlevelsStyle(gr_drivers) <- refGenChrStyle
 }
+seqlevelsStyle(gr_drivers) <- refGenChrStyle
 
 dir.create(dirname(out_prefix), recursive = T)
 
-# 0. Loading the precomputed region files -------------------------------------
+# 0. Loading the pre-computed region files ------------------------------------
 message("Loading target regions... ", Sys.time())
+
 target_regions = read.table(target_regions_path, header = T, sep = "\t")
+target_regions = set_seqlevelsStyle_table(target_regions, refGenChrStyle)
+
 trinucfreq_table = read.table(target_regions_trinucfreqs_path, header = T, 
                               sep = "\t")
+trinucfreq_table = set_seqlevelsStyle_table(trinucfreq_table, refGenChrStyle)
+
 neutral_regions = read.table(regions_neutralbins_file, header = T, 
                              sep = "\t")
+neutral_regions = set_seqlevelsStyle_table(neutral_regions, refGenChrStyle)
+
 trinucfreq_table_neutral = read.table(trinucfreq_neutralbins_file, header = T, 
                                       sep="\t")
+trinucfreq_table_neutral = set_seqlevelsStyle_table(trinucfreq_table_neutral,
+                                                    refGenChrStyle)
 
 # 1. Loading the mutations and extracting the trinucleotide context -----------
 message("Loading mutations... ", Sys.time())
@@ -407,6 +440,7 @@ mutations = mutations[,1:5]
 colnames(mutations) = c("sampleID","chr","pos","ref","mut")
 mutations = mutations[as.character(mutations$chr) %in% chr_list, ]
 mutations$pos = as.numeric(mutations$pos)
+mutations <- set_seqlevelsStyle_table(mutations, refGenChrStyle)
 
 # Extracting the trinucleotide context of each substitution
 message("Indels... ", Sys.time())
@@ -427,6 +461,7 @@ subsGR <- GRanges(as.vector(subs$chr), IRanges(subs$pos - 1, subs$pos + 1))
 seqlevelsStyle(subsGR) <- refGenChrStyle
 seqs = scanFa(genomeFile, subsGR)
 rm(subsGR)
+gc()
 muts_trinuc = as.vector(seqs)
 subs$trinuc_ref = muts_trinuc
 
@@ -530,6 +565,13 @@ n_matrix_global_neutral = L_matrix_ref
 subsin = (!is.na(mutations$trinuc_ref)) & (mutations$target_region!=0)
 aux = cbind(as.vector(mutations$trinuc_ref[subsin]),
             as.vector(mutations$mut[subsin]))
+if (nrow(aux) == 0) {
+  write.table(returnNULL('no mutations are found in the target regions'), 
+              file = paste(out_prefix,"-Selection_output.txt", sep = ""),
+              sep = "\t", row.names = F, col.names = T, append = F, 
+              quote = F)
+  stop_quietly()
+}
 for (j in 1:dim(aux)[1]) {
     n_matrix_global[aux[j,1],aux[j,2]] = n_matrix_global[aux[j,1],aux[j,2]] + 1
 }
@@ -540,8 +582,16 @@ subsin = (!is.na(mutations$trinuc_ref)) & (mutations$neutral_region!=0) &
   (mutations$target_region==0)
 aux = cbind(as.vector(mutations$trinuc_ref[subsin]), 
             as.vector(mutations$mut[subsin]))
+if (nrow(aux) == 0) {
+  write.table(returnNULL('no mutations are found in the target and neutral regions'), 
+              file = paste(out_prefix,"-Selection_output.txt", sep = ""),
+              sep = "\t", row.names = F, col.names = T, append = F, 
+              quote = F)
+  stop_quietly()
+}
 for (j in 1:dim(aux)[1]) {
-    n_matrix_global_neutral[aux[j,1],aux[j,2]] = n_matrix_global_neutral[aux[j,1],aux[j,2]] + 1
+    n_matrix_global_neutral[aux[j,1],aux[j,2]] = n_matrix_global_neutral[aux[j,1],
+                                                                         aux[j,2]] + 1
 }
 numindels_neutral = sum((is.na(mutations$trinuc_ref)) & 
                           (mutations$neutral_region!=0))
@@ -591,13 +641,19 @@ targetregions_df$end = sapply(aux, function(x) max(suppressWarnings(as.numeric(u
 
 
 tf = as.matrix(trinucfreq_table[,trinuc_list])
-targetregions_df$exp_subs = apply(tf, 1, function(x) sum(rep(x,4)*rates_target, na.rm=T) )
-targetregions_df$exp_indels = apply(tf, 1, function(x) sum(x)*indelsrate_target )
+targetregions_df$exp_subs = apply(tf, 1, 
+                                  function(x) sum(rep(x, 4) * rates_target, 
+                                                  na.rm = T))
+targetregions_df$exp_indels = apply(tf, 1,
+                                    function(x) sum(x) * indelsrate_target)
 
 neutralregions_df = data.frame(region=as.vector(trinucfreq_table_neutral[,1:3]))
 tf = as.matrix(trinucfreq_table_neutral[,trinuc_list])
-neutralregions_df$exp_subs = apply(tf, 1, function(x) sum(rep(x,4)*rates_neutral, na.rm=T) )
-neutralregions_df$exp_indels = apply(tf, 1, function(x) sum(x)*indelsrate_neutral )
+neutralregions_df$exp_subs = apply(tf, 1,
+                                   function(x) sum(rep(x, 4)*rates_neutral,
+                                                   na.rm = T))
+neutralregions_df$exp_indels = apply(tf, 1, 
+                                     function(x) sum(x)*indelsrate_neutral)
 
 # Observed number of subs and indels
 
@@ -617,7 +673,6 @@ neutralregions_df$obs_subs[as.numeric(names(numsubs))] = numsubs
 numinds = table( mutations$neutral_region[mutations$neutral_region > 0 & indel_pos] )
 neutralregions_df$obs_indels[as.numeric(names(numinds))] = numinds
 
-
 # Estimating the neighbourhood "t" for every target region
 # We choose as neighbouring neutral regions of a given target region all those that are 
 # within "neighbourhood_localrate" distance of the target region. We consider any overlap
@@ -629,9 +684,13 @@ neutralregions_df$obs_indels[as.numeric(names(numinds))] = numinds
 
 neighbourhood_localrate = ceiling(0.001/dim(mutations)[1]*3e9)*100000
 
-rangesTARGET = GRanges(target_regions[,2], IRanges(as.numeric(target_regions[,3])-neighbourhood_localrate, as.numeric(target_regions[,4])+neighbourhood_localrate))
+rangesTARGET = GRanges(target_regions[,2], 
+                       IRanges(as.numeric(target_regions[,3]) - neighbourhood_localrate, 
+                               as.numeric(target_regions[,4]) + neighbourhood_localrate))
 seqlevelsStyle(rangesTARGET) <- refGenChrStyle
-rangesNEUTRAL = GRanges(neutralregions_df[,1], IRanges(as.numeric(neutralregions_df[,2]), as.numeric(neutralregions_df[,3])))
+rangesNEUTRAL = GRanges(neutralregions_df[,1],
+                        IRanges(as.numeric(neutralregions_df[,2]), 
+                                as.numeric(neutralregions_df[,3])))
 seqlevelsStyle(rangesNEUTRAL) <- refGenChrStyle
 ol = findOverlaps(rangesTARGET, rangesNEUTRAL, type="any", select="all")
 olmatrix = as.matrix(ol)
@@ -732,14 +791,22 @@ targetregions_df$pval_indels_CV = NA
 targetregions_df$pval_both_CV = NA
 
 for (j in 1:dim(targetregions_df)[1]) {
-    targetregions_df$pval_subs_CV[j] = pnbinom(q=targetregions_df$obs_subs[j]-0.1, mu=targetregions_df$cv_predicted_subs[j], size=nb_size_subs_cv, lower.tail=F)
+    targetregions_df$pval_subs_CV[j] = pnbinom(q = targetregions_df$obs_subs[j]-0.1, 
+                                               mu = targetregions_df$cv_predicted_subs[j],
+                                               size = nb_size_subs_cv, 
+                                               lower.tail = F)
     #targetregions_df$pval_indels_CV[j] = pnbinom(q=targetregions_df$obs_indels[j]-0.1, mu=targetregions_df$cv_predicted_indels[j], size=nb_size_indels_cv, lower.tail=F)
     
     if (numindels_target>0) {
-        targetregions_df$pval_indels_CV[j] = pnbinom(q=targetregions_df$obs_indels[j]-0.1, mu=targetregions_df$cv_predicted_indels[j], size=nb_size_indels_cv, lower.tail=F)
+        targetregions_df$pval_indels_CV[j] = pnbinom(q = targetregions_df$obs_indels[j] - 0.1,
+                                                     mu = targetregions_df$cv_predicted_indels[j], 
+                                                     size = nb_size_indels_cv,
+                                                     lower.tail = F)
         # Fisher combined p-value
-        p_vec = c(targetregions_df$pval_subs_CV[j], targetregions_df$pval_indels_CV[j])
-        targetregions_df$pval_both_CV[j] = 1-pchisq(-2*sum(log(p_vec)),length(p_vec)*2)
+        p_vec = c(targetregions_df$pval_subs_CV[j],
+                  targetregions_df$pval_indels_CV[j])
+        targetregions_df$pval_both_CV[j] = 1- pchisq(-2*sum(log(p_vec)),
+                                                     length(p_vec) * 2)
     } else {
         # We use only subs
         targetregions_df$pval_both[j] = targetregions_df$pval_subs[j]
@@ -759,7 +826,9 @@ targetregions_df$qval_both_CV_tiered[inds] = p.adjust(targetregions_df$pval_both
 targetregions_df$qval_both_CV_tiered[!inds] = p.adjust(targetregions_df$pval_both_CV[!inds], method="BH") # Adjusted q-value
 targetregions_df = targetregions_df[order(targetregions_df$qval_both_CV_tiered),]
 
-write.table(targetregions_df, file=paste(out_prefix,"-Selection_output.txt",sep=""), sep = "\t", row.names = FALSE, col.names = TRUE, append=FALSE, quote=FALSE)
+write.table(targetregions_df, sep = "\t", row.names = F, col.names = T, 
+            append = F, quote = F,
+            file = paste(out_prefix,"-Selection_output.txt", sep = ""))
 
 
 # Plot of the underlying gamma distributions of the 4 models (subs and indels with and without covariates)
@@ -807,11 +876,12 @@ if (calculate_CI95_flag == 1) {
   targetregions_df$obsexp_subs_high = ci95_subs[,3]
     
   if (numindels_target>0) {
-    ci95_indels = as.matrix(targetregions_df[,c("obs_indels","cv_predicted_indels")])
+    ci95_indels = as.matrix(targetregions_df[, c("obs_indels",
+                                                 "cv_predicted_indels")])
     ci95_indels = t(apply(ci95_indels, 1, 
                           function(x) tryCatch(ci95nbr(x[1], x[2],
                                                        nb_size_indels_cv),
-                                               error=function(err) rep(NA,3))))
+                                               error = function(err) rep(NA,3))))
     targetregions_df$obsexp_indels_mle = ci95_indels[,1]
     targetregions_df$obsexp_indels_low = ci95_indels[,2]
     targetregions_df$obsexp_indels_high = ci95_indels[,3]
@@ -820,5 +890,7 @@ if (calculate_CI95_flag == 1) {
     targetregions_df$obsexp_indels_low = NA
     targetregions_df$obsexp_indels_high = NA
   }
-  write.table(targetregions_df, file=paste(out_prefix,"-Selection_output.txt",sep=""), sep = "\t", row.names = FALSE, col.names = TRUE, append=FALSE, quote=FALSE)
+  write.table(targetregions_df, sep = "\t", row.names = F, col.names = T,
+              file = paste(out_prefix, "-Selection_output.txt", sep = ""), 
+              append = F, quote = F)
 }
