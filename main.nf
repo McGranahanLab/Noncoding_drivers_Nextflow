@@ -143,10 +143,25 @@ process mutpanning {
     tuple val(tumor_subtype), val(software), val(gr_id), path(mutations),
           path(mutpan_inv)
 
+    output:
+    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*"
+
     script:
     """
+    OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
+
     mpPath=/bin/MutPanningV2/commons-math3-3.6.1.jar:/bin/MutPanningV2/jdistlib-0.4.5-bin.jar:/bin/MutPanningV2
-        java -Xmx2G -classpath \$mpPath MutPanning
+    java -Xmx${params.mutpanning_java_memory} -classpath \$mpPath MutPanning "." \
+        $mutations $mutpan_inv "/bin/MutPanningV2/Hg19/"
+
+    cpFrom=`find SignificanceRaw | grep -v Uniform | grep '.txt\$'`
+    if [[ -f "\$cpFrom" ]]; then
+        cp \$cpFrom \$OUT_FILE
+    else
+        echo 'MutPanning run on '${tumor_subtype}" "${gr_id}' did not yield results.'
+        echo 'It can happen if your cohort is too small. Will create an empty file.'
+        echo -e "Name\tTargetSize\tTargetSizeSyn\tCount\tCountSyn\tSignificanceSyn\tFDRSyn\tSignificance\tFDR" > \$OUT_FILE
+    fi
     """
 }
 
@@ -188,21 +203,17 @@ process oncodrivefml {
     tag "$tumor_subtype"-"$gr_id"
 
     input:
-    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), path(regions)
+    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), 
+          path(regions), path(oncodrivefml_config)
 
     script:
     """
-    echo ${mutations}
-    echo ${regions} 
+    OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
 
     oncodrivefml -i ${mutations} -e ${regions} --sequencing wgs \
-                 --configuration 'conf/oncodrivefml_'${params.target_genome_version}'.config' \
+                 --configuration ${oncodrivefml_config} \
                  --output '.'  --cores ${task.cpus}
-    oncodrBaseName="oncodrivefml-inputMutations-"$TUMOR"-"$TARGET_GENOME
-    mv $oncodrBaseName"-oncodrivefml.tsv" $OUT_FILE
-    OUT_FILE_BASE=`echo $OUT_FILE | sed 's/.csv//g'`
-    mv $oncodrBaseName"-oncodrivefml.png" $OUT_FILE_BASE".png"
-    mv $oncodrBaseName"-oncodrivefml.html" $OUT_FILE_BASE".html"
+    mv "oncodrivefml-inputMutations-"$tumor_subtype"-"${params.target_genome_version}"-oncodrivefml.tsv" \$OUT_FILE
     """
 }
 
@@ -233,9 +244,19 @@ workflow {
     varanno_conversion_table = channel_from_params_path(params.varanno_conversion_table)
 
     // NBR specific files
-    nbr_neutral_bins = channel_from_params_path(params.nbr_regions_neutralbins_file)
-    nbr_neutral_trinucfreq = channel_from_params_path(params.nbr_trinucfreq_neutralbins_file)
-    nbr_driver_regs = channel_from_params_path(params.nbr_driver_regs_file)
+    nbr_neutral_bins = Channel.fromPath(params.nbr_regions_neutralbins_file, 
+                                        checkIfExists: true)
+                              .ifEmpty { exit 1, "[ERROR]: nbr_regions_neutralbins_file not found" }
+    nbr_neutral_trinucfreq = Channel.fromPath(params.nbr_trinucfreq_neutralbins_file, 
+                                              checkIfExists: true)
+                                    .ifEmpty { exit 1, "[ERROR]: nbr_trinucfreq_neutralbins_file not found" }
+    nbr_driver_regs = Channel.fromPath(params.nbr_driver_regs_file, 
+                                               checkIfExists: true)
+                                     .ifEmpty { exit 1, "[ERROR]: nbr_driver_regs_file not found" }
+    //Oncodrivefml specific files
+    oncodrivefml_config = Channel.fromPath(params.oncodrivefml_config,
+                                           checkIfExists: true)
+                                 .ifEmpty { exit 1, "[ERROR]: oncodrivefml_config not found" }
 
     /*
         Step 1: check that inventories have all the needed columns and values
@@ -351,20 +372,29 @@ workflow {
     }.set{ input_to_soft_split }
 
     /*
-        Step 6: run NBR
-    */
+        Step 6: run mutpanning
+    
+    mutpanning_results = mutpanning(input_to_soft_split.mutpanning
+                                                       .map { it ->
+                                                                def mutpan_inv = it[3].toString().replace("inputMutations",
+                                                                                                          "patientsInv")
+                                                                return tuple(it[0], it[1], it[2], it[3], mutpan_inv)
+                                                            })*/
+
+    /*
+        Step 7: run NBR
+    
     nbr_results = nbr(input_to_soft_split.nbr.combine(target_genome_fasta)
                                              .combine(nbr_neutral_bins)
                                              .combine(nbr_neutral_trinucfreq)
-                                             .combine(nbr_driver_regs))
+                                             .combine(nbr_driver_regs))*/
+
 
     /*
-        Step 7: run mutpanning
-    
-    input_to_soft_split.mutpanning.map { it ->
-        def mutpan_inv = it[3].toString().replace("inputMutations", "patientsInv")
-        return tuple(it[0], it[1], it[2], it[3], mutpan_inv)
-    }//.view()*/
+        Step 8: run oncodrivefml
+    */
+    input_to_soft_split.oncodrivefml.combine(oncodrivefml_config).view()
+
 }
 
 // inform about completition
