@@ -136,6 +136,28 @@ process calculate_mutation_rates {
     """
 }
 
+process dndscv {
+    tag "$tumor_subtype"
+
+    input:
+    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations),
+          path(regions)
+
+    output:
+    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*"
+
+    script:
+    """
+    OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
+
+    # covariates
+    rdaWithCovs=`echo ${regions} | tr ' ' '\n' | grep withCovs.rda\$`
+
+    run_dndscv.R --with_covariates T --refRda \$rdaWithCovs \
+                 --variants ${mutations} --computeCI T --output \$OUT_FILE
+    """
+}
+
 process mutpanning {
     tag "$tumor_subtype"
 
@@ -200,11 +222,14 @@ process nbr {
 }
 
 process oncodrivefml {
-    tag "$tumor_subtype"-"$gr_id"
+    tag "$tumor_subtype-$gr_id"
 
     input:
     tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), 
           path(regions), path(oncodrivefml_config)
+
+    output:
+    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*"
 
     script:
     """
@@ -213,7 +238,7 @@ process oncodrivefml {
     oncodrivefml -i ${mutations} -e ${regions} --sequencing wgs \
                  --configuration ${oncodrivefml_config} \
                  --output '.'  --cores ${task.cpus}
-    mv "oncodrivefml-inputMutations-"$tumor_subtype"-"${params.target_genome_version}"-oncodrivefml.tsv" \$OUT_FILE
+    mv "oncodrivefml-inputMutations-"${tumor_subtype}"-"${params.target_genome_version}"-oncodrivefml.tsv" \$OUT_FILE
     """
 }
 
@@ -355,8 +380,8 @@ workflow {
                                                 .unique()
                                                 .combine(input_mutations_split_to_soft, 
                                                          by: [0, 1])
-    input_to_soft = input_mutations_split_to_soft.combine(input_genomic_regions_to_soft,
-                                                          by: [0, 1, 2])
+    input_to_soft = input_mutations_split_to_soft.join(input_genomic_regions_to_soft,
+                                                       by: [0, 1, 2], remainder: true)
 
     input_to_soft.branch {
         digdriver: it[1].toString() == 'digdriver'
@@ -371,29 +396,28 @@ workflow {
             return it
     }.set{ input_to_soft_split }
 
-    /*
-        Step 6: run mutpanning
+    /*  Step : run DIGdriver */
+
+    /*  Step : run dNdScv */
     
+
+    /* Step 6: run mutpanning */
     mutpanning_results = mutpanning(input_to_soft_split.mutpanning
                                                        .map { it ->
                                                                 def mutpan_inv = it[3].toString().replace("inputMutations",
                                                                                                           "patientsInv")
                                                                 return tuple(it[0], it[1], it[2], it[3], mutpan_inv)
-                                                            })*/
+                                                            })
 
-    /*
-        Step 7: run NBR
-    
+    /* Step 7: run NBR  */
     nbr_results = nbr(input_to_soft_split.nbr.combine(target_genome_fasta)
                                              .combine(nbr_neutral_bins)
                                              .combine(nbr_neutral_trinucfreq)
-                                             .combine(nbr_driver_regs))*/
+                                             .combine(nbr_driver_regs))
 
-
-    /*
-        Step 8: run oncodrivefml
-    */
-    input_to_soft_split.oncodrivefml.combine(oncodrivefml_config).view()
+    /* Step 8: run oncodrivefml */
+    oncodrivefml_results = oncodrivefml(input_to_soft_split.oncodrivefml
+                                                           .combine(oncodrivefml_config))
 
 }
 
