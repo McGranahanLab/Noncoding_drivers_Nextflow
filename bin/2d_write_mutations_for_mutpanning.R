@@ -88,7 +88,7 @@ outfile <- paste0(args$output, '/mutpanning-inputMutations-',
 
 # PROCESS MAF file to suit the software ---------------------------------------
 maf <- maf[, intersect(colsToGet, colnames(maf)), with = F]
-maf <- maf[order(chr, start)]
+maf <- maf[order(Chromosome, Start_Position)]
 
 message('[', Sys.time(), '] MutPanning requires chromosomal names in NCBI ',
         'format. Changed chromosomal names to NCBI format.')
@@ -112,8 +112,8 @@ mutpanInvent[, ConfidenceLevel := 'custom']
 mutpanInvent[, Study := 'custom']
 mutpanInvent[, Cohort := 'custom']
 # output to file
-outfile <- paste0(args$output, '/mutpanning-patientsInv-',
-                  args$cancer_subtype, '-', args$target_genome_version, '.csv')
+outfile <- paste0('mutpanning-patientsInv-', args$cancer_subtype, '-', 
+                  args$target_genome_version, '.csv')
 write.table(mutpanInvent, append = F, quote = F, row.names = F, outfile,
             col.names = T, sep = '\t')
 
