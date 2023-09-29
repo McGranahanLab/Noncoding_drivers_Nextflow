@@ -48,37 +48,37 @@ process check_inventories {
     """
 }
 
-process create_input_mutation_files {
+process filter_input_mutations {
     tag "$tumor_subtype"
 
     input:
-    tuple val(tumor_subtype), val(software), val(inventory_check_res), 
+    tuple val(inventory_check_res), val(tumor_subtype),
           path(patients_inventory_path), path(analysis_inventory_path),
           path(blacklist_inventory_path), path(target_genome_fasta),
-          path(chain)
+          path(target_genome_chr_len), path(chain)
 
     output:
-    path('inputs/*inputMutations*')
+    tuple val(tumor_subtype), path('inputMutations*'), emit: mutations
+    tuple val(tumor_subtype), path('hypermutated*'), optional: true, emit: hypermutant
 
     script:
-    """
-    software_flatten=`echo ${software} | sed 's/\\[//g' | sed 's/\\]//g' | sed 's/,//g'`
-    2_create_input_mutation_files.R --inventory_patients ${patients_inventory_path} \
-                                    --inventory_analysis ${analysis_inventory_path} \
-                                    --inventory_blacklisted ${blacklist_inventory_path} \
-                                    --cancer_subtype ${tumor_subtype} \
-                                    --software \$software_flatten \
-                                    --min_depth ${params.min_depth} \
-                                    --min_tumor_vac ${params.min_tumor_vac} \
-                                    --min_tumor_vaf ${params.min_tumor_vaf} \
-                                    --max_germline_vaf ${params.max_germline_vaf} \
-                                    --max_germline_vac ${params.max_germline_vac} \
-                                    --max_n_vars ${params.max_n_vars} \
-                                    --target_genome_path ${target_genome_fasta} \
-                                    --target_genome_version ${params.target_genome_version} \
-                                    --chain ${chain} \
-                                    --output 'inputs/' \
-                                    --cores ${task.cpus}
+    """ 
+    OUT_FILE='inputMutations-'${tumor_subtype}'-'${params.target_genome_version}'.maf'
+    2_filter_input_mutations.R --inventory_patients ${patients_inventory_path} \
+                               --inventory_analysis ${analysis_inventory_path} \
+                               --inventory_blacklisted ${blacklist_inventory_path} \
+                               --cancer_subtype ${tumor_subtype} \
+                               --min_depth ${params.min_depth} \
+                               --min_tumor_vac ${params.min_tumor_vac} \
+                               --min_tumor_vaf ${params.min_tumor_vaf} \
+                               --max_germline_vaf ${params.max_germline_vaf} \
+                               --max_germline_vac ${params.max_germline_vac} \
+                               --max_n_vars ${params.max_n_vars} \
+                               --target_genome_version ${params.target_genome_version} \
+                               --target_genome_path ${target_genome_fasta} \
+                               --target_genome_chr_len ${target_genome_chr_len} \
+                               --chain ${chain} --output \$OUT_FILE  \
+                               --cores ${task.cpus}
     
     """
 }
@@ -261,7 +261,10 @@ workflow {
                                            checkIfExists: true)
                                  .ifEmpty { exit 1, 
                                             "[ERROR]: target genome fasta file not found" }
-    target_genome_chr_len = channel_from_params_path(params.target_genome_chr_len)
+    target_genome_chr_len = Channel.fromPath(params.target_genome_chr_len,
+                                           checkIfExists: true)
+                                 .ifEmpty { exit 1, 
+                                            "[ERROR]: chromosomal lengths of target genome file not found" }
     chain = channel_from_params_path(params.chain)
 
     // create channels to gene name synonyms (needed for mutation rate calc)
@@ -295,129 +298,23 @@ workflow {
                 parallelise by cancer subtype. This will not be run if 
                 inventories do not pass the check.
     */
+    // filter mutations
+    tumor_subtypes = analysis_inv.splitCsv(header: true)
+                                 .map{row -> row.tumor_subtype}
+                                 .unique()
+    filtered_mutations =  filter_input_mutations(inventories_pass.combine(tumor_subtypes)
+                                                                 .combine(patients_inv)
+                                                                 .combine(analysis_inv)
+                                                                 .combine(blacklist_inv)
+                                                                 .combine(target_genome_fasta)
+                                                                 .combine(target_genome_chr_len)
+                                                                 .combine(chain))
+    // output them in a format suitable to run driver calling tools on
     tumor_subtypes = analysis_inv.splitCsv(header: true)
                                  .map{row -> tuple(row.tumor_subtype, row.software)}
-                                 .unique().groupTuple()
-    input_mutations =  create_input_mutation_files(tumor_subtypes
-                                                   .combine(inventories_pass)
-                                                   .combine(patients_inv)
-                                                   .combine(analysis_inv)
-                                                   .combine(blacklist_inv)
-                                                   .combine(target_genome_fasta)
-                                                   .combine(chain))
-                                                   .flatten()
-
-     // split on csv which will go to be processed by driver calling software and bed files
-    // which will go to estimation of mutation rates
-    input_mutations.branch {
-        csv: it.name.toString().endsWith('csv')
-            return it
-        maf: true
-            return it
-    }.set{ input_mutations_split }
-
-
-    /*
-        Step 3: create input mutations genomic region files for all requested
-                software, parallelize by cancer subtype. This will not be run if
-                inventories do not pass the check.
-    */
-    input_genomic_regions = create_input_genomic_regions_files(inventories_pass
-                                                               .combine(analysis_inv)
-                                                               .combine(blacklist_inv)
-                                                               .combine(target_genome_fasta)
-                                                               .combine(chain))
-                                                               .flatten()
-    // split on csv which will go to be processed by driver calling software and bed files
-    // which will go to estimation of mutation rates
-    input_genomic_regions.branch {
-        csv: it.toString().endsWith('csv')
-             return it
-        bed: true
-             return it
-    }.set{ input_genomic_regions_split }
-
-    /*
-        Step 4: calculate local mutation rates (used for filtering of drivers)
-    input_genomic_regions_split.bed.map { file ->
-        def splitted_name = file.name.toString().tokenize('-')
-        def tumor_subtype = splitted_name.get(1)
-        return tuple(tumor_subtype, file)
-    }.set{regions_bed_files}
-    input_mutations_split.maf.map { file ->
-        def splitted_name = file.name.toString().tokenize('-')
-        def tumor_subtype = splitted_name.get(1)
-        return tuple(tumor_subtype, file)
-    }.set{muts_maf_files}
-
-    mut_rates = calculate_mutation_rates(regions_bed_files.join(muts_maf_files, by: [0])
-                                                          .combine(target_genome_chr_len)
-                                                          .combine(gene_name_synonyms)
-                                                          .combine(varanno_conversion_table)) */
-
-    /*
-        Step 5: prepare channel input_to_soft which will contain pairs of 
-                genomic regions and mutations for all the software
-    */
-    input_genomic_regions_split.csv.map { file ->
-        def splitted_name = file.name.toString().tokenize('-')
-        def tumor_subtype = splitted_name.get(2)
-        def gr_id = splitted_name.get(3)
-        def software = splitted_name.get(0)
-        return tuple(tumor_subtype, software, gr_id, file)
-     }.set{ input_genomic_regions_to_soft }
-
-    input_mutations_split.csv.map { file ->
-        def splitted_name = file.name.toString().tokenize('-')
-        def tumor_subtype = splitted_name.get(2)
-        def software = splitted_name.get(0)
-        return tuple(tumor_subtype, software, file)
-    }.set{ input_mutations_split_to_soft }
-
-    input_mutations_split_to_soft = analysis_inv.splitCsv(header: true)
-                                                .map{row -> tuple(row.tumor_subtype, row.software, 
-                                                                  row.gr_id)}
-                                                .unique()
-                                                .combine(input_mutations_split_to_soft, 
-                                                         by: [0, 1])
-    input_to_soft = input_mutations_split_to_soft.join(input_genomic_regions_to_soft,
-                                                       by: [0, 1, 2], remainder: true)
-
-    input_to_soft.branch {
-        digdriver: it[1].toString() == 'digdriver'
-            return it
-        dndscv: it[1].toString() == 'dndscv'
-            return it
-        mutpanning: it[1].toString() == 'mutpanning'
-            return it
-        nbr: it[1].toString() == 'nbr'
-            return it
-        oncodrivefml: it[1].toString() == 'oncodrivefml'
-            return it
-    }.set{ input_to_soft_split }
-
-    /*  Step : run DIGdriver */
-
-    /*  Step : run dNdScv */
-    
-
-    /* Step 6: run mutpanning */
-    mutpanning_results = mutpanning(input_to_soft_split.mutpanning
-                                                       .map { it ->
-                                                                def mutpan_inv = it[3].toString().replace("inputMutations",
-                                                                                                          "patientsInv")
-                                                                return tuple(it[0], it[1], it[2], it[3], mutpan_inv)
-                                                            })
-
-    /* Step 7: run NBR  */
-    nbr_results = nbr(input_to_soft_split.nbr.combine(target_genome_fasta)
-                                             .combine(nbr_neutral_bins)
-                                             .combine(nbr_neutral_trinucfreq)
-                                             .combine(nbr_driver_regs))
-
-    /* Step 8: run oncodrivefml */
-    oncodrivefml_results = oncodrivefml(input_to_soft_split.oncodrivefml
-                                                           .combine(oncodrivefml_config))
+                                 .unique()
+                                 .combine(filtered_mutations.mutations, by: [0])
+    tumor_subtypes.view()                            
 
 }
 
