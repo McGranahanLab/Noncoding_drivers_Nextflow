@@ -18,7 +18,7 @@
 # COMPANY:  UCL, London, the UK
 # VERSION:  1
 # CREATED:  08.10.2020
-# REVISION: 18.09.2023
+# REVISION: 29.09.2023
 
 
 box::use(./custom_functions[...])
@@ -870,14 +870,13 @@ excludeFromTarget <- function(targetGR, excludeGR, type, ignore.strand = T) {
   
   # here ignore.strand is F because we gave all possible strand combinations
   # of strand in excludeGR and we want to preserve strand in targetGR
-  result <- switch(type, 'black' = setdiff(targetGR, excludeGR, 
-                                           ignore.strand = F), 
-                   'white' = intersect(targetGR, excludeGR, 
-                                       ignore.strand = F))
+  result <- switch(type, 
+                   'black' = setdiff(targetGR, excludeGR, ignore.strand = F), 
+                   'white' = intersect(targetGR, excludeGR, ignore.strand = F))
   if (length(result) == 0) {
     return(result)
   }
-  
+
   # return mcols to result
   ovrl <- findOverlaps(result, targetGR, type = 'within', ignore.strand = F, 
                        select = 'all')
@@ -899,6 +898,12 @@ excludeFromTarget <- function(targetGR, excludeGR, type, ignore.strand = T) {
            'genomics regions which are not in targets')
     }
   }
+  # in case regions with strand '*' are submitted to findOverlaps function, it
+  # will overlap them with all regions, even if ignore.strand = F. Therefore,
+  # we need to cake care of the strand
+  ovrl[, result_strand := as.character(strand(result))[result_idx]]
+  ovrl[, target_strand := as.character(strand(targetGR))[target_idx]]
+  ovrl <- ovrl[result_strand == target_strand]
   result <- result[ovrl$result_idx]
   mcols(result) <- mcols(targetGR)[ovrl$target_idx, ]
   names(result) <- NULL
@@ -1584,252 +1589,6 @@ gRangesToBed12 <- function(gr, genomeversion) {
   result
 }
 
-#' writeGRegionsToFile
-#' @description Function to write genomic regions of interest to the file 
-#' suitable to submit to activedriverwgs, nbr, oncodrivefml or oncodriveclustl
-#' @author Maria Litovchenko
-#' @param targetGR GRanges object
-#' @param format string, one of activedriverwgs, oncodrivefml, oncodriveclustl,
-#' nbr
-#' @param output_file path to the output file
-writeGRegionsToFile <- function(targetGR, format, targetGenomeVersion, 
-                                output_file) {
-  if (!format %in% c('activedriverwgs', 'digdriver', 'oncodrivefml', 
-                     'oncodriveclustl', 'nbr')) {
-    stop(paste('Inacceptable output format! Please use one of: ',
-               'activedriverwgs, digdriver, nbr, oncodrivefm, ',
-               'oncodriveclustl'))
-  }
-  # because NBR wants chromosome names in 'chr1' format
-  if (format %in% c('nbr', 'activedriverwgs')) { 
-    message('[', Sys.time(), '] Output of genomic regions in NBR format is ',
-            'requested. NBR requires chromosomal names be in format "chr1", seting up output to that ',
-            'format.')
-    seqlevelsStyle(targetGR) <- 'UCSC'
-  }
-  targetDT <- as.data.table(sort(targetGR))
-  
-  # columns, required for each software
-  colsToGet <- switch(format, 
-                      'activedriverwgs' = c('seqnames', 'start', 'end',
-                                            'gene_id'),
-                      'nbr' = c("seqnames", "start", "end", "gene_id"),
-                      'oncodrivefml' = c("seqnames", "start", "end", "gene_id",
-                                         "strand", "gene_name"),
-                      'oncodriveclustl' = c("seqnames", "start", "end",
-                                            "gene_id", "strand", "gene_name"))
-  result <- targetDT[, colsToGet, with = F]
-  
-  if (format == 'activedriverwgs') {
-    printColNames <- T
-    colnames(result) <- c('chr', 'start', 'end', 'id')
-  }
-  
-  if (format == 'nbr') {
-    printColNames <- F
-    message('[', Sys.time(), '] NBR needs 0-based regions! Converting regions',
-            ' to 0-base. Convert to hg19 on the next step.')
-    result[, start := start - 1]
-    result[, end := end - 1]
-  }
-  
-  if (format %in% c('oncodrivefml', 'oncodriveclustl')) {
-    printColNames <- T
-    colnames(result) <- c('CHROMOSOME', 'START', 'END', 'ELEMENT', 'STRAND',
-                          'SYMBOL')
-  }
-  
-  if (format == 'digdriver') {
-    result <- gRangesToBed12(sort(targetGR), targetGenomeVersion)
-    result <- result[order(chr, start)]
-    printColNames <- F
-  }
-  
-  suppressWarnings(dir.create(dirname(output_file), recursive = T))
-  write.table(result, output_file, col.names = printColNames, row.names = F,
-              quote = F, sep = '\t')
-}
-
-# Functions : dNdScv ----------------------------------------------------------
-#' create_dNdScv_RefCDS
-#' Creates reference table for dNdScv from GTF file
-#' @param gtfFiles vector of paths to gtf files. Although a vector is accepted,
-#' use of just one file is recommended. 
-#' @param gtfGenome vector of strings, genome version of submitted gtf files
-#' @param targetGenome string, target (final) genome version
-#' @param targetGR GRanges object with regions of interest.
-#' @param acceptChrCodes character vector, accepted chromosomal names
-#' @param refGenFastaPath character, path to reference genome file. Have to 
-#' be the same genome version as target genome.
-#' @param outputPath string, path to where save the RefCDS object
-#' @return creates file with RefCDS object for dNdScv
-create_dNdScv_RefCDS <- function(gtfFiles, gtfGenomes, targetGenome, 
-                                 chainObj = NULL, targetGR = NULL, 
-                                 acceptChrCodes = NULL, refGenFastaPath, 
-                                 outputPath) {
-  message('[', Sys.time(), '] Started generation of dNdScv RefCDS object ',
-          'from ', paste(gtfFiles, collapse = ', '))
-  
-  if (!is.null(targetGR)) {
-    if (class(targetGR) != 'GRanges') {
-      stop('[', Sys.time(), '] targetGR should be GRanges')
-    }
-  }
-  if (length(gtfGenomes) != length(gtfFiles)) {
-    stop('[', Sys.time(), '] Length of gtfGenomes should be the same as ',
-         'length gtfFiles')
-  }
-  if (any(gtfGenomes != targetGenome) & is.null(chainObj)) {
-    stop('[', Sys.time(), ']  chainObj is required for liftover')
-  }
-  
-  # import gtf(s) as GRanges and put them into txdb object
-  genomeGR <- lapply(gtfFiles, import)
-  
-  # perform liftover, if needed
-  for (gtfIdx in 1:length(genomeGR)) {
-    if (gtfGenomes[gtfIdx] != targetGenome) {
-      genomeGR[[gtfIdx]] <- checkLiftOverByTr(genomeGR[[gtfIdx]], 
-                                              liftOverGenomicRegion(genomeGR[[gtfIdx]],
-                                                                    chainObj))
-    }
-  }
-  genomeGR <- unlist(GRangesList(genomeGR))
-  genomeGR <- genomeGR[!duplicated(as.data.table(genomeGR))]
-  
-  # filter out genes completely removed from targetGR, if given
-  if (!is.null(targetGR)) {
-    # summarize transcript biotypes of removed genes
-    removedGenes <- genomeGR[!genomeGR$gene_id %in% targetGR$gene_id]
-    removedGenes <- as.data.table(mcols(removedGenes))
-    removedGenes <- unique(removedGenes[,.(gene_id, transcript_biotype)])
-    removedGenes <- removedGenes[,.N, by = transcript_biotype][order(-N)]
-    
-    nbefore <- length(unique(genomeGR$gene_id))
-    genomeGR <- genomeGR[genomeGR$gene_id %in% targetGR$gene_id]
-    nafter <- length(unique(genomeGR$gene_id))
-    ndiff <- length(setdiff(unique(targetGR$gene_id),
-                            unique(genomeGR$gene_id)))
-    message('[', Sys.time(), '] Removed ', nbefore - nafter, '(',
-            round(100 * (nbefore - nafter) / nbefore, 2), '%) genes from ',
-            paste(unique(gtfFiles), collapse = ', '), ' due to not being ',
-            'present in target ranges. Summary of biotype distribution: ')
-    message(paste0(capture.output(knitr::kable(removedGenes, 
-                                               format = "markdown")),
-                   collapse = '\n'))
-    message('Number of genes from target ranges not present in GTF files: ', 
-            ndiff)
-  }
-  
-  # convert to txdb
-  genomeTxdb <- makeTxDbFromGRanges(genomeGR)
-  
-  # all cds
-  genomeCDS <- cdsBy(genomeTxdb, 'tx', use.names = T)
-  # select protein coding transcripts
-  protCodTx <- as.data.table(mcols(genomeGR[!is.na(genomeGR$protein_id)]))
-  protCodTx <- protCodTx[, c('gene_id', 'gene_name', 'transcript_id', 
-                             'protein_id')]
-  protCodTx <- protCodTx[!duplicated(protCodTx)]
-  genomeCDS <- genomeCDS[intersect(protCodTx$transcript_id, names(genomeCDS))]
-  genomeCDS <- unlist(genomeCDS)
-  mcols(genomeCDS) <- NULL
-  
-  # annotation columns
-  setkey(protCodTx, transcript_id)
-  genomeCDSmcols <- protCodTx[names(genomeCDS)]
-  setnames(genomeCDSmcols, 
-           c('gene_id', 'gene_name', 'transcript_id', 'protein_id'), 
-           c('gene.id', 'gene.name',  'transcript_id', 'cds.id'))
-  mcols(genomeCDS) <- genomeCDSmcols
-  # bring seq styles of genomeCDS to the styles of reference genome
-  seqlevelsStyle(genomeCDS) <- getSeqlevelsStyle(refGenFastaPath)
-  
-  # convert to data.table for speed
-  genomeCDS <- as.data.table(genomeCDS)
-  # exclude non-canonical chromosomes
-  if (!is.null(acceptChrCodes)) {
-    genomeCDS <- genomeCDS[seqnames %in% acceptChrCodes]
-  }
-  genomeCDS[, strand := ifelse(strand == '+', 1, -1)]
-  genomeCDS[, length := sum(width), by = transcript_id]
-  # add cds.start and cds.end
-  genomeCDS[, cds.end := cumsum(width), by = transcript_id]
-  genomeCDS[, cds.start := c(1, cds.end[-length(cds.end)] + 1),
-              by = transcript_id]
-  # format for output
-  genomeCDS <- genomeCDS[, c('gene.id', 'gene.name', 'cds.id', 'seqnames',
-                             'start', 'end', 'cds.start', 'cds.end',
-                             'length', 'strand')]
-  setnames(genomeCDS, c('seqnames', 'start', 'end'), 
-           c('chr', 'cds.start', 'cds.end'))
-  
-  # temporary file to write table to use with buildref function
-  tmpFile <- paste0('.', 
-                    paste(sample(LETTERS, 20, replace = T), collapse = ''))
-  write.table(genomeCDS, tmpFile, sep = '\t', append = F, quote = F,
-              col.names = T, row.names = F)
-  
-  # build RefCDS
-  buildref(cdsfile = tmpFile, genomefile = refGenFastaPath, 
-           outfile = outputPath)
-  suppressMessages(file.remove(tmpFile))
-  
-  message('[', Sys.time(), '] Finished generation of dNdScv RefCDS object ',
-          'from ', paste(gtfFiles, collapse = ', '))
-}
-
-
-#' adjust_dNdScv_RefCDS_toUseWithCovs
-#' @description 
-#' @author Maria Litovchenko
-#' @param refCDSpath
-#' @param outputPath
-#' @return 
-adjust_dNdScv_RefCDS_toUseWithCovs <- function(refCDSpath, outputPath) {
-  suppressWarnings(rm(RefCDS, gr_genes))
-  
-  load(refCDSpath) 
-  refCDSgenes <- sapply(RefCDS, function(x) x$gene_name)
-  
-  nbefore <- length(RefCDS)
-  data("covariates_hg19", package = "dndscv")
-  RefCDS <- RefCDS[refCDSgenes %in% c('CDKN2A', rownames(covs))]
-  gr_genes <- gr_genes[gr_genes$names %in% c('CDKN2A', rownames(covs))]
-  nafter <- length(RefCDS)
-  message('[', Sys.time(), '] Removed ', nbefore - nafter, '(',
-          round(100 * (nbefore - nafter) / nbefore, 2), '%) genes from ', 
-          'RefCDS due to not being present in covs object of dNdScv')
-  
-  save(RefCDS, gr_genes, file = outputPath)
-  
-  suppressWarnings(rm(RefCDS, gr_genes, covs))
-}
-
-#' adjust_dNdScv_RefCDS_toDIGdriver
-#' @description Copies dNdScv RefRDA to use with DIGdriver by removing chr from
-#'              RefCDS
-#' @author Maria Litovchenko
-#' @param refSeqPath path to RefCDS rda to copy from
-#' @param outfile output file
-#' @return void
-adjust_dNdScv_RefCDS_toDIGdriver <- function(refSeqPath, outfile) {
-  # in case of digdriver it is imperative that there is no chr in the 
-  # chromosomal names of Rda files
-  message('[', Sys.time(), '] Will convert chromosomal names in RefRDA for ',
-          'digdriver to NCBI format.')
-  suppressWarnings(rm(gr_genes))
-  suppressWarnings(rm(RefCDS))
-  load(refSeqPath)
-  seqlevelsStyle(gr_genes) <- 'NCBI'
-  for (RefCDSidx in 1:length(RefCDS)) {
-    RefCDS[[RefCDSidx]]$chr <- gsub('^chr', '', RefCDS[[RefCDSidx]]$chr)
-  }
-  save(gr_genes, RefCDS, file = outfile)
-  suppressWarnings(rm(gr_genes))
-  suppressWarnings(rm(RefCDS))
-}
-
 # Parse input arguments -------------------------------------------------------
 # create parser object
 parser <- ArgumentParser(prog = 'create_input_genomic_regions_files.R')
@@ -1858,6 +1617,14 @@ targetGenomePathHelp <- paste('Path to the fasta file, genome version of',
 parser$add_argument("-f", "--target_genome_path", required = T,
                     default = '', type = 'character',
                     help = targetGenomePathHelp)
+
+targetGenomeChrHelp <- paste('Path to the tab-separated file containing ', 
+                             'chromosomal lengths of the target genome. ',
+                             'Must have 3 columns: chr, start(1) and length ',
+                             'of the chromosome. No header.')
+parser$add_argument("-cl", "--target_genome_chr_len", required = F,
+                    default = '', type = 'character', 
+                    help = targetGenomeChrHelp)
 
 targetGenomeHelp <- paste("Genome version, i.e. hg19, to which input variants",
                           "files for software should be brought.",
@@ -1892,6 +1659,7 @@ parser$add_argument("-o", "--output", required = T, type = 'character',
 
 args <- parser$parse_args()
 args$ignore_strand <- as.logical(args$ignore_strand)
+check_input_arguments(args, outputType = 'folder')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
@@ -1903,10 +1671,10 @@ dir.create(args$output, recursive = T)
 # args <- list(inventory_analysis = '../data/inventory/inventory_analysis_tcga.csv',
 #              inventory_blacklisted = '../data/inventory/inventory_blacklist_tcga.csv', 
 #              target_genome_version = 'hg19',
-#              target_genome_path = '../data/assets/reference_genome/hg19.fa',
+#              target_genome_path = '../data/assets/reference_genome/Homo_sapiens_assembly19.fasta',
+#              target_genome_chr_len = '../data/assets/reference_genome/Homo_sapiens_assembly19.chrom.sizes.bed',
 #              chain = '../data/assets/reference_genome/hg38ToHg19.over.chain',
 #              ignore_strand = T, min_reg_len = 5, cores = 2, output = 'test/')
-
 
 # READ inventories ------------------------------------------------------------
 analysisInv <- readAnalysisInventory(args$inventory_analysis, args$cores)
@@ -2078,6 +1846,48 @@ for (i in 1:length(cleanTargets)) {
 rm(allGenomicRegions)
 suppressMessages(suppressWarnings(gc()))
 
+# Liftover (if all files were on other than target genome) --------------------
+# ... if it was not the case, liftover was performed at the reading of all 
+# files.
+if (liftOverIsNeeded == 'end') {
+  cleanTargets <- lapply(cleanTargets,
+                         function(x) unlist(liftOverGenomicRegion(x, chain)))
+}
+
+# REMOVE black-/include only white- listed regions from/into target regions----
+# read all black- and white- listed files
+if (!is.null(bwInv)) {
+  setkey(bwInv, 'list_name')
+  bwGR <- lapply(bwInv$list_name, 
+                 function(x) readInAndFilterBWregions(bwInv[x]$file_path, 
+                                                      chrStyle = outChrStyle,
+                                                      bwScoreCol = bwInv[x]$score_column, 
+                                                      bwScoreMin = bwInv[x]$min_value,
+                                                      bwScoreMax = bwInv[x]$max_value))
+  names(bwGR) <- bwInv$list_name
+  for (bwCode in names(bwGR)) {
+    bwGR[[bwCode]]$rCode <- bwCode
+  }
+  
+  # perform removal of black- regions and filter in white ones
+  for (grID in names(analysisInv)) {
+    removeBW <- unlist(analysisInv[[grID]]$blacklisted_codes[1])
+    removeBW <- intersect(removeBW, names(bwGR))
+    if (any(!is.na(removeBW))) {
+      # do it with loop, because where could be both black- and white- listed 
+      # regions
+      for (bwCode in removeBW) {
+        cleanTargets[[grID]] <- excludeFromTarget(targetGR = cleanTargets[[grID]],  
+                                                  excludeGR = bwGR[[bwCode]],
+                                                  type = bwInv[bwCode]$file_type, 
+                                                  ignore.strand = args$ignore_strand)
+      }
+    }
+  }
+  
+  rm(bwGR)
+  suppressMessages(suppressWarnings(gc()))
+}
 # Perform UNION or INTERSECTION of overlapping regions of different genes -----
 doUnionIntersect <- sapply(analysisInv, 
                            function(x) any(c(!is.na(x$union_percentage), 
@@ -2094,7 +1904,7 @@ if (length(doUnionIntersect) != 0) {
   for (gr_id_i in doUnionIntersect) {
     message('[', Sys.time(), '] Started performing union or intersection of ',
             'overlapping regions of different genes on ', gr_id_i)
-    cleanTargets[[gr_id_i]] <- process_overlapping_gregions(cleanTargets[[gr_id_i]], 
+    cleanTargets[[gr_id_i]] <- process_overlapping_gregions(inGR = cleanTargets[[gr_id_i]], 
                                                             ignore.strand = args$ignore_strand,
                                                             unionTreshold = unique(analysisInv[[gr_id_i]]$union_percentage),
                                                             intersectTreshold = unique(analysisInv[[gr_id_i]]$intersect_percentage))
@@ -2106,7 +1916,26 @@ if (length(doUnionIntersect) != 0) {
 
 suppressMessages(suppressWarnings(gc()))
 
-# Remove too short regions ----------------------------------------------------
+# REMOVE regions outside of chromosomal lengths -------------------------------
+if (!is.null(args$target_genome_chr_len)) {
+  message('[', Sys.time(), '] --target_genome_chr_len file is given. Will ',
+          'remove any regions surpassing chromosomal length')
+  
+  chrLensGR <- fread(args$target_genome_chr_len, stringsAsFactors = F, 
+                     header = F,  col.names = c('chr', 'start', 'end'))
+  chrLensGR <- makeGRangesFromDataFrame(chrLensGR)
+  
+  # perform removal of black- regions and filter in white ones
+  for (grID in names(analysisInv)) { 
+    cleanTargets[[grID]] <- excludeFromTarget(cleanTargets[[grID]], chrLensGR,
+                                              'white', args$ignore_strand)
+  }
+  
+  message('[', Sys.time(), '] Removed any regions surpassing chromosomal ',
+          'length')
+}
+
+# REMOVE too short regions ----------------------------------------------------
 if (args$min_reg_len > 1) {
   for (grID in names(cleanTargets)) {
     nbefore <- length(cleanTargets[[grID]])
@@ -2116,70 +1945,9 @@ if (args$min_reg_len > 1) {
     message('[', Sys.time(), '] Removed ', nbefore - nafter, '(',
             round(100 * (nbefore - nafter) / nbefore, 2), '%) regions from ', 
             grID, ' due length < ', args$min_reg_len)
-
+    
     suppressMessages(suppressWarnings(gc()))
   }
-}
-
-# Liftover (if all files were on other than target genome) --------------------
-# ... if it was not the case, liftover was performed at the reading of all 
-# files.
-if (liftOverIsNeeded == 'end') {
-  cleanTargets <- lapply(cleanTargets,
-                         function(x) unlist(liftOverGenomicRegion(x, chain)))
-}
-
-# REMOVE black-/include only white- listed regions from/into target regions----
-# read all black- and white- listed files
-if (!is.null(bwInv)) {
-  setkey(bwInv, 'list_name')
-  # get regions of interest, so that bigwig files could be read into memory
-  # more efficiently on by chromosomal basis.
-  cleanChrRegs <- as.data.table(unlist(GRangesList(cleanTargets)))
-  cleanChrRegs <- cleanChrRegs[,.(start = min(start), end = max(end)),
-                               by = seqnames]
-  cleanChrRegs <- makeGRangesFromDataFrame(cleanChrRegs)
-  bwGR <- lapply(bwInv$list_name, 
-                 function(x) readInAndFilterBWregions(bwInv[x]$file_path, 
-                                                      chrStyle = outChrStyle,
-                                                      bwScoreCol = bwInv[x]$score_column, 
-                                                      bwScoreMin = bwInv[x]$min_value,
-                                                      bwScoreMax = bwInv[x]$max_value))
-  names(bwGR) <- bwInv$list_name
-  for (bwCode in names(bwGR)) {
-    bwGR[[bwCode]]$rCode <- bwCode
-  }
-  
-  # if needed, do liftover
-  if (liftOverIsNeeded == 'start') {
-    for (bwCode in names(bwGR)) {
-      # check, that file needs liftover now
-      fileNeedsLiftOver <- bwInv[bwCode]$file_genome 
-      fileNeedsLiftOver <- fileNeedsLiftOver != args$target_genome_version
-      if (fileNeedsLiftOver) {
-        bwGR[[bwCode]] <- unlist(liftOverGenomicRegion(bwGR[[bwCode]], chain))
-      }
-    }
-  }
-  
-  # perform removal of black- regions and filter in white ones
-  for (grID in names(analysisInv)) {
-    removeBW <- unlist(analysisInv[[grID]]$blacklisted_codes[1])
-    removeBW <- intersect(removeBW, names(bwGR))
-    if (any(!is.na(removeBW))) {
-      # do it with loop, because where could be both black- and white- listed 
-      # regions
-      for (bwCode in removeBW) {
-        cleanTargets[[grID]] <- excludeFromTarget(cleanTargets[[grID]], 
-                                                  bwGR[[bwCode]],
-                                                  bwInv[bwCode]$file_type,
-                                                  args$ignore_strand)
-      }
-    }
-  }
-  
-  rm(bwGR)
-  suppressMessages(suppressWarnings(gc()))
 }
 
 # Print summary of extracted regions to screen --------------------------------
@@ -2214,233 +1982,23 @@ message(paste0(capture.output(knitr::kable(summaryToPrint,
 # [SAVE] BED12 file with all genomic regions to scan --------------------------
 # these files (one per tumor type) will be very useful further down the 
 # pipeline for overlapping mutations and regions.
+bed12Regs <- lapply(cleanTargets, gRangesToBed12, args$target_genome_version)
+
+# output to file(s)
 outBed12inv <- lapply(analysisInv, function(x) x[,.(tumor_subtype, gr_id)])
 outBed12inv <- lapply(outBed12inv, function(x) x[!duplicated(x)])
 outBed12inv <- do.call(rbind, outBed12inv)
-# in order not to perform gRangesToBed12 conversion amount of times equal to 
-# number of tumor subtypes (can be large due to, for example, downsampling),
-# we'll find unique combinations of regions.
-outBed12inv[, gr_id_comb := paste(sort(unique(gr_id)), collapse = ',')]
-gr_id_uniq_combs <- unique(outBed12inv[,.(gr_id_comb, gr_id)])
-setkey(gr_id_uniq_combs, 'gr_id_comb')
-bed12Regs <- lapply(unique(gr_id_uniq_combs$gr_id_comb), 
-                    function(x) apply(gr_id_uniq_combs[x], 1, 
-                                      function(y) gRangesToBed12(cleanTargets[[y['gr_id']]],
-                                                                 args$target_genome_version)))
-names(bed12Regs) <- unique(gr_id_uniq_combs$gr_id_comb)
-bed12Regs <- lapply(bed12Regs, function(x) do.call(rbind, x))
-bed12Regs <- lapply(bed12Regs, function(x) x[order(chr, start)])
-
-# output to file
-tumSubtV <- lapply(analysisInv, function(x) x$tumor_subtype)
-tumSubtV <- sort(unique(unlist(tumSubtV)))
-outBed12inv <- unique(outBed12inv[,.(tumor_subtype, gr_id_comb)])
 setkey(outBed12inv, 'tumor_subtype')
 
-for (tumSubt in tumSubtV) {
+for (tumSubt in unique(outBed12inv$tumor_subtype)) {
   outfile <- paste0(args$output, '/inputGR-', tumSubt, '-', 
                     args$target_genome_version, '.bed')
-  write.table(bed12Regs[[outBed12inv[tumSubt]$gr_id_comb]], outfile, 
-              col.names = F, row.names = F, quote = F, sep = '\t')
-}
-rm(tumSubtV)
-
-# [output] for NBR, DIGdriver and OncodriveFML --------------------------------
-softV <- unique(do.call(rbind, analysisInv)$software)
-# mutpanning & chasm+ are here because it doesn't need regions file
-softV <- setdiff(softV, c('dndscv', 'mutpanning', 'chasmplus'))
-if (length(softV) != 0) {
-  # in the majority of the cases, user will want to study the same genomic 
-  # regions on different tumor subtypes. In order to save time, we will create
-  # a temporary file for each gr_id - software combination and then copy it 
-  # across different tumor subtypes
-  grID_soft_combs <- do.call(rbind, analysisInv)
-  grID_soft_combs <- unique(grID_soft_combs[,.(gr_id, software)])
-  grID_soft_combs <- grID_soft_combs[software %in% softV]
-  grID_soft_combs[, tmp_file := paste(c('.', sample(LETTERS, 20, replace = T)),
-                                      collapse = ''), by = .(gr_id, software)]
-  # a temporary file
-  apply(grID_soft_combs, 1, 
-        function(x) writeGRegionsToFile(cleanTargets[[x['gr_id']]], 
-                                        x['software'], 
-                                        args$target_genome_version,
-                                        x['tmp_file']))
-  # copying
-  grID_soft_tumorType_combs <- do.call(rbind, analysisInv)
-  grID_soft_tumorType_combs <- grID_soft_tumorType_combs[,.(tumor_subtype,
-                                                            gr_id, software)]
-  grID_soft_tumorType_combs <- unique(grID_soft_tumorType_combs)
-  grID_soft_tumorType_combs <- grID_soft_tumorType_combs[software %in% softV]
-  grID_soft_tumorType_combs <- merge(grID_soft_tumorType_combs, 
-                                     grID_soft_combs, all.x = T,
-                                     by = c('software', 'gr_id'))
-  grID_soft_tumorType_combs$outfile <- apply(grID_soft_tumorType_combs, 1, 
-                                             function(x) 
-                                               paste0(args$output, '/' ,
-                                                      x['software'], '-inputGR-', 
-                                                      x['tumor_subtype'], '-', 
-                                                      x['gr_id'], '-',
-                                                      args$target_genome_version,
-                                                      '.csv'))
-  message('[', Sys.time(), '] Started outputting genomic regions into ',
-          'different formats (NBR/DIGdriver/OncodriveFML)')
-  sapply(unique(dirname(grID_soft_tumorType_combs$outfile)), dir.create,
-         recursive = T)
-  apply(grID_soft_tumorType_combs, 1, 
-        function(x) file.copy(x['tmp_file'], x['outfile'], overwrite = T))
-  message('[', Sys.time(), '] Finished outputting genomic regions into ',
-          'different formats (NBR/DIGdriver/OncodriveFML)')
-  
-  suppressMessages(sapply(unique(grID_soft_tumorType_combs$tmp_file),
-                          file.remove))
-}
-
-# [dNdScv/DIGdriver RefCDS] generation (if required) --------------------------
-# determine, if dNdScv or DIGdriver is requested. DIGdriver also requires Rda
-# with RefCDS
-refRdaRequested <- unique(do.call(rbind, analysisInv)$software)
-refRdaRequested <- any(c('dndscv', 'digdriver') %in% refRdaRequested)
-if (refRdaRequested) {
-  # in the majority of the cases, user will want to study the same genomic 
-  # regions on different tumor subtypes. In order to save time, we will create
-  # a temporary file for each gr_id - software combination and then copy it 
-  # across different tumor subtypes
-  
-  refRdaInv <- lapply(analysisInv, 
-                      function(x) x[software %in% c('dndscv', 'digdriver')])
-  refRdaInv <- do.call(rbind, refRdaInv)
-  refRdaInv <- refRdaInv[,.(tumor_subtype, software, gr_id, gr_code, 
-                            gr_genome, gr_file)]
-  refRdaInv <- refRdaInv[gr_code == 'CDS']
-  refRdaInv <- unique(refRdaInv)
-  # final file names
-  refRdaInv$outfile_noCovs <- apply(refRdaInv, 1,
-                                    function(x) paste0(args$output, '/', 
-                                                       x['software'], 
-                                                       '/genomic_regions/', 
-                                                       x['software'],
-                                                       '-inputGR-',
-                                                       x['tumor_subtype'], '-',
-                                                       x['gr_id'], '-', 
-                                                       args$target_genome_version,
-                                                       '.withCovs.rda'))
-  refRdaInv[, outfile_wCovs := gsub('.withCovs.rda', '.noCovs.rda', 
-                                    outfile_noCovs)]
-  
-  # check, that for every combination of tumor_subtype and software there is 
-  # a combination of gtf file(s) for creation of refcds object
-  hasGTF <- split(refRdaInv, by = c('software', 'tumor_subtype'), drop = T)
-  hasGTF <- lapply(hasGTF,
-                   function(x) x[grepl('gtf$|gtf.gz$', gr_file)]$gr_file)
-  hasGTF <- sapply(hasGTF, length) != 0
-  if (any(!hasGTF)) {
-    stop('[', Sys.time(), '] Following tumor_subtype - software combinations ',
-         'do not have GTF file(s) for creation of RefCDS objects:', 
-         paste(names(hasGTF)[!hasGTF], collapse = ', '),
-         '. Check that there is a gr_code which equals to CDS in the table ',
-         'and that also there is a corresponding GTF file.')
+  if (file.exists(outfile)) {
+    file.remove(outfile)
   }
-  
-  # assign a temporary files (with and without covariates) for every unique
-  # combo of gtf files
-  gtfCombs <- refRdaInv[grepl('gtf$|gtf.gz$', gr_file)]
-  gtfCombs <- gtfCombs[!duplicated(gtfCombs)]
-  gtfCombs <- unique(gtfCombs[,.(gr_id, gr_code, gr_genome, gr_file)])
-  gtfCombs[, tmp_noCovs := paste(c('.', sample(LETTERS, 20, replace = T)),
-                                 collapse = ''),
-           by = c('gr_id', 'gr_code')]
-  gtfCombs[, tmp_wCovs := paste(c('.', sample(LETTERS, 20, replace = T)), 
-                                collapse = ''),
-           by = c('gr_id', 'gr_code')]
-  
-  # create RefRda without covariates
-  msg <- paste('A T T E N T I O N !!! RefDB object for dNdScv/ DIGdriver will',
-               'be created from unfiltered GTF file(s). This is because',
-               'filtereing (i.e. with blacklisted regions) can introduce a',
-               'bias to the object, such as new, non-existant splice sites or',
-               'remove existing splice sites or exons. However, if a gene is',
-               'removed COMPLETELY from the generated list of target genomic',
-               'regions (i.e. it is olfactory or long), it will also be',
-               'removed from generated RefCDS.')
-  message('[', Sys.time(), ']', msg)
-  setkey(gtfCombs, 'tmp_noCovs')
-  lapply(sort(unique(gtfCombs$tmp_noCovs)), 
-         function(x) create_dNdScv_RefCDS(gtfFiles = gtfCombs[x]$gr_file,
-                                          gtfGenomes = gtfCombs[x]$gr_genome, 
-                                          targetGenome = args$target_genome_version,
-                                          chainObj = chain, 
-                                          targetGR = cleanTargets[[unique(gtfCombs[x]$gr_id)]],
-                                          acceptChrCodes = acceptedChrNames,
-                                          refGenFastaPath = args$target_genome_path,
-                                          outputPath = x))
-  
-  # create RefRda with covariates
-  message('[', Sys.time(), '] In case there are some genes which are present ',
-          'in dNdScv RefCDS object which are not present in covs table of ',
-          'covariates (used by dNdScv and we can not add genes to it) dNdScv ',
-          'run will result into error. Therefore, we will create RefCDS ',
-          'which are restricted to genes found in covs')
-  setkey(gtfCombs, 'tmp_wCovs')
-  lapply(sort(unique(gtfCombs$tmp_wCovs)), 
-         function(x) adjust_dNdScv_RefCDS_toUseWithCovs(unique(gtfCombs[x]$tmp_noCovs),
-                                                        x))
-  
-  # in case digdriver is requested, we need to remove "chr" from the
-  # chromosomal names
-  if ('digdriver' %in% refRdaInv$software) {
-    # dd = Dig Driver
-    gtfCombs[, dd_tmp_noCovs := paste(c('.', sample(LETTERS, 20, replace = T)),
-                                      collapse = ''), by = 'tmp_noCovs']
-    gtfCombs[, dd_tmp_wCovs := paste(c('.', sample(LETTERS, 20, replace = T)),
-                                     collapse = ''), by = 'tmp_wCovs']
-    setkey(gtfCombs, 'tmp_noCovs')
-    lapply(sort(unique(gtfCombs$tmp_noCovs)),
-           function(x) adjust_dNdScv_RefCDS_toDIGdriver(x, 
-                                                        unique(gtfCombs[x]$dd_tmp_noCovs)))
-    setkey(gtfCombs, 'tmp_wCovs')
-    lapply(sort(unique(gtfCombs$tmp_wCovs)), 
-           function(x) adjust_dNdScv_RefCDS_toDIGdriver(x, 
-                                                        unique(gtfCombs[x]$dd_tmp_wCovs)))
-  }
-  
-  # do copying for dndscv
-  refRdaInv_dndscv <- merge(refRdaInv[software == 'dndscv'], gtfCombs,
-                            by = c('gr_id', 'gr_code', 'gr_genome', 'gr_file'))
-  refRdaInv_dndscv <- refRdaInv_dndscv[,.(software, tumor_subtype, gr_id, 
-                                          gr_code, tmp_noCovs, tmp_wCovs,
-                                          outfile_noCovs, outfile_wCovs)]
-  refRdaInv_dndscv <- unique(refRdaInv_dndscv)
-  suppressWarnings(dir.create(unique(dirname(refRdaInv_dndscv$outfile_noCovs)),
-                              recursive = T))
-  message('[', Sys.time(), '] Started outputting genomic regions into ',
-          'dNdScv format')
-  suppressMessages(apply(refRdaInv_dndscv, 1,
-                         function(x) file.copy(x['tmp_noCovs'], 
-                                               x['outfile_noCovs'])))
-  suppressMessages(apply(refRdaInv_dndscv, 1,
-                         function(x) file.copy(x['tmp_wCovs'], 
-                                               x['outfile_wCovs'])))
-  message('[', Sys.time(), '] Finished outputting genomic regions into ',
-          'dNdScv format')
-  
-  # do copying for digdriver
-  if ('dd_tmp_noCovs' %in% colnames(gtfCombs)) {
-    refRdaInv_digdriver <- cbind(refRdaInv[software == 'digdriver'], 
-                                 gtfCombs[,.(dd_tmp_noCovs, dd_tmp_wCovs)])
-    refRdaInv_digdriver <- refRdaInv_digdriver[,.(dd_tmp_noCovs, 
-                                                  dd_tmp_wCovs, outfile_noCovs,
-                                                  outfile_wCovs)]
-    refRdaInv_digdriver <- unique(refRdaInv_digdriver)
-    message('[', Sys.time(), '] Started outputting genomic regions into ',
-            'digdriver format')
-    suppressMessages(apply(refRdaInv_digdriver, 1,
-                           function(x) file.copy(x['dd_tmp_noCovs'], 
-                                                 x['outfile_noCovs'])))
-    suppressMessages(apply(refRdaInv_digdriver, 1,
-                           function(x) file.copy(x['dd_tmp_wCovs'], 
-                                                 x['outfile_wCovs'])))
-    message('[', Sys.time(), '] Finished outputting genomic regions into ',
-            'digdriver format')
+  for (gr_id_idx in outBed12inv[tumSubt]$gr_id) {
+    write.table(bed12Regs[[gr_id_idx]], outfile, col.names = F, row.names = F,
+                quote = F, sep = '\t', append = T)
   }
 }
 
