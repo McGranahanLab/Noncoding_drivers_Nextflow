@@ -68,7 +68,8 @@ printArgs(args)
 #             output = 'test')
 
 # Software specific parameters ------------------------------------------------
-colsToGet <- c('chr', 'start', 'ref', 'var', 'participant_id')
+colsToGet <- c('Chromosome', 'Start_Position', 'Reference_Allele', 
+               'Tumor_Seq_Allele2', 'Tumor_Sample_Barcode')
 colsOutNames <- c("CHROMOSOME", "POSITION", "REF", "ALT", "SAMPLE")
 printColnames <- T
 
@@ -82,7 +83,7 @@ outfile <- paste0(args$output, '/oncodrivefml-inputMutations-', args$cancer_subt
 
 # PROCESS MAF file to suit the software ---------------------------------------
 maf <- maf[, intersect(colsToGet, colnames(maf)), with = F]
-maf <- maf[order(chr, start)]
+maf <- maf[order(Chromosome, Start_Position)]
 
 setnames(maf, colsToGet, colsOutNames)
 setcolorder(maf, colsOutNames)

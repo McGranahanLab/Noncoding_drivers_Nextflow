@@ -104,6 +104,8 @@ check_input_arguments <- function(argsList, outputType = NULL) {
   check_file_existence_msg(argsList$gene_name_synonyms)
   check_file_existence_msg(argsList$varanno_conversion_table)
   
+  check_file_existence_msg(argsList$maf)
+  
   check_min_int_msg(argsList$cores, 'cores', 1)
   
   if (!is.null(argsList$output)) {

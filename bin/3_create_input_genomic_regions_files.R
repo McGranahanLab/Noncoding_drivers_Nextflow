@@ -886,7 +886,7 @@ excludeFromTarget <- function(targetGR, excludeGR, type, ignore.strand = T) {
   if (length(setdiff(1:length(result), ovrl$result_idx)) != 0) {
     # experience showed that if one of the result region's ends overlaps with
     # the start/end of targetGR, and it is fully inside, findOverlaps with
-    # type = 'within' won't recognise it! So, let's give it a chance without
+    # type = 'within' won't recognize it! So, let's give it a chance without
     # type = 'within'.
     rogueRegs <- result[setdiff(1:length(result), ovrl$result_idx)]
     ovrl_patch <- findOverlaps(rogueRegs, targetGR, ignore.strand = F,  
@@ -1602,9 +1602,8 @@ writeGRegionsToFile <- function(targetGR, format, targetGenomeVersion,
   }
   # because NBR wants chromosome names in 'chr1' format
   if (format %in% c('nbr', 'activedriverwgs')) { 
-    message('[', Sys.time(), '] Output of genomic regions in activedriverwgs',
-            '/NBR format is requested. activedriverwgs/NBR requires ',
-            'chromosomal names be in format "chr1", seting up output to that ',
+    message('[', Sys.time(), '] Output of genomic regions in NBR format is ',
+            'requested. NBR requires chromosomal names be in format "chr1", seting up output to that ',
             'format.')
     seqlevelsStyle(targetGR) <- 'UCSC'
   }
@@ -1743,36 +1742,38 @@ create_dNdScv_RefCDS <- function(gtfFiles, gtfGenomes, targetGenome,
            c('gene_id', 'gene_name', 'transcript_id', 'protein_id'), 
            c('gene.id', 'gene.name',  'transcript_id', 'cds.id'))
   mcols(genomeCDS) <- genomeCDSmcols
+  # bring seq styles of genomeCDS to the styles of reference genome
+  seqlevelsStyle(genomeCDS) <- getSeqlevelsStyle(refGenFastaPath)
   
   # convert to data.table for speed
-  genomeCDSdt <- as.data.table(genomeCDS)
+  genomeCDS <- as.data.table(genomeCDS)
   # exclude non-canonical chromosomes
   if (!is.null(acceptChrCodes)) {
-    genomeCDSdt <- genomeCDSdt[seqnames %in% acceptChrCodes]
+    genomeCDS <- genomeCDS[seqnames %in% acceptChrCodes]
   }
-  genomeCDSdt[, strand := ifelse(strand == '+', 1, -1)]
-  genomeCDSdt[, length := sum(width), by = transcript_id]
+  genomeCDS[, strand := ifelse(strand == '+', 1, -1)]
+  genomeCDS[, length := sum(width), by = transcript_id]
   # add cds.start and cds.end
-  genomeCDSdt[, cds.end := cumsum(width), by = transcript_id]
-  genomeCDSdt[, cds.start := c(1, cds.end[-length(cds.end)] + 1),
+  genomeCDS[, cds.end := cumsum(width), by = transcript_id]
+  genomeCDS[, cds.start := c(1, cds.end[-length(cds.end)] + 1),
               by = transcript_id]
   # format for output
-  genomeCDSdt <- genomeCDSdt[, c('gene.id', 'gene.name', 'cds.id', 'seqnames',
-                                 'start', 'end', 'cds.start', 'cds.end', 
-                                 'length', 'strand')]
-  setnames(genomeCDSdt, c('seqnames', 'start', 'end'), 
+  genomeCDS <- genomeCDS[, c('gene.id', 'gene.name', 'cds.id', 'seqnames',
+                             'start', 'end', 'cds.start', 'cds.end',
+                             'length', 'strand')]
+  setnames(genomeCDS, c('seqnames', 'start', 'end'), 
            c('chr', 'cds.start', 'cds.end'))
   
   # temporary file to write table to use with buildref function
   tmpFile <- paste0('.', 
                     paste(sample(LETTERS, 20, replace = T), collapse = ''))
-  write.table(genomeCDSdt, tmpFile, sep = '\t', append = F, quote = F,
+  write.table(genomeCDS, tmpFile, sep = '\t', append = F, quote = F,
               col.names = T, row.names = F)
   
   # build RefCDS
   buildref(cdsfile = tmpFile, genomefile = refGenFastaPath, 
            outfile = outputPath)
-  file.remove(tmpFile)
+  suppressMessages(file.remove(tmpFile))
   
   message('[', Sys.time(), '] Finished generation of dNdScv RefCDS object ',
           'from ', paste(gtfFiles, collapse = ', '))
@@ -1987,7 +1988,7 @@ if (all(filesGenomeVersion$genomeVersion == args$target_genome_version)) {
   }
 }
 
-# EXTRACT target and exclusion genomic regions --------------------------------
+# EXTRACT target and exclusion genomic regions (& liftover, if needed) --------
 # get unique combos of files and gr_code so that if in one analysis a region,
 # i.e. CDS is target, and in the other it is excluded we wouldn't extract it 
 # twice.
@@ -2061,7 +2062,7 @@ for (fileIdx in 1:length(grIDtoFileDT)) {
   
   rm(genomeAnno)
   rm(regs)
-  gc()
+  suppressMessages(suppressWarnings(gc()))
 }
 names(allGenomicRegions) <- names(grIDtoFileDT)
 
@@ -2075,7 +2076,58 @@ for (i in 1:length(cleanTargets)) {
 }
 
 rm(allGenomicRegions)
-gc()
+suppressMessages(suppressWarnings(gc()))
+
+# Perform UNION or INTERSECTION of overlapping regions of different genes -----
+doUnionIntersect <- sapply(analysisInv, 
+                           function(x) any(c(!is.na(x$union_percentage), 
+                                             c(!is.na(x$intersect_percentage)))))
+doUnionIntersect <- names(doUnionIntersect[doUnionIntersect == T])
+
+if (length(doUnionIntersect) != 0) {
+  message('[', Sys.time(), '] union_percentage and/or intersect_percentage ',
+          'was given in analysis inventory table for gr_id(s): ', 
+          paste(doUnionIntersect, collapse = ', '), '. Will perform union or ',
+          'intersection for noncoding regions. It will not be performed ',
+          'for coding regions due to presence of internal structure (codons) ',
+          'inside coding regions.')
+  for (gr_id_i in doUnionIntersect) {
+    message('[', Sys.time(), '] Started performing union or intersection of ',
+            'overlapping regions of different genes on ', gr_id_i)
+    cleanTargets[[gr_id_i]] <- process_overlapping_gregions(cleanTargets[[gr_id_i]], 
+                                                            ignore.strand = args$ignore_strand,
+                                                            unionTreshold = unique(analysisInv[[gr_id_i]]$union_percentage),
+                                                            intersectTreshold = unique(analysisInv[[gr_id_i]]$intersect_percentage))
+    
+    message('[', Sys.time(), '] Finished performing union or intersection of ',
+            'overlapping regions of different genes on ', gr_id_i)
+  }
+}
+
+suppressMessages(suppressWarnings(gc()))
+
+# Remove too short regions ----------------------------------------------------
+if (args$min_reg_len > 1) {
+  for (grID in names(cleanTargets)) {
+    nbefore <- length(cleanTargets[[grID]])
+    longEnough <- width(cleanTargets[[grID]]) >= args$min_reg_len
+    cleanTargets[[grID]] <- cleanTargets[[grID]][longEnough]
+    nafter <- length(cleanTargets[[grID]])
+    message('[', Sys.time(), '] Removed ', nbefore - nafter, '(',
+            round(100 * (nbefore - nafter) / nbefore, 2), '%) regions from ', 
+            grID, ' due length < ', args$min_reg_len)
+
+    suppressMessages(suppressWarnings(gc()))
+  }
+}
+
+# Liftover (if all files were on other than target genome) --------------------
+# ... if it was not the case, liftover was performed at the reading of all 
+# files.
+if (liftOverIsNeeded == 'end') {
+  cleanTargets <- lapply(cleanTargets,
+                         function(x) unlist(liftOverGenomicRegion(x, chain)))
+}
 
 # REMOVE black-/include only white- listed regions from/into target regions----
 # read all black- and white- listed files
@@ -2127,58 +2179,7 @@ if (!is.null(bwInv)) {
   }
   
   rm(bwGR)
-  gc()
-}
-
-# Perform UNION or INTERSECTION of overlapping regions of different genes -----
-doUnionIntersect <- sapply(analysisInv, 
-                           function(x) any(c(!is.na(x$union_percentage), 
-                                             c(!is.na(x$intersect_percentage)))))
-doUnionIntersect <- names(doUnionIntersect[doUnionIntersect == T])
-
-if (length(doUnionIntersect) != 0) {
-  message('[', Sys.time(), '] union_percentage and/or intersect_percentage ',
-          'was given in analysis inventory table for gr_id(s): ', 
-          paste(doUnionIntersect, collapse = ', '), '. Will perform union or ',
-          'intersection for noncoding regions. It will not be performed ',
-          'for coding regions due to presence of internal structure (codons) ',
-          'inside coding regions.')
-  for (gr_id_i in doUnionIntersect) {
-    message('[', Sys.time(), '] Started performing union or intersection of ',
-            'overlapping regions of different genes on ', gr_id_i)
-    cleanTargets[[gr_id_i]] <- process_overlapping_gregions(cleanTargets[[gr_id_i]], 
-                                                            ignore.strand = args$ignore_strand,
-                                                            unionTreshold = unique(analysisInv[[gr_id_i]]$union_percentage),
-                                                            intersectTreshold = unique(analysisInv[[gr_id_i]]$intersect_percentage))
-    
-    message('[', Sys.time(), '] Finished performing union or intersection of ',
-            'overlapping regions of different genes on ', gr_id_i)
-  }
-}
-
-gc()
-
-# Remove too short regions ----------------------------------------------------
-if (args$min_reg_len > 1) {
-  for (grID in names(cleanTargets)) {
-    nbefore <- length(cleanTargets[[grID]])
-    longEnough <- width(cleanTargets[[grID]]) >= args$min_reg_len
-    cleanTargets[[grID]] <- cleanTargets[[grID]][longEnough]
-    nafter <- length(cleanTargets[[grID]])
-    message('[', Sys.time(), '] Removed ', nbefore - nafter, '(',
-            round(100 * (nbefore - nafter) / nbefore, 2), '%) regions from ', 
-            grID, ' due length < ', args$min_reg_len)
-    
-    gc()
-  }
-}
-
-# Liftover (if all files were on other than target genome) --------------------
-# ... if it was not the case, liftover was performed at the reading of all 
-# files.
-if (liftOverIsNeeded == 'end') {
-  cleanTargets <- lapply(cleanTargets,
-                         function(x) unlist(liftOverGenomicRegion(x, chain)))
+  suppressMessages(suppressWarnings(gc()))
 }
 
 # Print summary of extracted regions to screen --------------------------------
@@ -2247,7 +2248,7 @@ rm(tumSubtV)
 # [output] for NBR, DIGdriver and OncodriveFML --------------------------------
 softV <- unique(do.call(rbind, analysisInv)$software)
 # mutpanning & chasm+ are here because it doesn't need regions file
-softV <- setdiff(softV, c('driverpower', 'dndscv', 'mutpanning', 'chasmplus'))
+softV <- setdiff(softV, c('dndscv', 'mutpanning', 'chasmplus'))
 if (length(softV) != 0) {
   # in the majority of the cases, user will want to study the same genomic 
   # regions on different tumor subtypes. In order to save time, we will create

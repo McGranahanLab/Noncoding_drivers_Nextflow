@@ -68,7 +68,8 @@ printArgs(args)
 #             output = 'test')
 
 # Software specific parameters ------------------------------------------------
-colsToGet <- c('chr', 'start', 'end', 'ref', 'var', 'participant_id')
+colsToGet <- c('Chromosome', 'Start_Position', 'End_Position',
+               'Reference_Allele', 'Tumor_Seq_Allele2', 'Tumor_Sample_Barcode')
 colsOutNames <- c('CHROM', 'START', 'END', 'REF', 'ALT', 'SAMPLE')
 printColnames <- F
 
@@ -82,15 +83,15 @@ outfile <- paste0(args$output, '/digdriver-inputMutations-',
 
 # PROCESS MAF file to suit the software ---------------------------------------
 maf <- maf[, intersect(colsToGet, colnames(maf)), with = F]
-maf <- maf[order(chr, start)]
+maf <- maf[order(Chromosome, Start_Position)]
 
 message('[', Sys.time(), '] DIGdriver requires chromosomal names in NCBI ',
         'format. Changed chromosomal names to NCBI format.')
-maf[, chr := gsub('chr', '', chr)]
+maf[, Chromosome := gsub('chr', '', Chromosome)]
 
 # digdriver wants 0-indexed coordinates
-maf[, start := start - 1]
-maf[, end := end - 1]
+maf[, Start_Position := Start_Position - 1]
+maf[, End_Position := End_Position - 1]
 
 setnames(maf, colsToGet, colsOutNames)
 setcolorder(maf, colsOutNames)

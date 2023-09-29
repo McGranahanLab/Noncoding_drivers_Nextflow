@@ -1060,7 +1060,8 @@ parser$add_argument("-s", "--calc_synonymous", required = F, default = T,
 
 targetGenomeChrHelp <- paste('Path to the tab-separated file containing ', 
                              'chromosomal lengths of the target genome. ',
-                             'Must have 2 columns: chr and length. No header.')
+                             'Must have 3 columns: chr, start(1) and length ',
+                             'of the chromosome. No header.')
 parser$add_argument("-l", "--target_genome_chr_len", required = F,
                     default = '', type = 'character', 
                     help = targetGenomeChrHelp)
@@ -1192,7 +1193,7 @@ if (args$bin_len > 1) {
   message('[', Sys.time(), '] Started reading chromosomal length file')
   chrLensDT <- fread(args$target_genome_chr_len, header = F, 
                      stringsAsFactors = F)
-  chrLensVect <- chrLensDT$V2
+  chrLensVect <- chrLensDT$V3
   names(chrLensVect) <- chrLensDT$V1
   message('[', Sys.time(), '] Finished reading chromosomal length file')
   rm(chrLensDT)

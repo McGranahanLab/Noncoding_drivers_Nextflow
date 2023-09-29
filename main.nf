@@ -83,6 +83,134 @@ process filter_input_mutations {
     """
 }
 
+process write_mutations_for_chasmplus {
+    tag "$tumor_subtype"
+
+    input:
+    tuple val(tumor_subtype), val(software), path(maf)
+
+    output:
+    tuple val(tumor_subtype), path('inputMutations*')
+
+    when:
+    software == 'chasmplus'
+
+    script:
+    """
+    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
+    2a_write_mutations_for_chasmplus.R --maf ${maf} \
+                                       --cancer_subtype ${tumor_subtype} \
+                                       --output \$OUT_FILE
+    """
+}
+
+process write_mutations_for_digdriver {
+    tag "$tumor_subtype"
+
+    input:
+    tuple val(tumor_subtype), val(software), path(maf)
+
+    output:
+    tuple val(tumor_subtype), path('inputMutations*')
+
+    when:
+    software == 'digdriver'
+
+    script:
+    """
+    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
+    2b_write_mutations_for_digdriver.R --maf ${maf} \
+                                       --cancer_subtype ${tumor_subtype} \
+                                       --output \$OUT_FILE
+    """
+}
+
+process write_mutations_for_dndscv {
+    tag "$tumor_subtype"
+
+    input:
+    tuple val(tumor_subtype), val(software), path(maf)
+
+    output:
+    tuple val(tumor_subtype), path('inputMutations*')
+
+    when:
+    software == 'dndscv'
+
+    script:
+    """
+    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
+    2c_write_mutations_for_dndscv.R --maf ${maf} \
+                                    --cancer_subtype ${tumor_subtype} \
+                                    --output \$OUT_FILE
+    """
+}
+
+
+process write_mutations_for_mutpanning {
+    tag "$tumor_subtype"
+
+    input:
+    tuple val(tumor_subtype), val(software), path(maf)
+
+    output:
+    tuple val(tumor_subtype), path('inputMutations*'), 
+          path('mutpanning-patientsInv*')
+
+    when:
+    software == 'mutpanning'
+
+    script:
+    """
+    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
+    2d_write_mutations_for_mutpanning.R --maf ${maf} \
+                                        --cancer_subtype ${tumor_subtype} \
+                                        --output \$OUT_FILE
+    """
+}
+
+process write_mutations_for_nbr {
+    tag "$tumor_subtype"
+
+    input:
+    tuple val(tumor_subtype), val(software), path(maf)
+
+    output:
+    tuple val(tumor_subtype), path('inputMutations*')
+
+    when:
+    software == 'nbr'
+
+    script:
+    """
+    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
+    2e_write_mutations_for_nbr.R --maf ${maf} \
+                                 --cancer_subtype ${tumor_subtype} \
+                                 --output \$OUT_FILE
+    """
+}
+
+process write_mutations_for_oncodrivefml {
+    tag "$tumor_subtype"
+
+    input:
+    tuple val(tumor_subtype), val(software), path(maf)
+
+    output:
+    tuple val(tumor_subtype), path('inputMutations*')
+
+    when:
+    software == 'oncodrivefml'
+
+    script:
+    """
+    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
+    2f_write_mutations_for_oncodrivefml.R --maf ${maf} \
+                                          --cancer_subtype ${tumor_subtype} \
+                                          --output \$OUT_FILE
+    """
+}
+
 process create_input_genomic_regions_files {
     input:
     tuple val(inventory_check_res), path(analysis_inventory_path),
@@ -314,8 +442,12 @@ workflow {
                                  .map{row -> tuple(row.tumor_subtype, row.software)}
                                  .unique()
                                  .combine(filtered_mutations.mutations, by: [0])
-    tumor_subtypes.view()                            
-
+    chasmplus_mutations = write_mutations_for_chasmplus(tumor_subtypes)
+    digdriver_mutations = write_mutations_for_digdriver(tumor_subtypes)
+    dndscv_mutations = write_mutations_for_dndscv(tumor_subtypes)
+    mutpanning_mutations = write_mutations_for_mutpanning(tumor_subtypes)
+    nbr_mutations = write_mutations_for_nbr(tumor_subtypes)
+    oncodrivefml_mutations = write_mutations_for_oncodrivefml(tumor_subtypes)
 }
 
 // inform about completition

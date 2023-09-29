@@ -68,8 +68,8 @@ printArgs(args)
 #             output = 'test')
 
 # Software specific parameters ------------------------------------------------
-colsToGet <- c('chr', 'start', 'strand', 'ref', 'var', 'participant_id',
-               'Gene.refGene')
+colsToGet <- c('Chromosome', 'Start_Position', 'Strand', 'Reference_Allele',
+               'Tumor_Seq_Allele2', 'Tumor_Sample_Barcode', 'Gene.refGene')
 colsOutNames <- c('chr', 'start', 'strand', 'ref', 'var', 'participant_id',
                   'Gene.refGene')
 printColnames <- F
@@ -84,14 +84,14 @@ outfile <- paste0(args$output, '/chasmplus-inputMutations-', args$cancer_subtype
 
 # PROCESS MAF file to suit the software ---------------------------------------
 maf <- maf[, intersect(colsToGet, colnames(maf)), with = F]
-maf <- maf[order(chr, start)]
+maf <- maf[order(Chromosome, Start_Position)]
 
 message('[', Sys.time(), '] CHASM+ requires chromosomal names in UCSC ',
         'format. Changed chromosomal names to UCSC format.')
-maf[, chr := paste0('chr', gsub('chr', '', chr))]
+maf[, Chromosome := paste0('chr', gsub('chr', '', Chromosome))]
 
 message('[', Sys.time(), '] CHASMplus requires strand to be set to +')
-maf[, strand := '+']
+maf[, Strand := '+']
 maf[, `Gene.refGene` := paste(`Gene.refGene`, 1:nrow(maf), sep = '_')]
 
 setnames(maf, colsToGet, colsOutNames)

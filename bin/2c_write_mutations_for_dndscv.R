@@ -68,7 +68,8 @@ printArgs(args)
 #             output = 'test')
 
 # Software specific parameters ------------------------------------------------
-colsToGet <- c('participant_id', 'chr', 'start', 'ref', 'var')
+colsToGet <- c('Tumor_Sample_Barcode', 'Chromosome', 'Start_Position', 
+               'Reference_Allele', 'Tumor_Seq_Allele2')
 colsOutNames <- c("sampleID", "chr", "pos", "ref", "mut")
 printColnames <- T
 
@@ -82,7 +83,7 @@ outfile <- paste0(args$output, '/dndscv-inputMutations-', args$cancer_subtype,
 
 # PROCESS MAF file to suit the software ---------------------------------------
 maf <- maf[, intersect(colsToGet, colnames(maf)), with = F]
-maf <- maf[order(chr, start)]
+maf <- maf[order(Chromosome, Start_Position)]
 
 setnames(maf, colsToGet, colsOutNames)
 setcolorder(maf, colsOutNames)
