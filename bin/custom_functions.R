@@ -358,6 +358,51 @@ readInAndFilterBWregions <- function(bwFile, chrStyle, bwScoreCol = NA,
   result
 }
 
+# Reading bed12 files ---------------------------------------------------------
+#' parseBED12regName
+#' @description Parces name string(s) from BED12 files containing information
+#' about genomic regions of interest. Usually those files are used with 
+#' driverpower.
+#' @author Maria Litovchenko
+#' @param nameStr vector of strings
+#' @return data table with number of rows = length of nameStr with columns 
+#'         target_genome_version, gr_id, gene_id, gene_name, name
+parseBED12regName <- function(nameStr, sepStr = '--') {
+  result <- lapply(nameStr, strsplit, sepStr)
+  result <- do.call(rbind, lapply(result, function(x) x[[1]]))
+  result <- as.data.table(result)
+  result[, name := nameStr]
+  colnames(result) <- c('target_genome_version', 'gr_id', 'gene_id',
+                        'gene_name', 'name')
+  result
+}
+
+#' readBED12
+#' @description Reads BED12 file into GRanges
+#' @author Maria Litovchenko
+#' @param bedPath path to bed12 file
+#' @return GRanges with mcols target_genome_version, gr_id, gene_id, gene_name,
+#'         gr_name
+readBED12 <- function(bedPath) {
+  result <- import(bedPath)
+  result <- unlist(blocks(result))
+  result_parsed <- parseBED12regName(unique(names(result)))
+  
+  setnames(result_parsed, 'name', 'gr_name')
+  setkey(result_parsed, gr_name)
+  mcols(result) <- result_parsed[names(result)]
+  rm(result_parsed)
+  
+  suppressMessages(suppressWarnings(gc()))
+  
+  message('[', Sys.time(), '] Finished reading input genomic ranges file')
+  message('[', Sys.time(), '] rtracklayer import function while reading ',
+          'bed12 assumes that it is 0-based. Therefore it adds 1 to all ',
+          'coordinates. We will correct it.')
+  start(result) <- start(result) - 1
+  end(result) <- end(result) - 1
+  result
+}
 # Misc -----------------------------------------------------------------------
 #' getSeqlevelsStyle
 #' @description Detemines a seqlevelstyle (aka chromosome naming style) from

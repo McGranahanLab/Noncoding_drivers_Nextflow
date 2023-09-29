@@ -32,25 +32,6 @@ suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
 suppressWarnings(suppressPackageStartupMessages(library(VariantAnnotation)))
 options(scipen = 999)
 
-# FUNCTIONS: reading ---------------------------------------------------------
-#' parseBED12regName
-#' @description Parces name string(s) from BED12 files containing information
-#' about genomic regions of interest. Usually those files are used with 
-#' driverpower.
-#' @author Maria Litovchenko
-#' @param nameStr vector of strings
-#' @return data table with number of rows = length of nameStr with columns 
-#'         target_genome_version, gr_id, gene_id, gene_name
-parseBED12regName <- function(nameStr, sepStr = '--') {
-  result <- lapply(nameStr, strsplit, sepStr)
-  result <- do.call(rbind, lapply(result, function(x) x[[1]]))
-  result <- as.data.table(result)
-  result[, name := nameStr]
-  colnames(result) <- c('target_genome_version', 'gr_id', 'gene_id',
-                        'gene_name', 'name')
-  result
-}
-
 # FUNCTIONS: common -----------------------------------------------------------
 #' getGeneSymbolSynonyms
 #' @description Retrieves from the table of gene names synonyms all synonumous 
@@ -1175,19 +1156,7 @@ message('[', Sys.time(), '] Finished reading ', args$variants)
 
 message('[', Sys.time(), '] Started reading input genomic ranges file')
 # GR = regions of interest
-GR <- import(args$genomic_regions)
-GR <- unlist(blocks(GR))
-GR_parsed <- parseBED12regName(unique(names(GR)))
-setnames(GR_parsed, 'name', 'gr_name')
-setkey(GR_parsed, gr_name)
-mcols(GR) <- GR_parsed[names(GR)]
-rm(GR_parsed)
-message('[', Sys.time(), '] Finished reading input genomic ranges file')
-message('[', Sys.time(), '] rtracklayer import function while reading ',
-        'bed12 assumes that it is 0-based. Therefore it adds 1 to all ',
-        'coordinates. We will correct it.')
-start(GR) <- start(GR) - 1
-end(GR) <- end(GR) - 1
+GR <- readBED12(args$genomic_regions)
 
 if (args$bin_len > 1) {
   message('[', Sys.time(), '] Started reading chromosomal length file')
