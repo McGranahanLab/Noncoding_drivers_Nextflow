@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# FILE: 2_create_input_mutation_files.R ---------------------------------------
+# FILE: 2_filter_input_mutations.R ---------------------------------------
 #
 # DESCRIPTION: Creates input mutation files for the requested de-novo cancer 
 # driver genes calling software (i.e. chasm+, digdriver, dndscv, mutpanning, 
@@ -9,7 +9,7 @@
 # MAF file containing all mutation in all patients for a tumor subtype.
 #
 #
-# USAGE: Rscript --vanilla 2_create_input_mutation_files.R \
+# USAGE: Rscript --vanilla 2_filter_input_mutations.R \
 #                --inventory_patients [path to your file] \
 #                --inventory_analysis [path to your file] \
 #                --inventory_blacklisted [path to your file] \ # optional
@@ -23,11 +23,11 @@
 #                --target_genome_path [path to fasta file of target genome] \
 #                --target_genome_version hg19 \
 #                --chain [path to chain file for liftover] \
-#                --output [path to folder to write files to] \
+#                --output [path to file to write files to] \
 #                --cores [number of cores]
 #
 # OPTIONS: Run 
-#          Rscript --vanilla 2_create_input_mutation_files.R -h
+#          Rscript --vanilla 2_filter_input_mutations.R -h
 #          to see the full list of options and their descriptions.
 #
 # REQUIREMENTS: 
@@ -428,7 +428,7 @@ filterVarsByBlackWhiteList <- function(varsDT, bwFile, chrStyle, bwName,
   after <- nrow(result)
   if (after != before) {
     message('[', Sys.time(), '] Removed ', before - after, '(',
-            round(100 * (before - after) / before, 2), '%) mutations becasuse',
+            round(100 * (before - after) / before, 2), '%) mutations because',
             ' of filtering by ', bwName)
   }
   message('[', Sys.time(), '] Finished filtering variants by ', bwName)
@@ -476,128 +476,6 @@ mutTabToMAF <- function(varDT) {
   result[, Variant_Type := struct_type]
   
   result
-}
-
-#' writeVarsToFile
-#' Outputs selected variants into format acceptable for further drive inference
-#' tool application.
-#' @param varDT data table with variants
-#' @param format string, format to which output the variants, one of oncodrive,
-#' activedriverwgs, larva, mutpanning, dndscv, chasmplus, digdriver
-#' @param outPath full path to output
-#' @return regions file, in GZIP format, containing regions ready to be 
-#' submitted to the driver inference software. If splitByChr = T, a folder with
-#' _byChr in the name will be created containing files split by chromosome 
-#' @note data table with variants in MAF format is needed for mutpanning output
-writeVarsToFile <- function(varDT, format, outPath) {
-  if (!format %in% c("activedriverwgs", "chasmplus", "digdriver", "dndscv", 
-                     "mutpanning", "nbr", "oncodriveclustl",
-                     "oncodrivefml")) {
-    stop(paste('Inacceptable output format! Please use one of: ',
-               "activedriverwgs", "chasmplus", "digdriver", "dndscv", 
-               "mutpanning", "nbr", "oncodriveclustl",
-               "oncodrivefml"))
-  }
-  # columns, required for each software
-  colsToGet <- list(activedriverwgs = c('chr', 'start', 'end', 'ref', 'var',
-                                        'participant_id'),
-                    chasmplus = c('chr', 'start', 'strand', 'ref', 'var', 
-                                  'participant_id', 'Gene.refGene'), 
-                    digdriver = c('chr', 'start', 'end', 'ref', 'var', 
-                                  'participant_id'),
-                    dndscv = c('participant_id', 'chr', 'start', 'ref', 'var'),
-                    mutpanning = c('Hugo_Symbol', 'Chromosome',
-                                   'Start_Position', 'End_Position', 'Strand',
-                                   'Variant_Classification', 'Variant_Type', 
-                                   'Reference_Allele', 'Tumor_Seq_Allele1', 
-                                   'Tumor_Seq_Allele2', 
-                                   'Tumor_Sample_Barcode'),
-                    nbr = c('participant_id', 'chr', 'start', 'ref', 'var'), 
-                    oncodrivefml = c('chr', 'start', 'ref', 'var', 
-                                     'participant_id'), 
-                    oncodriveclustl = c('chr', 'start', 'ref', 'var', 
-                                        'participant_id'))
-  # column names, required for each software
-  colsOutNames <- list(activedriverwgs = c('chr', 'pos1', 'pos2', 'ref', 'alt',
-                                           'patient'),
-                       chasmplus = c('chr', 'start', 'strand', 'ref', 'var', 
-                                     'participant_id', 'Gene.refGene'),
-                       digdriver = c('CHROM', 'START', 'END', 'REF', 'ALT', 
-                                     'SAMPLE'),
-                       dndscv =  c("sampleID", "chr", "pos", "ref", "mut"),
-                       mutpanning = c('Hugo_Symbol', 'Chromosome',
-                                      'Start_Position', 'End_Position', 
-                                      'Strand', 'Variant_Classification', 
-                                      'Variant_Type', 'Reference_Allele', 
-                                      'Tumor_Seq_Allele1', 'Tumor_Seq_Allele2', 
-                                      'Tumor_Sample_Barcode'), 
-                       nbr = c('sampleID', 'chr', 'pos', 'ref', 'mut'),
-                       oncodrivefml = c("CHROMOSOME", "POSITION", "REF", "ALT",
-                                        "SAMPLE"), 
-                       oncodriveclustl = c("CHROMOSOME", "POSITION", "REF", 
-                                           "ALT","SAMPLE"))
-  
-  result <- varDT[, intersect(colsToGet[[format]], colnames(varDT)), with = F]
-  if ('chr' %in% colnames(result)) {
-    result <- result[order(chr, start)]
-  } else {
-    result <- result[order(Chromosome, Start_Position)]
-  }
-  
-  # whatever or not in the result file chromosome names should be with chr
-  # checked in the docs that activedriverwgs, chasmplus, driverpower and nbr
-  # need UCSC style. 
-  if (format %in% c('activedriverwgs', 'chasmplus', 'nbr')) {
-    message('[', Sys.time(), '] ', format, ' requires chromosomal names in ',
-            'UCSC format. Changed chromosomal names to UCSC format.')
-    result[, chr := paste0('chr', gsub('chr', '', chr))]
-  } 
-  if (format %in% c('digdriver', 'mutpanning')) {
-    message('[', Sys.time(), '] ', format, ' requires chromosomal names in ',
-            'NCBI format. Changed chromosomal names to NCBI format.')
-    if ('chr' %in% colnames(result)) {
-      result[, chr := gsub('chr', '', chr)]
-    } else {
-      result[, Chromosome := gsub('chr', '', Chromosome)]
-    }
-  }
-  
-  # software-specific modifications
-  if (format == 'activedriverwgs') {
-    result[, end := end - 1]
-  }
-  if (format == 'chasmplus') {
-    message('[', Sys.time(), '] CHASMplus requires strand to be set to +')
-    result[, strand := '+']
-    result[, `Gene.refGene` := paste(`Gene.refGene`, 1:nrow(result), 
-                                     sep = '_')]
-  }
-  if (format == 'digdriver') {
-    # digdriver wants 0-indexed coordinates
-    result[, start := start - 1]
-    result[, end := end - 1]
-  }
-  
-  setnames(result, colsToGet[[format]], colsOutNames[[format]])
-  setcolorder(result, colsOutNames[[format]])
-  
-  # whatever or not result file should have header
-  printColnames <- F
-  if (format %in% c('activedriverwgs', 'dndscv', 'mutpanning',
-                    'oncodrivefml', 'oncodriveclustl')) {
-    printColnames <- T
-  }
-  
-  # check, that folder exists, if not - create
-  if (!file.exists(dirname(outPath))) {
-    message('[', Sys.time(), '] Created ', dirname(outPath), 
-            ' to store output')
-    dir.create(dirname(outPath), recursive = T)
-  }
-  
-  # Write to the file
-  write.table(result, outPath, col.names = printColnames, row.names = F, 
-              sep = '\t', quote = F)
 }
 
 # Parse input arguments -------------------------------------------------------
@@ -679,35 +557,32 @@ parser$add_argument("-g", "--target_genome_version", required = F,
                     default = 'hg19', type = 'character',
                     help = targetGenomeHelp)
 
+targetGenomeChrHelp <- paste('Path to the tab-separated file containing ', 
+                             'chromosomal lengths of the target genome. ',
+                             'Must have 3 columns: chr, start(1) and length ',
+                             'of the chromosome. No header.')
+parser$add_argument("-cl", "--target_genome_chr_len", required = F,
+                    default = '', type = 'character', 
+                    help = targetGenomeChrHelp)
+
 chainHelp <- paste('Path to chain file in case genome version of mutations is',
                    'not the same as --target_genome_version')
 parser$add_argument("-l", "--chain", required = F, 
                     type = 'character', help = chainHelp)
 
-softwareHelp <- paste("Format of the mutational file output (name of the",
-                      "software the file will be used with). One or several",
-                      "from the list: chasmplus, digdriver, dndscv,",
-                      "mutpanning, nbr, oncodrivefml.")
-parser$add_argument("-s", "--software", required = T, type = 'character',
-                    nargs = "+", help = softwareHelp,
-                    choices = c('chasmplus', 'digdriver', 'dndscv', 
-                                'mutpanning', 'nbr', 'oncodrivefml'))
-
 parser$add_argument("-o", "--output", required = T, type = 'character',
-                    help = "Path to the output folder")
+                    help = "Path to the output file")
 
 coresHelp <- 'How many cores the script should use. Default: 1.'
 parser$add_argument("-n", "--cores", required = F, type = 'integer', 
                     default = 1, help = coresHelp)
 
 args <- parser$parse_args()
-check_input_arguments(args, outputType = 'folder')
+check_input_arguments(args, outputType = 'file')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 printArgs(args)
-
-dir.create(args$output, recursive = T)
 
 # Test input args -------------------------------------------------------------
 # args <- list(inventory_patients = '../data/inventory/inventory_patients_tcga.csv',
@@ -718,11 +593,10 @@ dir.create(args$output, recursive = T)
 #              min_tumor_vaf = 5.0, max_germline_vaf = 1.0, 
 #              max_n_vars = 90000,
 #              target_genome_version = 'hg19',
-#              target_genome_path = '../data/assets/reference_genome/hg19.fa',
-#              chain = '../data/assets/reference_genome/hg38ToHg19.over.chain', 
-#              software = list('chasmplus', 'digdriver', 'dndscv', 'mutpanning',
-#                              'nbr', 'oncodrivefml'),
-#              output = 'test', cores = 2)
+#              target_genome_path = '../data/assets/reference_genome/Homo_sapiens_assembly19.fasta',
+#              target_genome_chr_len = '../data/assets/reference_genome/Homo_sapiens_assembly19.chrom.sizes.bed',
+#              chain = '../data/assets/reference_genome/hg38ToHg19.over.chain',
+#              output = 'test.maf', cores = 2)
 
 # READ inventories ------------------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients, args$cores)
@@ -803,7 +677,8 @@ if (outChrStyle == 'UCSC') {
   allVars[, chr := paste0('chr', chr)] 
 }
 
-gc()
+suppressMessages(suppressWarnings(gc()))
+
 # FILTER variants: noncanonical chr, duplicated, N var/ref, same alt/ref ------
 # 1) Non canonical chr
 before <- nrow(allVars)
@@ -845,7 +720,8 @@ if (after != before) {
           'of ref = alt')
 }
 
-gc()
+suppressMessages(suppressWarnings(gc()))
+
 # FILTER variants : VAF, ALT counts, etc --------------------------------------
 # 1) minimum depth of coverage for mutations
 if (!is.null(args$min_depth)) {
@@ -1062,7 +938,8 @@ if (!is.null(args$max_germline_vac)) {
   }
 }
 
-gc()
+suppressMessages(suppressWarnings(gc()))
+
 # LIFTOVER variants to target genome ------------------------------------------
 if (any(unique(allVars$somatic_genome) != args$target_genome_version)) {
   # read in chain file
@@ -1076,7 +953,30 @@ if (any(unique(allVars$somatic_genome) != args$target_genome_version)) {
   message('[', Sys.time(), '] Finished liftover')
 }
 
-gc()
+suppressMessages(suppressWarnings(gc()))
+
+# FILTER variants: location outside target genome chromosomes -----------------
+if (!is.null(args$target_genome_chr_len)) {
+  message('[', Sys.time(), '] Lengths of chromosomes are given, will check ',
+          'that mutations do not surpass them.')
+  nbefore <- nrow(allVars)
+  allVars <- filterVarsByBlackWhiteList(varsDT = allVars,
+                                        bwFile = args$target_genome_chr_len,
+                                        chrStyle = outChrStyle,
+                                        bwName = 'chromosome length',
+                                        bwFileType = 'white',
+                                        cores = args$cores)
+  nafter <- nrow(allVars)
+  if (nbefore == nafter) {
+    message('[', Sys.time(), '] All mutations are within chromosomal ',
+            'boundaries')
+  } else {
+    message('[', Sys.time(), '] WARNING: Removed', before - after, '(',
+            round(100 * (before - after) / before, 2), '%) mutations because',
+            ' they were outside chromosomal boundaries')
+  }
+}
+
 # FILTER variants: location in black-/white- listed regions -------------------
 if ('blacklisted_codes' %in% colnames(analysisInv)) {
   if (!is.null(bwInv)) {
@@ -1090,12 +990,13 @@ if ('blacklisted_codes' %in% colnames(analysisInv)) {
                                             bwScoreMin = bwInv$min_value[i],
                                             bwScoreMax = bwInv$max_value[i],
                                             cores = args$cores)
-      gc()
+      suppressMessages(suppressWarnings(gc()))
     }
   }
 }
 
-gc()
+suppressMessages(suppressWarnings(gc()))
+
 # FILTER patients: number of variants does not exceed max_n_vars --------------
 varsPerParticip <- allVars[,.N, by = participant_id]
 
@@ -1106,8 +1007,7 @@ if (any(varsPerParticip$N > args$max_n_vars)) {
   # output table with hypermutated samples
   write.table(hypermutated, append = F, sep = '\t', row.names = F, quote = F,
               col.names = T,
-              file = paste0(args$output, '/hypermutated-', args$cancer_subtype, 
-                            '.csv'))
+              file = paste0('hypermutated-', args$cancer_subtype, '.csv'))
   
 }
 before <- nrow(varsPerParticip)
@@ -1116,13 +1016,14 @@ varsPerParticip <- varsPerParticip[N <= args$max_n_vars]
 after <- nrow(varsPerParticip)
 if (after != before) {
   message('[', Sys.time(), '] Removed ', before - after, '(',
-          round(100 * (before - after) / before, 2), '%) patients becasuse',
-          ' number of mutations exceeded', args$max_n_vars, '. Removed ',
+          round(100 * (before - after) / before, 2), '%) patients because',
+          ' number of mutations exceeded ', args$max_n_vars, '. Removed ',
           'patients: ', paste(removedPatients, collapse = ', '))
 }
 allVars <- allVars[participant_id %in% varsPerParticip$participant_id]
 
-gc()
+suppressMessages(suppressWarnings(gc()))
+
 # SAVE annotated cancer subtype mutation table as MAF file --------------------
 # bring allVars chromosome notation to the one of reference genome, yes, again
 allVars[, chr := gsub('chr', '', chr)] # this covers NCBI
@@ -1137,44 +1038,8 @@ setkey(patientsInv, participant_id)
 allVars[, patient_tumor_subtype := patientsInv[allVars$participant_id]$tumor_subtype]
 allVarsMAF <- mutTabToMAF(allVars)
 
-write.table(allVarsMAF, append = F, sep = '\t', row.names = F, col.names = T,
-            file = paste0(args$output, '/inputMutations-', args$cancer_subtype, 
-                          '-', args$target_genome_version, '.maf'), quote = F)
-
-# [OUTPUT] to files in driver-calling input format ----------------------------
-# bring allVars chromosome notation to the one of reference genome, yes, again
-allVars[, chr := gsub('chr', '', chr)] # this covers NCBI
-if (outChrStyle == 'UCSC') {
-  allVars[, chr := paste0('chr', chr)] 
-}
-
-# output variants for all formats
-for (software in args$software) {
-  message('[', Sys.time(), '] Outputting variants for ', software)
-  outfile <- paste0(args$output, '/', software, '-inputMutations-',
-                    args$cancer_subtype, '-', args$target_genome_version,
-                    '.csv')
-  
-  if (software != 'mutpanning') {
-    writeVarsToFile(allVars, software, outfile)
-  } else {
-    writeVarsToFile(allVarsMAF, software, outfile)
-    # mutpanning also requires txt file with samples, similar to patientsInv
-    mutpanInvent <- patientsInv[, c('participant_id', 'participant_id',
-                                    'tumor_subtype')]
-    colnames(mutpanInvent) <- c('ID',	'Sample', 'Subtype')
-    mutpanInvent[, ConfidenceLevel := 'custom']
-    mutpanInvent[, Study := 'custom']
-    mutpanInvent[, Cohort := 'custom']
-    
-    # output to file
-    outfile <- paste0(args$output, '/', software, '-patientsInv-',
-                      args$cancer_subtype, '-', args$target_genome_version,
-                      '.csv')
-    write.table(mutpanInvent, append = F, quote = F, row.names = F, outfile,
-                col.names = T, sep = '\t')
-  }
-}
+write.table(allVarsMAF, args$output, append = F, sep = '\t', row.names = F,
+            col.names = T, quote = F)
 
 message("End time of run: ", Sys.time())
 message('Total execution time: ',  
