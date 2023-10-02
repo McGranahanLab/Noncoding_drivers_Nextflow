@@ -31,7 +31,7 @@ options(scipen = 999)
 
 # Parse input arguments -------------------------------------------------------
 # create parser object
-parser <- ArgumentParser(prog = 'write_mutations_to_nbr.R')
+parser <- ArgumentParser(prog = 'write_mutations_for_nbr.R')
 
 mafHelp <- 'A path to MAF file with all mutations for that cancer subtype'
 parser$add_argument("-m", "--maf", required = T, type = 'character',
