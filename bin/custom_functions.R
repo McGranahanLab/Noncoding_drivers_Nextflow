@@ -384,6 +384,7 @@ parseBED12regName <- function(nameStr, sepStr = '--') {
 #' @return GRanges with mcols target_genome_version, gr_id, gene_id, gene_name,
 #'         gr_name
 readBED12 <- function(bedPath) {
+  message('[', Sys.time(), '] Started reading input genomic ranges file')
   result <- import(bedPath)
   result <- unlist(blocks(result))
   result_parsed <- parseBED12regName(unique(names(result)))
