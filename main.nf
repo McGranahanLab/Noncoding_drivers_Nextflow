@@ -58,8 +58,9 @@ process filter_input_mutations {
           path(target_genome_chr_len), path(chain)
 
     output:
-    tuple val(tumor_subtype), path('inputMutations*'), emit: mutations
+    tuple val(tumor_subtype), path('*.maf'), emit: mutations
     tuple val(tumor_subtype), path('hypermutated*'), optional: true, emit: hypermutant
+    tuple path('*.out'), path('*.err'), emit: logs
 
     script:
     """ 
@@ -78,7 +79,9 @@ process filter_input_mutations {
                                --target_genome_path ${target_genome_fasta} \
                                --target_genome_chr_len ${target_genome_chr_len} \
                                --chain ${chain} --output \$OUT_FILE  \
-                               --cores ${task.cpus}
+                               --cores ${task.cpus} \
+                               1>filter_mutations_${tumor_subtype}.out \
+                               2>filter_mutations_${tumor_subtype}.err
     
     """
 }
@@ -211,26 +214,29 @@ process write_mutations_for_oncodrivefml {
     """
 }
 
-process create_input_genomic_regions_files {
+process filter_genomic_regions {
     input:
     tuple val(inventory_check_res), path(analysis_inventory_path),
           path(blacklist_inventory_path), path(target_genome_fasta),
-          path(chain)
+          path(target_genome_chr_len), path(chain)
 
     output:
-    path('inputs/*inputGR*')
+    path('*.bed'), emit: bed
+    tuple path('*.out'), path('*.err'), emit: logs
 
     script:
     """
-    3_create_input_genomic_regions_files.R --inventory_analysis ${analysis_inventory_path} \
-                                           --inventory_blacklisted ${blacklist_inventory_path} \
-                                           --target_genome_path ${target_genome_fasta} \
-                                           --target_genome_version ${params.target_genome_version} \
-                                           --chain ${chain} \
-                                           --ignore_strand ${params.ignore_strand} \
-                                           --min_reg_len ${params.min_reg_len} \
-                                           --output 'inputs/' \
-                                           --cores ${task.cpus}
+    3_filter_input_genomic_regions.R --inventory_analysis ${analysis_inventory_path} \
+                                     --inventory_blacklisted ${blacklist_inventory_path} \
+                                     --target_genome_path ${target_genome_fasta} \
+                                     --target_genome_chr_len ${target_genome_chr_len} \
+                                     --target_genome_version ${params.target_genome_version} \
+                                     --chain ${chain} \
+                                     --ignore_strand ${params.ignore_strand} \
+                                     --min_reg_len ${params.min_reg_len} \
+                                     --output '.' --cores ${task.cpus} \
+                                     1>filter_genomic_regions.out \
+                                     2>filter_genomic_regions.err
     """
 }
 
@@ -422,21 +428,19 @@ workflow {
     inventories_pass = inventories_pass.collect()
 
     /* 
-        Step 2: create input mutations files for all requested software, 
-                parallelise by cancer subtype. This will not be run if 
-                inventories do not pass the check.
+        Step 2: create input mutations files
     */
     // filter mutations
     tumor_subtypes = analysis_inv.splitCsv(header: true)
                                  .map{row -> row.tumor_subtype}
                                  .unique()
-    filtered_mutations =  filter_input_mutations(inventories_pass.combine(tumor_subtypes)
-                                                                 .combine(patients_inv)
-                                                                 .combine(analysis_inv)
-                                                                 .combine(blacklist_inv)
-                                                                 .combine(target_genome_fasta)
-                                                                 .combine(target_genome_chr_len)
-                                                                 .combine(chain))
+    filtered_mutations = filter_input_mutations(inventories_pass.combine(tumor_subtypes)
+                                                                .combine(patients_inv)
+                                                                .combine(analysis_inv)
+                                                                .combine(blacklist_inv)
+                                                                .combine(target_genome_fasta)
+                                                                .combine(target_genome_chr_len)
+                                                                .combine(chain))
     // output them in a format suitable to run driver calling tools on
     tumor_subtypes = analysis_inv.splitCsv(header: true)
                                  .map{row -> tuple(row.tumor_subtype, row.software)}
@@ -448,6 +452,26 @@ workflow {
     mutpanning_mutations = write_mutations_for_mutpanning(tumor_subtypes)
     nbr_mutations = write_mutations_for_nbr(tumor_subtypes)
     oncodrivefml_mutations = write_mutations_for_oncodrivefml(tumor_subtypes)
+
+    /* 
+        Step 3: create input genomic regions files
+    */
+    // pre-process regions
+    filtered_regions = filter_genomic_regions(inventories_pass.combine(analysis_inv)
+                                                              .combine(blacklist_inv)
+                                                              .combine(target_genome_fasta)
+                                                              .combine(target_genome_chr_len)
+                                                              .combine(chain)).bed
+    tumor_subtypes_and_gr = analysis_inv.splitCsv(header: true)
+                                        .map{row -> tuple(row.software, row.tumor_subtype, row.gr_id)}
+                                        .unique()
+                                        .groupTuple(by: [0, 1])
+                                        .map { it ->
+                                            def gr_id_combo = it[2].sort(mutate = false).join('--')
+                                            return tuple(it[0], gr_id_combo, it[1])
+                                        }
+                                        .groupTuple(by: [0, 1])
+                                        .view()
 }
 
 // inform about completition
