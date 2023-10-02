@@ -426,6 +426,7 @@ getSeqlevelsStyle <- function(fastaPath) {
 #' @param chrs vector of chromosomes
 #' @return vector of unique chromosomal names, ordered (first numeric 
 #' chromosomes, i.e. 1-22, and then 'character' chromosomes like X and Y)
+#' @export
 orderChromosomes <- function(chrs) {
   result <- data.table(chr = unique(chrs))
   result[, chrInt := gsub('^chr', '', chr)]
@@ -433,5 +434,5 @@ orderChromosomes <- function(chrs) {
   result[chr == 'X']$chrInt <- 23
   result[chr == 'Y']$chrInt <- 24
   result <- result[order(chrInt, chr)]
-  return(result$chr)
+  result$chr
 }
