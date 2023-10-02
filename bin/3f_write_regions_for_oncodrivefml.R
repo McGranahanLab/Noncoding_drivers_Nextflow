@@ -1,17 +1,17 @@
 #!/usr/bin/env Rscript
-# FILE: 3e_write_regions_for_nbr.R ---------------------------------------------
+# FILE: 3f_write_regions_for_oncodrivefml.R -----------------------------------
 #
 # DESCRIPTION: Formats BED12 file containing genomic regions for one tumor 
-#              subtype to NBR input format.
+#              subtype to OncodriveFML input format.
 #
-# USAGE: Rscript --vanilla 3e_write_regions_for_nbr.R \
+# USAGE: Rscript --vanilla 3e_write_regions_for_oncodrivefml.R \
 #                --bed [path to BED12 file with all regions for that subtype] \
 #                --cancer_subtype [cancer subtype of interest] \
 #                --gr_id [list of genomic regions IDs] \
 #                --output [path to folder to write files to] \
 #
 # OPTIONS: Run 
-#          Rscript --vanilla  3e_write_regions_for_nbr.R -h
+#          Rscript --vanilla  3e_write_regions_for_oncodrivefml.R -h
 #          to see the full list of options and their descriptions.
 #
 # REQUIREMENTS: 
@@ -32,7 +32,7 @@ options(scipen = 999)
 
 # Input arguments -------------------------------------------------------------
 # create parser object
-parser <- ArgumentParser(prog = 'write_regions_for_nbr.R')
+parser <- ArgumentParser(prog = 'write_regions_for_oncodrivefml.R')
 
 bedHelp <- 'A path to BED12 file with all regions for that cancer subtype'
 parser$add_argument("-b", "--bed", required = T, type = 'character',
@@ -67,13 +67,15 @@ printArgs(args)
 #              'gr_id' = list('5primeUTR', 'CDS', 'lincRNA', 'ss'))
 
 # Software specific parameters ------------------------------------------------
-colsToGet <- c("seqnames", "start", "end", "gene_id")
-colsOutNames <- c("seqnames", "start", "end", "gene_id")
-printColnames <- F
+colsToGet <- c("seqnames", "start", "end", "gene_id",
+               "strand", "gene_name")
+colsOutNames <- c('CHROMOSOME', 'START', 'END', 'ELEMENT', 'STRAND', 'SYMBOL')
+printColnames <- T
 
-message('[', Sys.time(), '] Formatting genomic regions for NBR, ', 
+message('[', Sys.time(), '] Formatting genomic regions for OncodriveFML, ', 
         args$cancer_subtype)
-outfileBase <- paste0(args$output, '/inputGR-', args$cancer_subtype, '-nbr-')
+outfileBase <- paste0(args$output, '/inputGR-', args$cancer_subtype, 
+                      '-oncodrivefml-')
 
 # READ BED12 file -------------------------------------------------------------
 bed <- readBED12(args$bed)
@@ -82,12 +84,8 @@ bed <- bed[bed$gr_id %in% args$gr_id]
 target_genome_version <- unique(bed$target_genome_version)
 
 # PROCESS bed to software format ----------------------------------------------
-mcols(bed) <- mcols(bed)[, c('gr_id', 'gene_id')]
+mcols(bed) <- mcols(bed)[, c('gr_id', 'gene_id', 'gene_name')]
 bed <- as.data.table(bed)
-message('[', Sys.time(), '] NBR needs 0-based regions! Converting regions to ',
-        ' 0-base.')
-bed[, start := start - 1]
-bed[, end := end - 1]
 bed <- split(bed, by = 'gr_id')
 bed <- lapply(bed, function(x) x[, colsToGet, with = F])
 bed <-  lapply(bed, setnames, colsToGet, colsOutNames)

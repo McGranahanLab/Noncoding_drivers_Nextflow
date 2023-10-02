@@ -280,6 +280,46 @@ process write_regions_for_nbr {
     """
 }
 
+process write_regions_for_oncodrivefml {
+    tag "$tumor_subtype-$software"
+
+    input:
+    tuple val(software), val(gr), val(tumor_subtype), path(bed)
+
+    output:
+    path('*.csv')
+
+    when:
+    software == 'oncodrivefml'
+
+    script:
+    """
+    gr_arr=`echo ${gr} | sed 's/--/ /g'`
+    IFS='--' read -r -a subtypes_arr <<< "$tumor_subtype"
+
+    3f_write_regions_for_oncodrivefml.R --bed ${bed} \
+                                        --cancer_subtype \${subtypes_arr[0]} \
+                                        --gr_id \$gr_arr --output '.'
+
+    # in case set of the same regions is analysed for a lot of tumor subtypes
+    # it is faster to create region file for one tumor subtype and then copy 
+    # it for the other tumor subtypes (for one software of course). This is 
+    # what is done here                 
+    if [ "\${#subtypes_arr[@]}" -gt 1 ]; then
+        for i in "\${!subtypes_arr[@]}"; do
+            if [[ "\$i" -gt 0 ]] && [[ -n "\${subtypes_arr[\$i]}" ]]; then
+                cpFrom=(\$(find . | grep \${subtypes_arr[0]}))
+                for j in "\${!cpFrom[@]}"; do
+                    cpTo=`echo "\${cpFrom[\$j]}" | sed "s/\${subtypes_arr[0]}/\${subtypes_arr[i]}/g"`
+                    cp "\${cpFrom[\$j]}" \$cpTo
+                    
+                done
+            fi
+        done
+    fi
+    """
+}
+
 process calculate_mutation_rates {
     tag "$tumor_subtype"
 
@@ -523,9 +563,9 @@ workflow {
                                          .map { it ->
                                              def tum_st_combo = it[2].sort(mutate = false).join('--')
                                              return tuple(it[0], it[1], tum_st_combo, it[3].flatten()[0])
-                                         }.view()
-
+                                         }
     nbr_regions = write_regions_for_nbr(tumor_subtypes_and_gr)
+    oncodrivefml_regions = write_regions_for_oncodrivefml(tumor_subtypes_and_gr)
 }
 
 // inform about completition
