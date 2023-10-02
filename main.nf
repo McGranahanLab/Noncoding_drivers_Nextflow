@@ -240,6 +240,52 @@ process filter_genomic_regions {
     """
 }
 
+process write_regions_for_digdriver {
+    tag "$tumor_subtype-$software"
+
+    input:
+    tuple val(software), val(gr), val(tumor_subtype), path(bed)
+    val target_genome_version
+
+    output:
+    path('*.csv')
+
+    when:
+    software == 'digdriver'
+
+    script:
+    """
+    IFS='--' read -r -a gr_arr <<< "$gr"
+    IFS='--' read -r -a subtypes_arr <<< "$tumor_subtype"
+
+    tumor_subtype=\${subtypes_arr[0]}
+    for i in "\${!gr_arr[@]}"; do
+        if [[ -n "\${gr_arr[\$i]}" ]]; then
+            oneGR="\${gr_arr[\$i]}"
+            outFileOneGR='inputGR-'\$tumor_subtype'-digdriver-'\$oneGR'-'${target_genome_version}'.csv'
+            grep -w \$oneGR ${bed} > \$outFileOneGR
+        fi
+    done
+
+    # in case set of the same regions is analysed for a lot of tumor subtypes
+    # it is faster to create region file for one tumor subtype and then copy 
+    # it for the other tumor subtypes (for one software of course). This is 
+    # what is done here                 
+    if [ "\${#subtypes_arr[@]}" -gt 1 ]; then
+        for i in "\${!subtypes_arr[@]}"; do
+            if [[ "\$i" -gt 0 ]] && [[ -n "\${subtypes_arr[\$i]}" ]]; then
+                cpFrom=(\$(find . | grep \${subtypes_arr[0]}))
+                for j in "\${!cpFrom[@]}"; do
+                    cpTo=`echo "\${cpFrom[\$j]}" | sed "s/\${subtypes_arr[0]}/\${subtypes_arr[i]}/g"`
+                    cp "\${cpFrom[\$j]}" \$cpTo
+                    
+                done
+            fi
+        done
+    fi
+    """
+}
+
 process write_regions_for_nbr {
     tag "$tumor_subtype-$software"
 
@@ -566,6 +612,7 @@ workflow {
                                          }
     nbr_regions = write_regions_for_nbr(tumor_subtypes_and_gr)
     oncodrivefml_regions = write_regions_for_oncodrivefml(tumor_subtypes_and_gr)
+    digdriver_regions = write_regions_for_digdriver(tumor_subtypes_and_gr, params.target_genome_version)
 }
 
 // inform about completition
