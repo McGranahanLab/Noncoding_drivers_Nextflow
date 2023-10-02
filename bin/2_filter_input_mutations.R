@@ -1034,9 +1034,12 @@ if (outChrStyle == 'UCSC') {
 patientsInv[, participant_id := as.character(participant_id)]
 allVars[, participant_id := as.character(participant_id)]
 setkey(patientsInv, participant_id)
-# do merge instead
 allVars[, patient_tumor_subtype := patientsInv[allVars$participant_id]$tumor_subtype]
 allVarsMAF <- mutTabToMAF(allVars)
+
+# sort by chromosome & start
+allVarsMAF[, Chromosome := factor(Chromosome, orderChromosomes(Chromosome))]
+allVarsMAF <- allVarsMAF[order(Chromosome, Start_Position)]
 
 write.table(allVarsMAF, args$output, append = F, sep = '\t', row.names = F,
             col.names = T, quote = F)

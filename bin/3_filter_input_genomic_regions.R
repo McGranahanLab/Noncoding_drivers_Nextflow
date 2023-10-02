@@ -1997,8 +1997,12 @@ for (tumSubt in unique(outBed12inv$tumor_subtype)) {
     file.remove(outfile)
   }
   for (gr_id_idx in outBed12inv[tumSubt]$gr_id) {
-    write.table(bed12Regs[[gr_id_idx]], outfile, col.names = F, row.names = F,
-                quote = F, sep = '\t', append = T)
+    regsForOut <- copy(bed12Regs[[gr_id_idx]])
+    regsForOut[, chr := factor(chr, orderChromosomes(chr))]
+    regsForOut <- regsForOut[order(chr, start)]
+    write.table(regsForOut, outfile, col.names = F, row.names = F, quote = F,
+                sep = '\t', append = T)
+    rm(regsForOut)
   }
 }
 
