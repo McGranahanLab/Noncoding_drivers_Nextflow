@@ -255,6 +255,12 @@ process write_regions_for_digdriver {
 
     script:
     """
+    # check that all submitted bed files are the same
+    n_uniq_bed=`md5sum-lite ${bed} | cut -f1 -d' ' | sort | uniq | wc -l`
+    if [[ "\$n_uniq_bed" -gt 1 ]]; then
+        exit "Several different BED12 files are submitted. This is not supported."
+    fi
+
     IFS='--' read -r -a gr_arr <<< "$gr"
     IFS='--' read -r -a subtypes_arr <<< "$tumor_subtype"
 
@@ -286,6 +292,22 @@ process write_regions_for_digdriver {
     """
 }
 
+
+process write_regions_for_dndscv {
+    tag "$tumor_subtype-dndscv-rda"
+    debug true
+
+    input:
+    tuple val(tumor_subtype), val(gtf_combo), path(gtf), 
+          val(gtf_genome_version), path(filtered_bed)
+
+    script:
+    """
+    echo ${tumor_subtype}
+    paste ${gtf} ${gtf_genome_version} | echo
+    """
+}
+
 process write_regions_for_nbr {
     tag "$tumor_subtype-$software"
 
@@ -299,7 +321,7 @@ process write_regions_for_nbr {
     software == 'nbr'
 
     script:
-    """
+    """ 
     gr_arr=`echo ${gr} | sed 's/--/ /g'`
     IFS='--' read -r -a subtypes_arr <<< "$tumor_subtype"
 
@@ -596,23 +618,49 @@ workflow {
        it is faster to create region file for one tumor subtype and then copy 
        it for the other tumor subtypes (for one software of course). This is 
        what is done here */
-    tumor_subtypes_and_gr =  analysis_inv.splitCsv(header: true)
-                                         .map{row -> tuple(row.tumor_subtype, row.software, row.gr_id)}
-                                         .unique().combine(filtered_regions, by: 0)
-                                         .groupTuple(by: [0, 1])
-                                         .map { it ->
-                                             def gr_id_combo = it[2].sort(mutate = false).join('--')
-                                             def bed_file = it[3].unique().flatten()
-                                             return tuple(it[1], gr_id_combo, it[0], bed_file)
-                                         }
-                                         .groupTuple(by: [0, 1])
-                                         .map { it ->
-                                             def tum_st_combo = it[2].sort(mutate = false).join('--')
-                                             return tuple(it[0], it[1], tum_st_combo, it[3].flatten()[0])
-                                         }
+       filtered_regions.view()
+    tumor_subtypes_and_gr = analysis_inv.splitCsv(header: true)
+                                        .map{row -> tuple(row.tumor_subtype, row.software, row.gr_id)}
+                                        .unique().combine(filtered_regions, by: 0)
+                                        .groupTuple(by: [0, 1])
+                                        .map { it ->
+                                            def gr_id_combo = it[2].sort(mutate = false).join('--')
+                                            def bed_file = it[3].flatten().unique()
+                                            return tuple(it[1], gr_id_combo, it[0], bed_file)
+                                        }
+                                        .groupTuple(by: [0, 1])
+                                        .map { it ->
+                                            def tum_st_combo = it[2].sort(mutate = false).join('--')
+                                            return tuple(it[0], it[1], tum_st_combo, it[3].flatten())
+                                        }
     nbr_regions = write_regions_for_nbr(tumor_subtypes_and_gr)
     oncodrivefml_regions = write_regions_for_oncodrivefml(tumor_subtypes_and_gr)
     digdriver_regions = write_regions_for_digdriver(tumor_subtypes_and_gr, params.target_genome_version)
+    /* dNdScv and DIGdriver require .rda object which describes coding genomic
+       elements. DIGdriver needs it even if it is not being used on CDS. This
+       .rda file takes ~1h to be created */
+    gtf_for_rda = analysis_inv.splitCsv(header: true)
+                              .map{row -> tuple(row.tumor_subtype, row.software, 
+                                                row.gr_id, row.gr_file, row.gr_genome)}
+                              .unique()
+                              .map { it ->
+                                  if ((it[1] == 'digdriver' || it[1] == 'dndscv') && it[2] == 'CDS') 
+                                  {
+                                      return it
+                                  }
+                              }
+                              .map { it ->
+                                  return tuple(it[0], it[3], it[4])
+                              }
+                              .unique()
+                              .combine(filtered_regions, by: [0])
+                              .groupTuple(by: [0])
+                              .map { it ->
+                                  def gtf_combo = it[1].sort(mutate = false).join('-:-')
+                                  return tuple(it[0], gtf_combo, it[1], it[2], it[3])
+                              }
+                              .groupTuple(by: [1])
+    //write_regions_for_dndscv(gtf_for_rda)
 }
 
 // inform about completition

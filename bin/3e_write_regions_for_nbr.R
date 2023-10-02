@@ -28,6 +28,7 @@ box::use(./custom_functions[...])
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
+suppressWarnings(suppressPackageStartupMessages(library(tools)))
 options(scipen = 999)
 
 # Input arguments -------------------------------------------------------------
@@ -35,8 +36,8 @@ options(scipen = 999)
 parser <- ArgumentParser(prog = 'write_regions_for_nbr.R')
 
 bedHelp <- 'A path to BED12 file with all regions for that cancer subtype'
-parser$add_argument("-b", "--bed", required = T, type = 'character',
-                    default = NULL, help = bedHelp)
+parser$add_argument("-b", "--bed", required = T, type = 'character', 
+                    nargs = '+', default = NULL, help = bedHelp)
 
 subtypeHelp <- paste('A cancer subtype to select from patientsInv table. Only',
                      'mutations from patients with that cancer type will be',
@@ -76,7 +77,13 @@ message('[', Sys.time(), '] Formatting genomic regions for NBR, ',
 outfileBase <- paste0(args$output, '/inputGR-', args$cancer_subtype, '-nbr-')
 
 # READ BED12 file -------------------------------------------------------------
-bed <- readBED12(args$bed)
+# check that all submitted BED12 files are the same
+if (length(unique(md5sum(args$bed))) != 1) {
+  stop('[', Sys.time(), '] Several different BED12 files are submitted. This ',
+       'is not supported.')
+}
+
+bed <- readBED12(args$bed[1])
 # select only regions of interest
 bed <- bed[bed$gr_id %in% args$gr_id]
 target_genome_version <- unique(bed$target_genome_version)
