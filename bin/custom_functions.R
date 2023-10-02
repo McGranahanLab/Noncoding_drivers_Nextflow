@@ -105,6 +105,7 @@ check_input_arguments <- function(argsList, outputType = NULL) {
   check_file_existence_msg(argsList$varanno_conversion_table)
   
   check_file_existence_msg(argsList$maf)
+  check_file_existence_msg(argsList$bed)
   
   check_min_int_msg(argsList$cores, 'cores', 1)
   
@@ -406,7 +407,7 @@ readBED12 <- function(bedPath) {
 }
 # Misc -----------------------------------------------------------------------
 #' getSeqlevelsStyle
-#' @description Detemines a seqlevelstyle (aka chromosome naming style) from
+#' @description Determines a seqlevelstyle (aka chromosome naming style) from
 #' the reference genome
 #' @author Maria Litovchenko
 #' @param fastaPath path to fasta file
@@ -417,4 +418,20 @@ getSeqlevelsStyle <- function(fastaPath) {
   result <- readLines(fastaPath, n = 1)
   result <- ifelse(grepl('>chr', result), 'UCSC', 'NCBI')
   result
+}
+
+#' orderChromosomes
+#' @description Orders chromosomal names
+#' @author Maria Litovchenko
+#' @param chrs vector of chromosomes
+#' @return vector of unique chromosomal names, ordered (first numeric 
+#' chromosomes, i.e. 1-22, and then 'character' chromosomes like X and Y)
+orderChromosomes <- function(chrs) {
+  result <- data.table(chr = unique(chrs))
+  result[, chrInt := gsub('^chr', '', chr)]
+  suppressWarnings(result[, chrInt := as.integer(chrInt)])
+  result[chr == 'X']$chrInt <- 23
+  result[chr == 'Y']$chrInt <- 24
+  result <- result[order(chrInt, chr)]
+  return(result$chr)
 }
