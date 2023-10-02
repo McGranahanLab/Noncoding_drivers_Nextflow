@@ -26,6 +26,7 @@
 box::use(./custom_functions[...])
 
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
 options(scipen = 999)
 
@@ -35,7 +36,7 @@ parser <- ArgumentParser(prog = 'write_regions_for_nbr.R')
 
 bedHelp <- 'A path to BED12 file with all regions for that cancer subtype'
 parser$add_argument("-b", "--bed", required = T, type = 'character',
-                    default = NULL, help = mafHelp)
+                    default = NULL, help = bedHelp)
 
 subtypeHelp <- paste('A cancer subtype to select from patientsInv table. Only',
                      'mutations from patients with that cancer type will be',
@@ -93,9 +94,10 @@ bed <-  lapply(bed, setnames, colsToGet, colsOutNames)
 
 # WRITE -----------------------------------------------------------------------
 lapply(names(bed),
-       function(x) write.table(bed[[x]], col.names = printColNames,
+       function(x) write.table(bed[[x]], col.names = printColnames,
                                row.names = F, quote = F, sep = '\t',
-                               file = paste0(outfileBase, x, '-', args$output, 
+                               file = paste0(args$output, '/', outfileBase, x, 
+                                             '-', target_genome_version,
                                              '.csv')))
 
 message("End time of run: ", Sys.time())
