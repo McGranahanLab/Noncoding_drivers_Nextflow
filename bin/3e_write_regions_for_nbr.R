@@ -1,0 +1,104 @@
+#!/usr/bin/env Rscript
+# FILE: 3e_write_regions_for_nbr.R ---------------------------------------------
+#
+# DESCRIPTION: Formats BED12 file containing genomic regions for one tumor 
+#              subtype to NBR input format.
+#
+# USAGE: Rscript --vanilla 3e_write_regions_for_nbr.R \
+#                --bed [path to BED12 file with all regions for that subtype] \
+#                --cancer_subtype [cancer subtype of interest] \
+#                --gr_id [list of genomic regions IDs] \
+#                --output [path to folder to write files to] \
+#
+# OPTIONS: Run 
+#          Rscript --vanilla  3e_write_regions_for_nbr.R -h
+#          to see the full list of options and their descriptions.
+#
+# REQUIREMENTS: 
+# BUGS: --
+# NOTES:
+# AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk
+# COMPANY:  UCL, Cancer Institute, London, the UK
+# VERSION:  1
+# CREATED:  28.09.2023
+# REVISION: 28.09.2023
+
+box::use(./custom_functions[...])
+
+suppressWarnings(suppressPackageStartupMessages(library(argparse)))
+suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
+options(scipen = 999)
+
+# Input arguments -------------------------------------------------------------
+# create parser object
+parser <- ArgumentParser(prog = 'write_regions_for_nbr.R')
+
+bedHelp <- 'A path to BED12 file with all regions for that cancer subtype'
+parser$add_argument("-b", "--bed", required = T, type = 'character',
+                    default = NULL, help = mafHelp)
+
+subtypeHelp <- paste('A cancer subtype to select from patientsInv table. Only',
+                     'mutations from patients with that cancer type will be',
+                     'selected. In case an analysis of several cancer types',
+                     'needed to be performed please run this script ',
+                     'separetedly for each cancer type.')
+parser$add_argument("-c", "--cancer_subtype", required = T, type = 'character',
+                    default = NULL, help = subtypeHelp)
+
+grIdHelp <- paste('IDs of genomic regions to be created. Multiple are ',
+                  'accepted')
+parser$add_argument("-g", "--gr_id", required = T, type = 'character',
+                    nargs = '+', default = NULL, help = grIdHelp)
+
+parser$add_argument("-o", "--output", required = T, type = 'character',
+                    help = "Path to the output folder")
+
+args <- parser$parse_args()
+check_input_arguments(args, outputType = 'folder')
+
+timeStart <- Sys.time()
+message('[', Sys.time(), '] Start time of run')
+printArgs(args)
+
+# Test arguments --------------------------------------------------------------
+# args <- list('bed' = '../TEST/inputs/inputGR-LUAD-hg19.bed',
+#              'cancer_subtype' = 'LUAD',
+#              'gr_id' = list('5primeUTR', 'CDS', 'lincRNA', 'ss'))
+
+# Software specific parameters ------------------------------------------------
+colsToGet <- c("seqnames", "start", "end", "gene_id")
+colsOutNames <- c("seqnames", "start", "end", "gene_id")
+printColnames <- F
+
+message('[', Sys.time(), '] Formatting genomic regions for NBR, ', 
+        args$cancer_subtype)
+outfileBase <- paste0(args$output, '/nbr-inputGR-', args$cancer_subtype, '-')
+
+# READ BED12 file -------------------------------------------------------------
+bed <- readBED12(args$bed)
+# select only regions of interest
+bed <- bed[bed$gr_id %in% args$gr_id]
+target_genome_version <- unique(bed$target_genome_version)
+
+# PROCESS bed to software format ----------------------------------------------
+mcols(bed) <- mcols(bed)[, c('gr_id', 'gene_id')]
+bed <- as.data.table(bed)
+message('[', Sys.time(), '] NBR needs 0-based regions! Converting regions to ',
+        ' 0-base.')
+bed[, start := start - 1]
+bed[, end := end - 1]
+bed <- split(bed, by = 'gr_id')
+bed <- lapply(bed, function(x) x[, colsToGet, with = F])
+bed <-  lapply(bed, setnames, colsToGet, colsOutNames)
+
+# WRITE -----------------------------------------------------------------------
+lapply(names(bed),
+       function(x) write.table(bed[[x]], col.names = printColNames,
+                               row.names = F, quote = F, sep = '\t',
+                               file = paste0(outfileBase, x, '-', args$output, 
+                                             '.csv')))
+
+message("End time of run: ", Sys.time())
+message('Total execution time: ',  
+        difftime(Sys.time(), timeStart, units = 'mins'), ' mins.')
+message('Finished!')
