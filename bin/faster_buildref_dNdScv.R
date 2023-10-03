@@ -22,7 +22,8 @@
 box::use(Biostrings[...])
 box::use(dndscv[...])
 box::use(GenomicRanges[...])
-box::use(pbmcapply[...])
+box::use(IRanges[...])
+box::use(parallel[...])
 box::use(Rsamtools[...])
 box::use(seqinr[...])
 box::use(utils[...])
@@ -140,7 +141,8 @@ build_RefCDS_one_gene <- function(gene_cdss, cdsList, genomefile, numcode) {
   result
 }
 
-calculate_impact <- function(oneGeneRefCDS) {
+calculate_impact <- function(oneGeneRefCDS, nt, impMatrix, trinucSubsInd, 
+                             trinucInd) {
   L = array(0, dim = c(192, 4))
   
   cdsseq = as.character(as.vector(oneGeneRefCDS$seq_cds))
@@ -163,8 +165,8 @@ calculate_impact <- function(oneGeneRefCDS) {
     return(new_codonx)
   })
   new_codon = paste(new_codon[1, ], new_codon[2, ], new_codon[3, ], sep = "")
-  imp = impact_matrix[(trinuc_ind[new_codon] - 1) * 64 + trinuc_ind[old_codon]]
-  matrind = trinuc_subsind[paste(old_trinuc, new_trinuc, sep = ">")]
+  imp = impMatrix[(trinucInd[new_codon] - 1) * 64 + trinucInd[old_codon]]
+  matrind = trinucSubsInd[paste(old_trinuc, new_trinuc, sep = ">")]
   matrix_ind = table(matrind[which(imp == 1)])
   L[as.numeric(names(matrix_ind)), 1] = matrix_ind
   matrix_ind = table(matrind[which(imp == 2)])
@@ -179,13 +181,12 @@ calculate_impact <- function(oneGeneRefCDS) {
     new_trinuc = paste(rep(splseq1up, each = 3), 
                        c(sapply(splseq, function(x) nt[nt != x])), 
                        rep(splseq1down, each = 3), sep = "")
-    matrind = trinuc_subsind[paste(old_trinuc, new_trinuc, sep = ">")]
+    matrind = trinucSubsInd[paste(old_trinuc, new_trinuc, sep = ">")]
     matrix_ind = table(matrind)
     L[as.numeric(names(matrix_ind)), 4] = matrix_ind
   }
-  result <- copy(oneGeneRefCDS)
-  result$L <- L
-  result
+  oneGeneRefCDS$L <- L
+  oneGeneRefCDS
 }
 
 buildref_faster <- function(cdsfile, genomefile, outfile = "RefCDS.rda",
@@ -269,11 +270,11 @@ buildref_faster <- function(cdsfile, genomefile, outfile = "RefCDS.rda",
   gene_split = split(cds_table, f = cds_table$gene.name)
   
   message(Sys.time(), " [2/3] Building the RefCDS object...")
-  RefCDS <- pbmclapply(1:length(gene_split),
-                       function(idx) build_RefCDS_one_gene(gene_split[[idx]],
-                                                           cds_split, 
-                                                           genomefile, 
-                                                           numcode),
+  RefCDS <- mclapply(1:length(gene_split),
+                     function(idx) build_RefCDS_one_gene(gene_split[[idx]],
+                                                         cds_split, 
+                                                         genomefile, 
+                                                         numcode),
                        mc.cores = cores)
   RefCDS <- RefCDS[sapply(RefCDS, length) != 0]
   names(RefCDS) <- sapply(RefCDS, function(x) x$gene_name)
@@ -313,9 +314,14 @@ buildref_faster <- function(cdsfile, genomefile, outfile = "RefCDS.rda",
       }
     }
   }
-  RefCDS <- pbmclapply(1:length(RefCDS),
-                       function(idx) calculate_impact(RefCDS[[idx]]),
-                       mc.cores = cores)
+  saveRDS(RefCDS, 'RefCDS_before.rds')
+  RefCDS <- mclapply(1:length(RefCDS),
+                     function(idx) calculate_impact(RefCDS[[idx]], nt, 
+                                                    impact_matrix,
+                                                    trinuc_subsind,
+                                                    trinuc_ind),
+                     mc.cores = cores)
+  saveRDS(RefCDS, 'RefCDS_after.rds')
   names(RefCDS) <- sapply(RefCDS, function(x) x$gene_name)
   aux = unlist(sapply(1:length(RefCDS), 
                       function(x) t(cbind(x, 
