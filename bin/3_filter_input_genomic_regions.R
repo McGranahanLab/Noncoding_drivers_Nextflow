@@ -34,172 +34,6 @@ suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
 suppressWarnings(suppressPackageStartupMessages(library(strex)))
 options(scipen = 999)
 
-# FUNCTIONS: liftover ---------------------------------------------------------
-#' liftOverGenomicRegion
-#' @description Lifts over coordinates from original genome to target genome
-#' using chain chainObj
-#' @author Maria Litovchenko
-#' @param inGR input genomic regions. mcols are not used
-#' @param chainObj chain to move genome coordinates from original genome 
-#' version to the target one
-#' @param min.gapwidt minimum length of a gap between lifted over regions that
-#'                    will prevent them from being merged together. 
-#'                    Default = Inf (no reduce will be performed).
-#' @param min.width minimum width of lifted over genomic regions.
-#'                  Default = 0 (no regions will be filtered out). 
-#' @return lifted over genomic coordinates
-liftOverGenomicRegion <- function(inGR, chainObj, min.gapwidt = Inf, 
-                                  min.width = 0) {
-  message('[', Sys.time(), '] Started liftover')
-  if (class(inGR) == 'CompressedGRangesList') {
-    inGRunlist <- unlist(inGR)
-  } else {
-    inGRunlist <- inGR
-  }
-  # change chromosomal format, if needed
-  seqlevelsStyle(inGRunlist) <- seqlevelsStyle(chainObj)[1]
-  
-  # perform liftover
-  result <- liftOver(inGRunlist, chainObj)
-  # inform about not lifted regions
-  notLifted <- unlist(lapply(width(result), 
-                             function(x) identical(x, integer(0))))
-  notLiftedPerc <- round(100 * sum(notLifted) / length(inGRunlist), 2)
-  message('[', Sys.time(), '] ', sum(notLifted), ' (', notLiftedPerc,
-          '%) genomic regions were not lifted over.')
-  # inform if a region was split into 2
-  splitted <- unlist(lapply(width(result), function(x) length(x) > 1))
-  splittedPerc <- round(100 * sum(splitted) / length(splitted), 2)
-  message('[', Sys.time(), '] ', sum(splitted), ' (', splittedPerc,
-          '%) genomic regions were splitted into 2 and more.')
-  
-  # merge regions, if min.gapwidt is not infinite
-  if (!is.infinite(min.gapwidt)) {
-    message('[', Sys.time(), '] Reduction of lifted over genomic regions ',
-            'located closer than ', min.gapwidt, 'bp will be performed.')
-    result <- reduce(result, min.gapwidt = min.gapwidt)
-    # reduce removed all mcols, add them back
-    not_empty <- which(!notLifted)
-    lo_length <- elementNROWS(result)[!notLifted]
-    idx_inOrigin <- rep(not_empty, lo_length)
-    result <- unlist(result)
-    mcols(result) <- mcols(inGRunlist)[idx_inOrigin, ]
-  } else {
-    result <- unlist(result)
-  }
-  
-  # remove small regions, min.width is given
-  if (min.width > 0) {
-    message('[', Sys.time(), '] min.width is given. Summary of region ',
-            'lengths before removal of regions with width < ', min.width)
-    width_sum <- round(summary(width(result)), 0)
-    message(paste(paste0(names(width_sum), collapse = '\t'), '\n', 
-                  paste0(width_sum, collapse = '\t')))
-    result <- result[width(result) >= min.width]
-    message('[', Sys.time(), '] Summary of region lengths after removal of ',
-            'regions with width < ', min.width)
-    width_sum <- round(summary(width(result)), 0)
-    message(paste(paste0(names(width_sum), collapse = '\t'), '\n', 
-                  paste0(width_sum, collapse = '\t')))
-  }
-  
-  message('[', Sys.time(), '] Ratio of total region length after and ',
-          'before liftover: ', round(sum(width(result)) / sum(width(inGR)), 3))
-  message('[', Sys.time(), "] Ratio of regions' numbers after and before ",
-          'liftover: ', round(length(result) / length(inGR), 3))
-  
-  # set style of chromosomal names to the same as input data
-  seqlevelsStyle(result) <- seqlevelsStyle(inGR)
-  
-  message('[', Sys.time(), '] Finished liftover')
-  result
-}
-
-#' checkLiftOverByTr
-#' @description Checks results of liftover. For every transcript checks that it
-#'              was lifted to one chromosome and one strand. If it's not the
-#'              case will remove them.
-#' @author Maria Litovchenko
-#' @param origGR CompressedGRangesList/GRangesList/GRanges from which liftover
-#'               was performed.
-#' @param loGR GRangesList of lifted regions, result of liftOverGenomicRegion
-#'             function
-#' @return GRanges
-checkLiftOverByTr <- function(origGR, loGR) {
-  if (class(origGR) == 'CompressedGRangesList') {
-    origGRunlist <- unlist(origGR)
-  } else {
-    origGRunlist <- origGR
-  }
-  
-  # identify transcripts, where there is a non-unique combination of chromosome
-  # and strand after liftover
-  lo_tr_chrStrand <- data.table(chr = as.character(seqnames(loGR)),
-                                strand = as.character(strand(loGR)),
-                                transcript_id = loGR$transcript_id)
-  lo_tr_chrStrand <- unique(lo_tr_chrStrand)
-  weirdLO <- lo_tr_chrStrand[,.N, by = transcript_id]
-  weirdLO <- weirdLO[N > 1]
-  if (nrow(weirdLO) != 0) {
-    weirdLO[, N := NULL]
-    
-    # add biotype, if available 
-    if ('transcript_biotype' %in% colnames(mcols(loGR))) {
-      biotype_to_id <- mcols(loGR)[, c('transcript_id', 'transcript_biotype')]
-      biotype_to_id <- as.data.table(unique(biotype_to_id))
-      weirdLO <- merge(weirdLO, biotype_to_id, by = 'transcript_id', all.x = T)
-    } else {
-      weirdLO[, transcript_biotype := 'unknown']
-    }
-    
-    # inform user about situation
-    msgTab <- weirdLO[,.(length(unique(transcript_id))), 
-                      by = 'transcript_biotype']
-    setnames(msgTab, 'V1', 'nWeird')
-    # ... if biotype is available, calculate number of transcripts in the 
-    #     original regions per biotype
-    if ('transcript_biotype' %in% colnames(mcols(origGRunlist))) {
-      orig_biotype_count <- mcols(origGRunlist)[, c('transcript_id',
-                                                    'transcript_biotype')]
-      orig_biotype_count <- unique(as.data.table(orig_biotype_count))
-      orig_biotype_count <- orig_biotype_count[,.(length(unique(transcript_id))),
-                                               by = 'transcript_biotype']
-      setnames(orig_biotype_count, 'V1', 'N')
-      orig_biotype_count[, Ntotal := length(unique(origGRunlist$transcript_id))]
-    } else {
-      orig_biotype_count <- data.table(transcript_biotype = 'unknown',
-                                       N = length(unique(origGRunlist$transcript_id)))
-      orig_biotype_count[, Ntotal := N]
-    }
-    msgTab <- merge(msgTab, orig_biotype_count, by = 'transcript_biotype',
-                    all.x = T)
-    msgTab[is.na(msgTab)] <- 0
-    msgTab[, nWeirdPerc := round(100 * nWeird/N, 2)]
-    msgTab[, nWeirdPercTotal := round(100 * nWeird/Ntotal, 2)]
-    msgTab <- msgTab[,.(transcript_biotype, nWeird, 
-                        nWeirdPerc, nWeirdPercTotal)]
-    msgTab <- msgTab[order(-nWeirdPerc)]
-    colnames(msgTab) <- c('transcript_biotype', 'N. trascripts', 
-                          '% trascripts, that biotype',
-                          '% trascripts, all biotypes')
-    message('[', Sys.time(), '] Some transcripts were lifted over to > one ',
-            'chromosome and/or > one strand. During creation of TxDB it will ',
-            'lead to the transcripts being discarded. Here is an overview of ',
-            'numbers:')
-    message(paste0(capture.output(knitr::kable(msgTab, format = "markdown")),
-                   collapse = '\n'))
-    message('[', Sys.time(), '] These transcripts will be removed. ')
-    
-    result <- loGR[!loGR$transcript_id %in% weirdLO$transcript_id]
-  } else {
-    message('[', Sys.time(), '] No transcript was lifted over to different ',
-            'chromosome/strand')
-    result <- copy(loGR)
-  }
-  
-  result
-}
-
 # FUNCTIONS: conversion to txdb -----------------------------------------------
 #' extractGeneToIDmap
 #' @description Extracts a data table with columns gene_name, gene_id, 
@@ -1635,7 +1469,7 @@ parser$add_argument("-g", "--target_genome_version", required = F,
 
 chainHelp <- paste('Path to chain file in case genome version of mutations is',
                    'not the same as --target_genome_version')
-parser$add_argument("-l", "--chain", required = F, 
+parser$add_argument("-l", "--chain", required = F, default = NULL,
                     type = 'character', help = chainHelp)
 
 strandHelp <- paste('Boolean, indicating, whatever or not strand information ',
@@ -1715,10 +1549,9 @@ if (!is.null(args$inventory_blacklisted)) {
 }
 
 # read in chain file
+chain <- NULL
 if (!is.null(args$chain)) {
   chain <- import.chain(args$chain)
-} else {
-  chain <- NULL
 }
 
 # determine, if chromosomal names in fasta file have 'chr' in front of them or
