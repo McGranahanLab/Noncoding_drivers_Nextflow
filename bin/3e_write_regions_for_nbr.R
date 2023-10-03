@@ -93,7 +93,7 @@ print(head(bed))
 print(args$gr_id)
 bed <- split(bed, by = 'gr_id')
 bed <- lapply(bed, function(x) x[, colsToGet, with = F])
-bed <-  lapply(bed, setnames, colsToGet, colsOutNames)
+bed <- lapply(bed, setnames, colsToGet, colsOutNames)
 
 # WRITE -----------------------------------------------------------------------
 lapply(names(bed),
