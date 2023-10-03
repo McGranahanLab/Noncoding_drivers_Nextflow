@@ -76,8 +76,8 @@
 # REVISION: 26.07.2023
 
 box::use(./custom_functions[...])
-suppressPackageStartupMessages(library(argparse))
-suppressPackageStartupMessages(library(data.table))
+suppressWarnings(suppressPackageStartupMessages(library(argparse)))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 
 # Functions -------------------------------------------------------------------
 #' checkHaveEssentialColumns

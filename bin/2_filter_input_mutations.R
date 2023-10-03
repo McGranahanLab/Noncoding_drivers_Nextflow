@@ -567,7 +567,7 @@ parser$add_argument("-cl", "--target_genome_chr_len", required = F,
 
 chainHelp <- paste('Path to chain file in case genome version of mutations is',
                    'not the same as --target_genome_version')
-parser$add_argument("-l", "--chain", required = F, 
+parser$add_argument("-l", "--chain", required = F, default = NULL,
                     type = 'character', help = chainHelp)
 
 parser$add_argument("-o", "--output", required = T, type = 'character',
