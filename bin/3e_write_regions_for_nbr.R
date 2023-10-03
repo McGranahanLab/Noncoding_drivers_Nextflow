@@ -37,7 +37,7 @@ parser <- ArgumentParser(prog = 'write_regions_for_nbr.R')
 
 bedHelp <- 'A path to BED12 file with all regions for that cancer subtype'
 parser$add_argument("-b", "--bed", required = T, type = 'character', 
-                    nargs = '+', default = NULL, help = bedHelp)
+                    default = NULL, help = bedHelp)
 
 subtypeHelp <- paste('A cancer subtype to select from patientsInv table. Only',
                      'mutations from patients with that cancer type will be',
@@ -77,13 +77,7 @@ message('[', Sys.time(), '] Formatting genomic regions for NBR, ',
 outfileBase <- paste0(args$output, '/inputGR-', args$cancer_subtype, '-nbr-')
 
 # READ BED12 file -------------------------------------------------------------
-# check that all submitted BED12 files are the same
-if (length(unique(md5sum(args$bed))) != 1) {
-  stop('[', Sys.time(), '] Several different BED12 files are submitted. This ',
-       'is not supported.')
-}
-
-bed <- readBED12(args$bed[1])
+bed <- readBED12(args$bed)
 # select only regions of interest
 bed <- bed[bed$gr_id %in% args$gr_id]
 target_genome_version <- unique(bed$target_genome_version)
@@ -95,6 +89,8 @@ message('[', Sys.time(), '] NBR needs 0-based regions! Converting regions to ',
         ' 0-base.')
 bed[, start := start - 1]
 bed[, end := end - 1]
+print(head(bed))
+print(args$gr_id)
 bed <- split(bed, by = 'gr_id')
 bed <- lapply(bed, function(x) x[, colsToGet, with = F])
 bed <-  lapply(bed, setnames, colsToGet, colsOutNames)
