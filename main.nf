@@ -375,36 +375,49 @@ process calculate_mutation_rates {
 }
 
 process dndscv {
-    tag "$tumor_subtype"
+    tag "$tumor_subtype-$gr_id"
 
     input:
-    tuple val(tumor_subtype), val(gr_id), val(software), path(gr_id), 
-          path(mutations)
+    tuple val(tumor_subtype), val(gr_id), val(software), path(rda_ncbi),
+          path(rda_ucsc), path(mutations)
 
     output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*"
+    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
+    path "*global.csv", emit: global
+    path "*Rds", emit: rds
+    tuple path('*.out'), path('*.err'), emit: logs
 
     script:
     """
     OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
+    OUT_GLOBAL_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'_global.csv'
+    OUT_RDS=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.Rds'
     MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
     ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
 
+    rda=${rda_ncbi}
+    mut_format=`head -1 ${mutations}`
+    if [[ \$mut_format == "chr*" ]];
+    then
+        rda=${rda_ucsc}
+    fi
 
-    run_dndscv.R --with_covariates T --refRda \$rdaWithCovs \
-                 --variants ${mutations} --computeCI T --output \$OUT_FILE
+    run_dndscv.R --with_covariates T --genomic_regions \$rda \
+                 --variants ${mutations} --computeCI T --output \$OUT_FILE \
+                 --outputGlobal \$OUT_GLOBAL_FILE --outputRds \$OUT_RDS \
+                 1>\$MSG_FILE 2>\$ERR_FILE
     """
 }
 
 process mutpanning {
-    tag "$tumor_subtype"
+    tag "$tumor_subtype-$gr_id"
 
     input:
     tuple val(tumor_subtype), val(gr_id), val(software), path(mutations),
           path(mutpan_inv)
 
     output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*", emit: csv
+    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
@@ -438,7 +451,7 @@ process nbr {
           path(nbr_neutral_trinucfreq), path(nbr_driver_regs)
     
     output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*", emit: csv
+    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
@@ -479,7 +492,7 @@ process oncodrivefml {
           path(mutations), path(oncodrivefml_config)
 
     output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*", emit: csv
+    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
@@ -597,7 +610,7 @@ workflow {
                                         .combine(filtered_regions, by: 0)
     gtf_for_rda = analysis_inv.splitCsv(header: true)
                               .map{row -> tuple(row.tumor_subtype, row.software, 
-                                                row.gr_id, row.gr_file, row.gr_genome)}
+                                                row.gr_code, row.gr_file, row.gr_genome)}
                               .unique()
                               .map { it ->
                                   if ((it[1] == 'digdriver' || it[1] == 'dndscv') && it[2] == 'CDS') {
@@ -625,7 +638,16 @@ workflow {
     /* 
         Step 4c: run dNdScv
     */
-
+    dndscv_results = dndscv(analysis_inv.splitCsv(header: true)
+                                        .map{row -> tuple(row.tumor_subtype, row.software, row.gr_id)}
+                                        .unique()
+                                        .map { it ->
+                                            if (it[1] == 'dndscv') {
+                                                return tuple(it[0], it[2], 'dndscv')
+                                            }
+                                        }
+                                        .combine(dndscv_digdriver_rda.rda, by: [0])
+                                        .combine(dndscv_mutations, by: [0]))
     /* 
         Step 4d: run MutPanning
     */
