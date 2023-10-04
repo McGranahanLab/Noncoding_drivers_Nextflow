@@ -378,8 +378,8 @@ process dndscv {
     tag "$tumor_subtype"
 
     input:
-    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations),
-          path(regions)
+    tuple val(tumor_subtype), val(gr_id), val(software), path(gr_id), 
+          path(mutations)
 
     output:
     path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*"
@@ -387,9 +387,9 @@ process dndscv {
     script:
     """
     OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
+    MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
+    ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
 
-    # covariates
-    rdaWithCovs=`echo ${regions} | tr ' ' '\n' | grep withCovs.rda\$`
 
     run_dndscv.R --with_covariates T --refRda \$rdaWithCovs \
                  --variants ${mutations} --computeCI T --output \$OUT_FILE
@@ -400,19 +400,23 @@ process mutpanning {
     tag "$tumor_subtype"
 
     input:
-    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations),
+    tuple val(tumor_subtype), val(gr_id), val(software), path(mutations),
           path(mutpan_inv)
 
     output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*"
+    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*", emit: csv
+    tuple path('*.out'), path('*.err'), emit: logs
 
     script:
     """
     OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
+    MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
+    ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
 
     mpPath=/bin/MutPanningV2/commons-math3-3.6.1.jar:/bin/MutPanningV2/jdistlib-0.4.5-bin.jar:/bin/MutPanningV2
     java -Xmx${params.mutpanning_java_memory} -classpath \$mpPath MutPanning "." \
-        $mutations $mutpan_inv "/bin/MutPanningV2/Hg19/"
+        $mutations $mutpan_inv "/bin/MutPanningV2/Hg19/" \
+        1>\$MSG_FILE 2>\$ERR_FILE
 
     cpFrom=`find SignificanceRaw | grep -v Uniform | grep '.txt\$'`
     if [[ -f "\$cpFrom" ]]; then
@@ -434,13 +438,19 @@ process nbr {
           path(nbr_neutral_trinucfreq), path(nbr_driver_regs)
     
     output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*"
+    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*", emit: csv
+    tuple path('*.out'), path('*.err'), emit: logs
 
     script:
     """
     OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
+    MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
+    ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
 
-    NBR_create_intervals.R --region_bed ${regions} --genomeFile ${target_genome_fasta}
+    NBR_create_intervals.R --region_bed ${regions} \
+                           --genomeFile ${target_genome_fasta} \
+                           1>\$MSG_FILE 2>\$ERR_FILE
+
     regionsFile=`echo ${regions}| sed 's/.csv\$/.csv.regions/g'`
     triNuclregionsFile=`echo ${regions} | sed 's/.csv\$/.csv.txt/g'`
 
@@ -451,7 +461,9 @@ process nbr {
           --gr_drivers ${nbr_driver_regs} \
           --regions_neutralbins_file ${nbr_neutral_bins} \
           --trinucfreq_neutralbins_file ${nbr_neutral_trinucfreq} \
-          --out_prefix \$OUT_FILE
+          --out_prefix \$OUT_FILE \
+          1>>\$MSG_FILE 2>>\$ERR_FILE
+
     mv \$OUT_FILE"-Selection_output.txt" \$OUT_FILE 
     OUT_FILE_BASE=`echo \$OUT_FILE | sed 's/.csv//g'`
     # mv \$OUT_FILE"-global_mle_subs.Rds" \$OUT_FILE_BASE"-global_mle_subs.Rds" 
@@ -463,19 +475,23 @@ process oncodrivefml {
     tag "$tumor_subtype-$gr_id"
 
     input:
-    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations), 
-          path(regions), path(oncodrivefml_config)
+    tuple val(tumor_subtype), val(gr_id), val(software), path(regions),
+          path(mutations), path(oncodrivefml_config)
 
     output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*"
+    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}*", emit: csv
+    tuple path('*.out'), path('*.err'), emit: logs
 
     script:
     """
     OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
+    MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
+    ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
 
     oncodrivefml -i ${mutations} -e ${regions} --sequencing wgs \
                  --configuration ${oncodrivefml_config} \
-                 --output '.'  --cores ${task.cpus}
+                 --output '.'  --cores ${task.cpus} \
+                 1>\$MSG_FILE 2>\$ERR_FILE
     mv "oncodrivefml-inputMutations-"${tumor_subtype}"-"${params.target_genome_version}"-oncodrivefml.tsv" \$OUT_FILE
     """
 }
@@ -609,9 +625,19 @@ workflow {
     /* 
         Step 4c: run dNdScv
     */
+
     /* 
         Step 4d: run MutPanning
     */
+    mutpanning_results = mutpanning(analysis_inv.splitCsv(header: true)
+                                                .map{row -> tuple(row.tumor_subtype, row.software, row.gr_id)}
+                                                .unique()
+                                                .map { it ->
+                                                    if (it[1] == 'mutpanning') {
+                                                         return tuple(it[0], it[2], 'mutpanning')
+                                                    }
+                                                }
+                                                .combine(mutpanning_mutations, by: [0]))
     /* 
         Step 4e: run NBR
     */
@@ -629,6 +655,13 @@ workflow {
     /* 
         Step 4f: run OncodriveFML
     */
+    oncodrivefml_results = oncodrivefml(oncodrivefml_regions.flatten().first()
+                                                            .map { it ->
+                                                               return tuple(infer_tumor_subtype(it),
+                                                                            infer_genomic_region(it),
+                                                                            'oncodrivefml', it)}
+                                                            .combine(oncodrivefml_mutations, by: [0])
+                                                            .combine(oncodrivefml_config))
 }
 
 // inform about completition
