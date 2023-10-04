@@ -27,6 +27,16 @@ def channel_from_params_path (staticPath) {
     return result
 }
 
+def infer_tumor_subtype (filePath) {
+    result = filePath.name.toString().tokenize('-').get(1)
+    return result
+}
+
+def infer_genomic_region(filePath) {
+    result = filePath.name.toString().tokenize('-').get(3)
+    return result
+}
+
 /* ----------------------------------------------------------------------------
 * Processes
 *----------------------------------------------------------------------------*/
@@ -223,7 +233,7 @@ process filter_genomic_regions {
           path(target_genome_chr_len), path(chain)
 
     output:
-    path('*.bed'), emit: bed
+    path('*.bed', emit: bed)
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
@@ -244,14 +254,13 @@ process filter_genomic_regions {
 
 process create_rda_for_dndscv_digdriver {
     tag "$tumor_subtype-dndscv-digdriver-rda"
-    debug true
 
     input:
     tuple val(tumor_subtype), path(gtf), val(gtf_genome_version), path(bed), 
           path(target_genome_fasta), path(chain)
 
     output:
-    tuple val(tumor_subtype), path("${tumor_subtype}_NCBI.Rda"), path("${tumor_subtype}_UCSC.Rda")
+    tuple val(tumor_subtype), path("${tumor_subtype}_NCBI.Rda"), path("${tumor_subtype}_UCSC.Rda"), emit: rda
     tuple path('*.out'), path('*.err'), emit: logs
     
     script:
@@ -420,8 +429,8 @@ process nbr {
     tag "$tumor_subtype-$gr_id"
 
     input:
-    tuple val(tumor_subtype), val(software), val(gr_id), path(mutations),
-          path(regions), path(target_genome_fasta), path(nbr_neutral_bins),
+    tuple val(tumor_subtype), val(gr_id), val(software), path(regions), 
+          path(mutations), path(target_genome_fasta), path(nbr_neutral_bins),
           path(nbr_neutral_trinucfreq), path(nbr_driver_regs)
     
     output:
@@ -585,12 +594,41 @@ workflow {
                               .unique()
                               .groupTuple(by: [0])
                               .combine(filtered_regions, by: [0])   
-    gtf_for_rda.view()
     digdriver_regions = write_regions_for_digdriver(tumor_subtypes_and_gr)
     nbr_regions = write_regions_for_nbr(tumor_subtypes_and_gr)
     oncodrivefml_regions = write_regions_for_oncodrivefml(tumor_subtypes_and_gr)
     dndscv_digdriver_rda = create_rda_for_dndscv_digdriver(gtf_for_rda.combine(target_genome_fasta)
                                                                       .combine(chain))
+
+    /* 
+        Step 4a: run CHASM+
+    */
+    /* 
+        Step 4b: run DIGdriver
+    */
+    /* 
+        Step 4c: run dNdScv
+    */
+    /* 
+        Step 4d: run MutPanning
+    */
+    /* 
+        Step 4e: run NBR
+    */
+    nbr_results = nbr(nbr_regions.flatten()
+                                 .map { it ->
+                                     return tuple(infer_tumor_subtype(it),
+                                                  infer_genomic_region(it), 'nbr',
+                                                  it)
+                                 }
+                                 .combine(nbr_mutations, by: [0])
+                                 .combine(target_genome_fasta)
+                                 .combine(nbr_neutral_bins)
+                                 .combine(nbr_neutral_trinucfreq)
+                                 .combine(nbr_driver_regs))
+    /* 
+        Step 4f: run OncodriveFML
+    */
 }
 
 // inform about completition
