@@ -158,7 +158,7 @@ process write_mutations_for_mutpanning {
 
     output:
     tuple val(tumor_subtype), path('inputMutations*'), 
-          path('mutpanning-patientsInv*')
+          path('patientsInv*')
 
     when:
     software == 'mutpanning'
@@ -166,9 +166,11 @@ process write_mutations_for_mutpanning {
     script:
     """
     OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
+    OUT_INV='patientsInv-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
     2d_write_mutations_for_mutpanning.R --maf ${maf} \
                                         --cancer_subtype ${tumor_subtype} \
-                                        --output \$OUT_FILE
+                                        --output \$OUT_FILE \
+                                        --output_inventory \$OUT_INV
     """
 }
 
@@ -240,6 +242,32 @@ process filter_genomic_regions {
     """
 }
 
+process create_rda_for_dndscv_digdriver {
+    tag "$tumor_subtype-dndscv-digdriver-rda"
+    debug true
+
+    input:
+    tuple val(tumor_subtype), path(gtf), val(gtf_genome_version), path(bed), 
+          path(target_genome_fasta), path(chain)
+
+    output:
+    tuple val(tumor_subtype), path("${tumor_subtype}_NCBI.Rda"), path("${tumor_subtype}_UCSC.Rda")
+    tuple path('*.out'), path('*.err'), emit: logs
+    
+    script:
+    """
+    gtf_gv=`echo ${gtf_genome_version} | sed 's/\\[//g' | sed 's/,//g' | sed 's/\\]//g'`
+    3c_write_regions_for_dndscv.R --gtf ${gtf} --gtf_genomes \$gtf_gv \
+                                  --cancer_subtype ${tumor_subtype} \
+                                  --target_genome_path ${target_genome_fasta}\
+                                  --target_genome_version ${params.target_genome_version} \
+                                  --chain ${chain} \
+                                  --cores ${task.cpus} --output '.' \
+                                  1>rda_for_dndscv_digdriver.out \
+                                  2>rda_for_dndscv_digdriver.err
+    """
+}
+
 process write_regions_for_digdriver {
     tag "$tumor_subtype-$software"
 
@@ -262,22 +290,6 @@ process write_regions_for_digdriver {
         outFileOneGR='inputGR-'${tumor_subtype}'-digdriver-'\$oneGR'-'${params.target_genome_version}'.csv'
         grep -w \$oneGR ${bed} > \$outFileOneGR
     done
-    """
-}
-
-
-process write_regions_for_dndscv {
-    tag "$tumor_subtype-dndscv-rda"
-    debug true
-
-    input:
-    tuple val(tumor_subtype), val(software), val(gr), path(bed)
-    tuple path(gtf), val(gtf_genome_version)
-
-    script:
-    """
-    echo ${tumor_subtype}
-    paste ${gtf} ${gtf_genome_version} | echo
     """
 }
 
@@ -577,7 +589,8 @@ workflow {
     digdriver_regions = write_regions_for_digdriver(tumor_subtypes_and_gr)
     nbr_regions = write_regions_for_nbr(tumor_subtypes_and_gr)
     oncodrivefml_regions = write_regions_for_oncodrivefml(tumor_subtypes_and_gr)
-    //write_regions_for_dndscv(gtf_for_rda)
+    dndscv_digdriver_rda = create_rda_for_dndscv_digdriver(gtf_for_rda.combine(target_genome_fasta)
+                                                                      .combine(chain))
 }
 
 // inform about completition
