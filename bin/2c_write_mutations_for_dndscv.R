@@ -53,10 +53,10 @@ parser$add_argument("-g", "--target_genome_version", required = F,
                     help = targetGenomeHelp)
 
 parser$add_argument("-o", "--output", required = T, type = 'character',
-                    help = "Path to the output folder")
+                    help = "Path to the output file")
 
 args <- parser$parse_args()
-check_input_arguments(args, outputType = 'folder')
+check_input_arguments(args, outputType = 'file')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
@@ -78,8 +78,6 @@ maf <- fread(args$maf, header = T, stringsAsFactors = F)
 
 message('[', Sys.time(), '] Formatting mutations for dNdScv, ', 
         args$cancer_subtype)
-outfile <- paste0(args$output, '/dndscv-inputMutations-', args$cancer_subtype, 
-                  '-', args$target_genome_version, '.csv')
 
 # PROCESS MAF file to suit the software ---------------------------------------
 maf <- maf[, intersect(colsToGet, colnames(maf)), with = F]
@@ -88,8 +86,8 @@ maf <- maf[order(Chromosome, Start_Position)]
 setnames(maf, colsToGet, colsOutNames)
 setcolorder(maf, colsOutNames)
 
-write.table(maf, outfile, col.names = printColnames, row.names = F, sep = '\t',
-            quote = F)
+write.table(maf, args$output, col.names = printColnames, row.names = F, 
+            sep = '\t', quote = F)
 message('[', Sys.time(), '] Wrote mutations for dNdScv, ', 
         args$cancer_subtype)
 
