@@ -374,6 +374,65 @@ process calculate_mutation_rates {
     """
 }
 
+
+
+process digdriver {
+    tag "$tumor_subtype-$gr_id"
+
+    input:
+    tuple val(tumor_subtype), val(gr_id), val(software), path(regions), 
+          path(rda_ncbi), path(rda_ucsc), path(mutations),
+          path(digdriver_model), path(digdriver_elements),
+          path(target_genome_fasta)
+
+    output:
+    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
+    tuple path('*.out'), path('*.err'), emit: logs
+
+    script:
+    """
+    MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
+    ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
+
+    # a unique ID to use in all further commands
+    RUN_CODE=${tumor_subtype}'_'${gr_id}'_'${params.target_genome_version}
+    OUT_FILE=${software}"-results-"\$RUN_CODE'.csv'
+
+    # copy model as it will be modified during the run
+    DIG_MODEL='digdriver-model-'\$RUN_CODE'.h5'
+    cp ${digdriver_model} \$DIG_MODEL
+    # make it writable
+    chmod 700 \$DIG_MODEL
+
+    # path to element_data.h5 referred in DIGdriver tutorials 
+    DIG_ELEMENTS='digdriver-elements-'\$RUN_CODE'.h5'
+    cp ${digdriver_elements} \$DIG_ELEMENTS
+    chmod 700 \$DIG_ELEMENTS
+
+    # STEP 1: annotate the mutation file 
+    ANNOT_VARIANTS=${mutations}'-DIGannotated.csv'
+    touch \$ANNOT_VARIANTS
+    DigPreprocess.py annotMutationFile --n-procs ${task.cpus} \
+        ${mutations} ${rda_ucsc} ${target_genome_fasta} \$ANNOT_VARIANTS \
+        1>\$MSG_FILE 2>\$ERR_FILE
+
+    # STEP 2: preprocess the nucleotide contexts of the annotations
+    DigPreprocess.py preprocess_element_model \$DIG_ELEMENTS \$DIG_MODEL \
+        ${target_genome_fasta} \$RUN_CODE --f-bed ${regions} \
+        1>>\$MSG_FILE 2>>\$ERR_FILE
+
+    # STEP 3: pretrain a neutral mutation model 
+    DigPretrain.py elementModel \$DIG_MODEL \$DIG_ELEMENTS \$RUN_CODE \
+        1>>\$MSG_FILE 2>>\$ERR_FILE
+
+    # geneDriver is not used even for CDS, because it can handle only SNP
+    DigDriver.py elementDriver \$ANNOT_VARIANTS \$DIG_MODEL \$RUN_CODE \
+        --f-bed ${regions} --outdir '.' --outpfx \$RUN_CODE \
+        1>>\$MSG_FILE 2>>\$ERR_FILE
+    mv \$RUN_CODE'.results.txt' \$OUT_FILE
+    """
+}
+
 process dndscv {
     tag "$tumor_subtype-$gr_id"
 
@@ -513,6 +572,9 @@ process oncodrivefml {
 * Workflows
 *----------------------------------------------------------------------------*/
 workflow {
+    /*
+        Step 1: convert inventories & reference genome files to channels
+    */
     // create channels to all inventories
     patients_inv = Channel.fromPath(params.patients_inventory, 
                                     checkIfExists: true)
@@ -521,7 +583,6 @@ workflow {
                                     checkIfExists: true)
                           .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" }
     blacklist_inv = channel_from_params_path(params.blacklist_inventory)
-
 
     // create channels to target genome verion and to chain file for liftover
     target_genome_fasta = Channel.fromPath(params.target_genome_path,
@@ -538,7 +599,23 @@ workflow {
     gene_name_synonyms = channel_from_params_path(params.gene_name_synonyms)
     varanno_conversion_table = channel_from_params_path(params.varanno_conversion_table)
 
+    /*
+        Step 2: convert additional files for the software (loaded only if 
+        corresponding software is requested)
+    */
+    software = analysis_inv.splitCsv(header: true).map{row -> row.software}
+                           .unique().toList()
+                           software.view()
+    // DIGdriver model inventory
+    digdriver_inv = Channel.fromPath(params.digdriver_models_inventory, 
+                                    checkIfExists: true)
+                           .ifEmpty { exit 1, "[ERROR]: digdriver models inventory file not found" }
+    digdriver_elements = Channel.fromPath(params.digdriver_elements, 
+                                         checkIfExists: true)
+                                .ifEmpty { exit 1, "[ERROR]: digdriver elements file not found" }
+
     // NBR specific files
+    // PATCH - NEED TO LOAD IT IF AND ONLY IF NBR IS REQUESTED
     nbr_neutral_bins = Channel.fromPath(params.nbr_regions_neutralbins_file, 
                                         checkIfExists: true)
                               .ifEmpty { exit 1, "[ERROR]: nbr_regions_neutralbins_file not found" }
@@ -548,7 +625,9 @@ workflow {
     nbr_driver_regs = Channel.fromPath(params.nbr_driver_regs_file, 
                                                checkIfExists: true)
                                      .ifEmpty { exit 1, "[ERROR]: nbr_driver_regs_file not found" }
+
     //Oncodrivefml specific files
+    // PATCH - NEED TO LOAD IT IF AND ONLY IF ONCODRIVEFML IS REQUESTED
     oncodrivefml_config = Channel.fromPath(params.oncodrivefml_config,
                                            checkIfExists: true)
                                  .ifEmpty { exit 1, "[ERROR]: oncodrivefml_config not found" }
@@ -635,6 +714,21 @@ workflow {
     /* 
         Step 4b: run DIGdriver
     */
+    digdriver_inv = digdriver_inv.splitCsv(header: true)
+                                 .map { it ->
+                                     return(tuple(it.tumor_subtype, it.model_file))
+                                 }
+    /*digdriver_results = digdriver(*/digdriver_regions.flatten()
+                                                   .map { it ->
+                                                            return tuple(infer_tumor_subtype(it),
+                                                                         infer_genomic_region(it),
+                                                                         'digdriver', it)
+                                                    }
+                                                    .combine(dndscv_digdriver_rda.rda, by: [0])
+                                                    .combine(digdriver_mutations, by: [0])
+                                                    .combine(digdriver_inv, by: [0])
+                                                    .combine(digdriver_elements)
+                                                    .combine(target_genome_fasta)
     /* 
         Step 4c: run dNdScv
     */
@@ -684,6 +778,7 @@ workflow {
                                                                             'oncodrivefml', it)}
                                                             .combine(oncodrivefml_mutations, by: [0])
                                                             .combine(oncodrivefml_config))
+
 }
 
 // inform about completition
