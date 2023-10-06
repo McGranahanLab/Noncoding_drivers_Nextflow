@@ -69,6 +69,7 @@ build_RefCDS_one_gene <- function(gene_cdss, cdsList, genomefile, numcode) {
   h = keeptrying = 1
   
   while (h <= nrow(gene_cdss) & keeptrying) {
+    print(keeptrying)
     pid = gene_cdss[h, 3]
     cds = cdsList[[pid]]
     strand = cds[1, 10]
@@ -189,8 +190,8 @@ calculate_impact <- function(oneGeneRefCDS, nt, impMatrix, trinucSubsInd,
   oneGeneRefCDS
 }
 
-buildref_faster <- function(cdsfile, genomefile, outfile = "RefCDS.rda",
-                            numcode = 1, excludechrs = NULL, onlychrs = NULL,
+buildref_faster <- function(cdsfile, genomefile, numcode = 1, 
+                            excludechrs = NULL, onlychrs = NULL,
                             useids = F, cores = 1) {
   message(Sys.time(), " [1/3] Preparing the environment...")
   reftable = read.table(cdsfile, header = 1, sep = "\t", stringsAsFactors = F, 
