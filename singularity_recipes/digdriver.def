@@ -81,9 +81,9 @@ From: ubuntu:22.04
     cd DIGDriver/
     git reset --hard 5bb565a
     cd scripts/
+    # to be able to give our own rda object
     sed -i "s/# parse_d.add_argument('refdb'/parse_d.add_argument('refdb'/g" DigPreprocess.py
     sed -i "s/cmd = \['mutationFunction.R', args.fmut, refdb,/# cmd = \['mutationFunction.R', args.fmut, refdb,/g" DigPreprocess.py
     sed -i "s/# cmd = \['mutationFunction.R', args.fmut, args.refdb/cmd = \['mutationFunction.R', args.fmut, args.refdb/g" DigPreprocess.py
     cd ../
     python3 setup.py install
-
