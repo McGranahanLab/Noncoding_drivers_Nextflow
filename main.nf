@@ -260,18 +260,19 @@ process create_rda_for_dndscv_digdriver {
           path(target_genome_fasta), path(chain)
 
     output:
-    tuple val(tumor_subtype), path("${tumor_subtype}_NCBI.Rda"), path("${tumor_subtype}_UCSC.Rda"), emit: rda
+    tuple val(tumor_subtype), path("*.Rda"), emit: rda
     tuple path('*.out'), path('*.err'), emit: logs
     
     script:
     """
+    OUT_FILE=${tumor_subtype}'.Rda'
     gtf_gv=`echo ${gtf_genome_version} | sed 's/\\[//g' | sed 's/,//g' | sed 's/\\]//g'`
     3c_write_regions_for_dndscv.R --gtf ${gtf} --gtf_genomes \$gtf_gv \
                                   --cancer_subtype ${tumor_subtype} \
                                   --target_genome_path ${target_genome_fasta}\
                                   --target_genome_version ${params.target_genome_version} \
                                   --chain ${chain} \
-                                  --cores ${task.cpus} --output '.' \
+                                  --cores ${task.cpus} --output \$OUT_FILE \
                                   1>rda_for_dndscv_digdriver.out \
                                   2>rda_for_dndscv_digdriver.err
     """
@@ -298,6 +299,7 @@ process write_regions_for_digdriver {
         oneGR="\${gr_parsed[\$i]}"
         outFileOneGR='inputGR-'${tumor_subtype}'-digdriver-'\$oneGR'-'${params.target_genome_version}'.csv'
         grep -w \$oneGR ${bed} > \$outFileOneGR
+        # digdriver requires NCBI region format
     done
     """
 }
@@ -779,7 +781,7 @@ workflow {
     /* 
         Step 4f: run OncodriveFML
     */
-    oncodrivefml_results = oncodrivefml(oncodrivefml_regions.flatten().first()
+    oncodrivefml_results = oncodrivefml(oncodrivefml_regions.flatten()
                                                             .map { it ->
                                                                return tuple(infer_tumor_subtype(it),
                                                                             infer_genomic_region(it),

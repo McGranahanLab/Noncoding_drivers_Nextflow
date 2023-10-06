@@ -10,6 +10,58 @@ date: "`r Sys.Date()`"
 knitr::opts_chunk$set(echo = T)
 ```
 
+ADD DIGDRIVER INVENTORY TO INVENTORY CHECK SCRIPT
+
+https://github.com/OpenGenomics/mc3/blob/aff72c9696031c2f2bdedbb549ceb8102e0c0ef0/refdocs_tree.txt#L17
+https://data.broadinstitute.org/snowman/hg19/annotation/
+wget https://data.broadinstitute.org/snowman/hg19/Homo_sapiens_assembly19.fasta
+wget https://data.broadinstitute.org/snowman/hg19/annotation/Homo_sapiens_assembly19.gtf
+
+because DIGdriver can only handle reference genome in UCSC format, we have to add 'chr' to the name
+of each chromosome in fasta file. no need to do that for your mutations or gtf regions, the code
+will take care of this.
+
+do not forget to add the check that gtf does not contain "--" and that there is either protein_id or ccdsid
+
+## Oncodrivefml
+downloading bgdata is done properly if and only if example is run.
+is big 17GB
+
+## DIGdriver
+mkdir -p $DIG_MODELS_DIR
+cd $DIG_MODELS_DIR
+
+# since durng execution DIGdriver changes content of its models and element 
+# files, files will be made read only and in the run script copied for every 
+# execution and run.
+
+wget http://cb.csail.mit.edu/cb/DIG/downloads/mutation_maps/Lung_tumors_SNV_MNV_INDEL.Pretrained.h5
+mv Lung_tumors_SNV_MNV_INDEL.Pretrained.h5 digdriver-PANCAN-SNV_MNV_INDEL.Pretrained.h5
+chmod 0444 digdriver-PANCAN-SNV_MNV_INDEL.Pretrained.h5
+
+wget http://cb.csail.mit.edu/cb/DIG/downloads/mutation_maps/Lung-AdenoCA_SNV_MNV_INDEL.Pretrained.h5
+mv Lung-AdenoCA_SNV_MNV_INDEL.Pretrained.h5 digdriver-ADENOCARCINOMA-SNV_MNV_INDEL.Pretrained.h5
+chmod 0444 digdriver-ADENOCARCINOMA-SNV_MNV_INDEL.Pretrained.h5
+
+wget http://cb.csail.mit.edu/cb/DIG/downloads/mutation_maps/Lung-SCC_SNV_MNV_INDEL.Pretrained.h5
+mv Lung-SCC_SNV_MNV_INDEL.Pretrained.h5 digdriver-SQUAMOUS_CELL-SNV_MNV_INDEL.Pretrained.h5
+chmod 0444 digdriver-ADENOCARCINOMA-SNV_MNV_INDEL.Pretrained.h5
+
+wget http://cb.csail.mit.edu/cb/DIG/downloads//dig_data_files/element_data.h5
+mv element_data.h5 digdriver-element_data.h5
+chmod 0444 digdriver-element_data.h5
+
+cd ../
+
+## MISC
+
+Do not forget to add chmod +x on R file into tutorial
+Grep Use.For.Plots because it can still appear in scripts
+Add a small workflow on how to prepare ensemble gtf to the biotyped gtf
+Provide with the pipeline biotype annotated GTF files on hg38 and on hg19
+REMEMBER THAT:
+Nextflow implementation does not filter files by columns 'Use.For.Plots' and 'Use.For.Plots.Indel’
+
 ## Organising your data
 * inventory folder
 * _assets folder
@@ -153,3 +205,6 @@ it is best to perform match between genetic elements and CN on the same genome
 version CN were done.
 
 #We have to store somewhere IDs of patients which were filtered out as hypermutated
+
+GTF FILE SHOULD NOT CONTAIN GENE NAMES/IDS WITH -- IN THEM. FOR CURRENT HG37
+I MANUALLY REPLACED THEM WITH -
