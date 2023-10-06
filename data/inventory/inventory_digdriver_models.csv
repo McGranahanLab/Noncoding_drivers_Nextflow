@@ -1,0 +1,4 @@
+tumor_subtype,model_file
+LUAD,/Users/maria/Desktop/BitBucket/Noncoding_drivers_Nextflow/data/assets/DIGdriver/Lung-AdenoCA_SNV_MNV_INDEL.Pretrained.h5
+LUSC,/Users/maria/Desktop/BitBucket/Noncoding_drivers_Nextflow/data/assets/DIGdriver/Lung-SCC_SNV_MNV_INDEL.Pretrained.h5
+PANLUNG,/Users/maria/Desktop/BitBucket/Noncoding_drivers_Nextflow/data/assets/DIGdriver/Lung_tumors_SNV_MNV_INDEL.Pretrained.h5
