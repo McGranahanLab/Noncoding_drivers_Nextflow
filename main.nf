@@ -591,7 +591,7 @@ workflow {
                                             "[ERROR]: target genome fasta file not found" }
     target_genome_chr_len = Channel.fromPath(params.target_genome_chr_len,
                                            checkIfExists: true)
-                                 .ifEmpty { exit 1, 
+                                   .ifEmpty { exit 1, 
                                             "[ERROR]: chromosomal lengths of target genome file not found" }
     chain = channel_from_params_path(params.chain)
 
@@ -601,36 +601,44 @@ workflow {
 
     /*
         Step 2: convert additional files for the software (loaded only if 
-        corresponding software is requested)
+        corresponding software is requested) to channels
     */
     software = analysis_inv.splitCsv(header: true).map{row -> row.software}
-                           .unique().toList()
-                           software.view()
-    // DIGdriver model inventory
-    digdriver_inv = Channel.fromPath(params.digdriver_models_inventory, 
-                                    checkIfExists: true)
+                           .unique()
+    // check that all needed files are present
+    software.map { it ->
+        if (it == 'digdriver') {
+            Channel.fromPath(params.digdriver_models_inventory, checkIfExists: true)
                            .ifEmpty { exit 1, "[ERROR]: digdriver models inventory file not found" }
-    digdriver_elements = Channel.fromPath(params.digdriver_elements, 
-                                         checkIfExists: true)
-                                .ifEmpty { exit 1, "[ERROR]: digdriver elements file not found" }
-
-    // NBR specific files
-    // PATCH - NEED TO LOAD IT IF AND ONLY IF NBR IS REQUESTED
-    nbr_neutral_bins = Channel.fromPath(params.nbr_regions_neutralbins_file, 
-                                        checkIfExists: true)
-                              .ifEmpty { exit 1, "[ERROR]: nbr_regions_neutralbins_file not found" }
-    nbr_neutral_trinucfreq = Channel.fromPath(params.nbr_trinucfreq_neutralbins_file, 
-                                              checkIfExists: true)
-                                    .ifEmpty { exit 1, "[ERROR]: nbr_trinucfreq_neutralbins_file not found" }
-    nbr_driver_regs = Channel.fromPath(params.nbr_driver_regs_file, 
+            Channel.fromPath(params.digdriver_elements, checkIfExists: true)
+                           .ifEmpty { exit 1, "[ERROR]: digdriver elements file not found" }
+        }
+        if (it == 'nbr') {
+            nbr_neutral_bins = Channel.fromPath(params.nbr_regions_neutralbins_file,
+                                                checkIfExists: true)
+                                      .ifEmpty { exit 1, "[ERROR]: nbr_regions_neutralbins_file not found" }
+            nbr_neutral_trinucfreq = Channel.fromPath(params.nbr_trinucfreq_neutralbins_file, 
+                                                      checkIfExists: true)
+                                            .ifEmpty { exit 1, "[ERROR]: nbr_trinucfreq_neutralbins_file not found" }
+            nbr_driver_regs = Channel.fromPath(params.nbr_driver_regs_file, 
                                                checkIfExists: true)
                                      .ifEmpty { exit 1, "[ERROR]: nbr_driver_regs_file not found" }
-
-    //Oncodrivefml specific files
-    // PATCH - NEED TO LOAD IT IF AND ONLY IF ONCODRIVEFML IS REQUESTED
-    oncodrivefml_config = Channel.fromPath(params.oncodrivefml_config,
-                                           checkIfExists: true)
-                                 .ifEmpty { exit 1, "[ERROR]: oncodrivefml_config not found" }
+        }
+        if (it == 'oncodrivefml') {
+            oncodrivefml_config = Channel.fromPath(params.oncodrivefml_config,
+                                                   checkIfExists: true)
+                                         .ifEmpty { exit 1, "[ERROR]: oncodrivefml_config not found" }
+        }
+    } 
+    // now all the files needed for individual software could be loaded via
+    // channel_from_params_path function. If file does not exist, it will just 
+    // create an empty file & continue 
+    digdriver_inv = channel_from_params_path(params.digdriver_models_inventory)
+    digdriver_elements = channel_from_params_path(params.digdriver_elements)
+    nbr_neutral_bins = channel_from_params_path(params.nbr_regions_neutralbins_file)
+    nbr_neutral_trinucfreq = channel_from_params_path(params.nbr_trinucfreq_neutralbins_file)
+    nbr_driver_regs = channel_from_params_path(params.nbr_driver_regs_file)
+    oncodrivefml_config = channel_from_params_path(params.oncodrivefml_config)
 
     /*
         Step 1: check that inventories have all the needed columns and values
