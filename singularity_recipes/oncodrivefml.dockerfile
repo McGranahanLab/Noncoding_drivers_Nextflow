@@ -1,30 +1,13 @@
-Bootstrap: docker
-From: ubuntu:18.04
+FROM ubuntu:18.04
+MAINTAINER Maria Litovchenko m.litovchenko@ucl.ac.uk
+ 
+RUN apt-get -y update
+RUN apt-get -y upgrade
+RUN apt-get install -y procps libcurl4-openssl-dev libssl-dev gcc libz-dev
+# python 3.6 is default for ubuntu:18.04
+RUN apt-get install -y python3-pip
 
-%help
-    Main software:
-        oncodrivefml        v.2.3.0          https://bitbucket.org/bbglab/oncodrivefml/src/master/
-        oncodriveclustl     v1.1.1           https://bitbucket.org/bbglab/oncodriveclustl/src/master/
-
-    Example run:
-        oncodrivefml --help
-        oncodriveclust --help
-
-%labels
-    CREATOR     Maria Litovchenko
-    ORGANIZATION    UCL
-
-%environment
-    export LC_ALL=C.UTF-8
-    export LANG=C.UTF-8
-
-%post
-    apt-get update
-    apt-get install -y procps libcurl4-openssl-dev libssl-dev gcc libz-dev
-    # python 3.6 is default for ubuntu:18.04
-    apt-get install -y python3-pip
-  
-    pip3 install ago==0.0.9 appdirs==1.4.4 bgcache==0.1 bgconfig==0.8 \
+RUN pip3 install ago==0.0.9 appdirs==1.4.4 bgcache==0.1 bgconfig==0.8 \
                  bgdata==2.0.2 bglogs==0.6 bgparsers==0.9 bgreference==0.5 \
                  bgsignature==0.2 bokeh==0.12.4 brotlipy==0.7.0 \
                  certifi==2020.6.20 cffi==1.14.0 chardet==3.0.4 click==6.7 \
@@ -41,3 +24,7 @@ From: ubuntu:18.04
                  scikit-learn==0.23.2 scipy==1.1.0 six==1.15.0 \
                  sortedcontainers==2.2.2 statsmodels==0.9.0 \
                  threadpoolctl==2.1.0 tornado==6.0.4 tqdm==4.42.1
+RUN echo "export LC_ALL=C.UTF-8" >> ~/.bashrc
+RUN echo "export LANG=C.UTF-8" >> ~/.bashrc
+
+CMD source /root/.bashrc
