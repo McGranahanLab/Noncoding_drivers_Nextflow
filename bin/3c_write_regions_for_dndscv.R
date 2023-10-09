@@ -261,7 +261,7 @@ create_transcript_table <- function(gtfPaths, gtfGenomes,
 
 # Parse input arguments -------------------------------------------------------
 # create parser object
-parser <- ArgumentParser(prog = '3c_create_ref_RDa.R')
+parser <- ArgumentParser(prog = '3c_write_regions_for_dndscv.R')
 
 gtfHelp <- 'A path to GTF file(s) for that cancer subtype'
 parser$add_argument("-a", "--gtf", required = T, type = 'character', 
@@ -306,10 +306,10 @@ parser$add_argument("-n", "--cores", required = F, type = 'integer',
                     default = 1, help = coresHelp)
 
 parser$add_argument("-o", "--output", required = T, type = 'character',
-                    help = "Path to the output file")
+                    help = "Path to the output folder")
 
 args <- parser$parse_args()
-check_input_arguments(args, outputType = 'file')
+check_input_arguments(args, outputType = 'folder')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
@@ -323,7 +323,7 @@ printArgs(args)
 #              target_genome_path = '../data/assets/reference_genome/Homo_sapiens_assembly19.fasta',
 #              target_genome_version = 'hg19', chain = NULL, 
 #              cancer_subtype = 'LUAD',
-#              bed = '../TEST/inputs/inputGR-LUAD-hg19.bed', output = 'test.Rda',
+#              bed = '../TEST/inputs/inputGR-LUAD-hg19.bed', output = '.',
 #              cores = 4)
 
 # Create transcript table -----------------------------------------------------
@@ -356,37 +356,34 @@ rda <- buildref_faster(cdsfile = transrTabPath, cores = args$cores,
                        genomefile = args$target_genome_path)
 RefCDS <- rda$RefCDS
 gr_genes <- rda$gr_genes
-save(RefCDS, gr_genes, file = args$output)
-
-# No need to record second Rda object in the other chromosomal naming notation
-# because DIGdriver can only handle UCSC, all other software are also forced to
-# UCSC
+save(RefCDS, gr_genes, file = paste0(args$output, '/', args$cancer_subtype,
+                                     '_', refGenStyle, '.Rda'))
 
 # change refGenStyle to the opposite (NCBI -> UCSC, UCSC -> NCBI) to save 
 # Rda in both formats. 
-# if (refGenStyle == 'NCBI') {
-#   seqlevelsStyle(rda$gr_genes) <- 'UCSC'
-#   
-#   for (RefCDSidx in 1:length(rda$RefCDS)) {
-#     rda$RefCDS[[RefCDSidx]]$chr <- paste0('chr', RefCDS[[RefCDSidx]]$chr)
-#   }
-#   
-#   outputFile <- paste0(args$output, '/', args$cancer_subtype, '_UCSC.Rda')
-#   RefCDS <- rda$RefCDS
-#   gr_genes <- rda$gr_genes
-#   save(RefCDS, gr_genes, file = outputFile)
-# }
-# if (refGenStyle == 'UCSC') {
-#   seqlevelsStyle(rda$gr_genes) <- 'NCBI'
-#   for (RefCDSidx in 1:length(rda$RefCDS)) {
-#     rda$RefCDS[[RefCDSidx]]$chr <- gsub('^chr', '', RefCDS[[RefCDSidx]]$chr)
-#   }
-#   
-#   outputFile <- paste0(args$output, '/', args$cancer_subtype, '_NCBI.Rda')
-#   RefCDS <- rda$RefCDS
-#   gr_genes <- rda$gr_genes
-#   save(RefCDS, gr_genes, file = outputFile)
-# } 
+if (refGenStyle == 'NCBI') {
+  seqlevelsStyle(rda$gr_genes) <- 'UCSC'
+  
+  for (RefCDSidx in 1:length(rda$RefCDS)) {
+    rda$RefCDS[[RefCDSidx]]$chr <- paste0('chr', RefCDS[[RefCDSidx]]$chr)
+    }
+  
+  outputFile <- paste0(args$output, '/', args$cancer_subtype, '_UCSC.Rda')
+  RefCDS <- rda$RefCDS
+  gr_genes <- rda$gr_genes
+  save(RefCDS, gr_genes, file = outputFile)
+}
+if (refGenStyle == 'UCSC') {
+  seqlevelsStyle(rda$gr_genes) <- 'NCBI'
+  for (RefCDSidx in 1:length(rda$RefCDS)) {
+    rda$RefCDS[[RefCDSidx]]$chr <- gsub('^chr', '', RefCDS[[RefCDSidx]]$chr)
+  }
+   
+  outputFile <- paste0(args$output, '/', args$cancer_subtype, '_NCBI.Rda')
+  RefCDS <- rda$RefCDS
+  gr_genes <- rda$gr_genes
+  save(RefCDS, gr_genes, file = outputFile)
+} 
   
 message('[', Sys.time(), '] Finished building RefRda object for ',
         'dNdScv/DIGdriver')
