@@ -31,7 +31,8 @@ RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
     && sed -Ei 's/^# deb-src /deb-src /' /etc/apt/sources.list \
     && apt-get update \
     && apt-get -y build-dep r-base-dev \
-    && wget -c https://cran.r-project.org/src/base/R-4/R-4.3.0.tar.gz \ \
+    && wget -c https://cran.r-project.org/src/base/R-4/R-4.3.0.tar.gz \
+    && tar -xf R-4.3.0.tar.gz \
     && cd R-4.3.0 \
     && ./configure \
     && make -j9 \
