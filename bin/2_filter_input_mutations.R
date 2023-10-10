@@ -442,8 +442,7 @@ filterVarsByBlackWhiteList <- function(varsDT, bwFile, chrStyle, bwName,
 #' @author Maria Litovchenko
 #' @param varDT variant data table, essential columns: key, chr, start, end,
 #' ref, var, Func.refGene, Gene.refGene, GeneDetail.refGene,
-#' ExonicFunc.refGene, AAChange.refGene, Use.For.Plots, Use.For.Plots.Indel, 
-#' participant_id, somatic_genome
+#' ExonicFunc.refGene, AAChange.refGene, participant_id, somatic_genome
 #' @return data table in MAF format
 mutTabToMAF <- function(varDT) {
   result <- copy(varDT)

@@ -97,7 +97,9 @@ checkHaveEssentialColumns <- function(filePath, essentialCols,
                                    nThread = cores))
   if (!all(essentialCols %in% colnames(result))) {
     stop('[', Sys.time(), '] ', inventory_type, ' inventory must have ',
-         'columns: ', paste(essentialCols, collapse = ', '))
+         'columns: ', paste(essentialCols, collapse = ', '), '. Absent ',
+         'columns: ', paste(setdiff(essentialCols, colnames(result)),
+                            collapse = ', '))
   }
   result
 }
@@ -770,10 +772,12 @@ if (!is.null(args$inventory_blacklisted)) {
   genomesVersions <- c(genomesVersions, bwInv$file_genome)
 }
 genomesVersions <- unique(genomesVersions)
+genomesVersions <- genomesVersions[!is.na(genomesVersions)]
 if (length(genomesVersions) > 2) {
   stop('[', Sys.time(), '] > 2 different genome versions are detected across ',
-       'all inventory tables. Please restrict it to the maximum of 2 ',
-       'different genome versions.')
+       'all inventory tables. Current genome versions: ',
+       paste0(genomesVersions, collapse = ', '), '. Please restrict it to ',
+       'the maximum of 2 different genome versions.')
 }
 
 print(paste0('[', Sys.time(), '] Analysis inventory is OK'))

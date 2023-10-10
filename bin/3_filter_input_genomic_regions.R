@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# FILE: create_genomic_regions.R ----------------------------------------------
+# FILE: 3_filter_input_genomic_regions.R --------------------------------------
 #
 # DESCRIPTION: a script for creating input genomic regions for various cancer
 #              driver programs.

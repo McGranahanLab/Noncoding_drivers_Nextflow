@@ -1,11 +1,11 @@
 #!/usr/bin/env Rscript
 
-# FILE: 3c_create_ref_RDa.R ---------------------------------------------------
+# FILE: 3c_write_regions_for_dndscv.R -----------------------------------------
 #
 # DESCRIPTION: Formats BED12 file containing genomic regions for one tumor 
 #              subtype to NBR input format.
 #
-# USAGE: Rscript --vanilla 3c_create_ref_RDa.R \
+# USAGE: Rscript --vanilla 3c_write_regions_for_dndscv.R \
 #                --gtf [path to GTF file(s)] \
 #                --gtf_genomes [genome version(s) of GTF file(s)] \
 #                --target_genome_path [path to reference fasta file] \
@@ -16,7 +16,7 @@
 #                --output [path to file to write files to] \
 #
 # OPTIONS: Run 
-#          Rscript --vanilla 3c_create_ref_RDa.R -h
+#          Rscript --vanilla 3c_write_regions_for_dndscv.R -h
 #          to see the full list of options and their descriptions.
 #
 # REQUIREMENTS: 

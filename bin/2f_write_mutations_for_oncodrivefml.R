@@ -1,10 +1,10 @@
 #!/usr/bin/env Rscript
-# FILE: 2a_write_mutations_to_oncodrivefml.R ----------------------------------
+# FILE: 2f_write_mutations_to_oncodrivefml.R ----------------------------------
 #
 # DESCRIPTION: Formats MAF file containing mutations for one tumor subtype to
 #              OncodriveFML input format.
 #
-# USAGE: Rscript --vanilla 2a_write_mutations_to_oncodrivefml.R \
+# USAGE: Rscript --vanilla 2f_write_mutations_to_oncodrivefml.R \
 #                --maf [path to MAF file with all mutations for that subtype] \
 #                --cancer_subtype [cancer subtype of interest] \
 #                --target_genome_version hg19 \

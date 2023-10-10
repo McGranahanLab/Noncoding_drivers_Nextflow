@@ -1,17 +1,17 @@
 #!/usr/bin/env Rscript
-# FILE: 2a_write_mutations_to_nbr.R -------------------------------------------
+# FILE: 2e_write_mutations_to_nbr.R -------------------------------------------
 #
 # DESCRIPTION: Formats MAF file containing mutations for one tumor subtype to
 #              NBR input format.
 #
-# USAGE: Rscript --vanilla 2a_write_mutations_to_nbr.R \
+# USAGE: Rscript --vanilla 2e_write_mutations_to_nbr.R \
 #                --maf [path to MAF file with all mutations for that subtype] \
 #                --cancer_subtype [cancer subtype of interest] \
 #                --target_genome_version hg19 \
 #                --output [path to folder to write files to] \
 #
 # OPTIONS: Run 
-#          Rscript --vanilla  2a_write_mutations_to_nbr.R -h
+#          Rscript --vanilla  2e_write_mutations_to_nbr.R -h
 #          to see the full list of options and their descriptions.
 #
 # REQUIREMENTS: 

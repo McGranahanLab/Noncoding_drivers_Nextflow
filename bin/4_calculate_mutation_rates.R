@@ -1,13 +1,13 @@
 #!/usr/bin/env Rscript
-# FILE: calculate_mutation_rates.R --------------------------------------------
+# FILE: 4_calculate_mutation_rates.R ------------------------------------------
 #
 # DESCRIPTION: Rscript to calculate local [hyper]mutation rate to use it 
 #              further in filtering
 #
-# USAGE: Rscript --vanilla calculate_mutation_rates.R [options]
+# USAGE: Rscript --vanilla 4_calculate_mutation_rates.R [options]
 #
 # OPTIONS: Run in terminal: 
-#          Rscript --vanilla calculate_mutation_rates.R -h 
+#          Rscript --vanilla 4_calculate_mutation_rates.R -h 
 #          to see available options and help message. Or just scroll down to
 #          parser definition.
 #

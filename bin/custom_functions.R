@@ -1,11 +1,11 @@
 #!/usr/bin/env Rscript
-# FILE: 0_functions.R ---------------------------------------------------------
+# FILE: custom_functions.R ----------------------------------------------------
 #
 # DESCRIPTION: All custom created R functions to perform de-novo cancer driver 
 #              genetic element discovery.
 #             
 # USAGE: In R script, insert:
-#        source('0_functions.R')
+#        source('custom_functions.R')
 #
 # OPTIONS: None
 #

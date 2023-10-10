@@ -1,17 +1,17 @@
 #!/usr/bin/env Rscript
-# FILE: 2a_write_mutations_to_mutpanning.R ------------------------------------
+# FILE: 2d_write_mutations_to_mutpanning.R ------------------------------------
 #
 # DESCRIPTION: Formats MAF file containing mutations for one tumor subtype to
 #              MutPanning input format.
 #
-# USAGE: Rscript --vanilla 2a_write_mutations_to_mutpanning.R \
+# USAGE: Rscript --vanilla 2d_write_mutations_to_mutpanning.R \
 #                --maf [path to MAF file with all mutations for that subtype] \
 #                --cancer_subtype [cancer subtype of interest] \
 #                --target_genome_version hg19 \
 #                --output [path to folder to write files to] \
 #
 # OPTIONS: Run 
-#          Rscript --vanilla  2a_write_mutations_to_mutpanning.R -h
+#          Rscript --vanilla  2d_write_mutations_to_mutpanning.R -h
 #          to see the full list of options and their descriptions.
 #
 # REQUIREMENTS: 

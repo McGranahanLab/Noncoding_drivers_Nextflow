@@ -1,17 +1,17 @@
 #!/usr/bin/env Rscript
-# FILE: 2a_write_mutations_to_dndscv.R -------------------------------------
+# FILE: 2c_write_mutations_to_dndscv.R -------------------------------------
 #
 # DESCRIPTION: Formats MAF file containing mutations for one tumor subtype to
 #              dNdScv input format.
 #
-# USAGE: Rscript --vanilla 2a_write_mutations_to_dndscv.R \
+# USAGE: Rscript --vanilla 2c_write_mutations_to_dndscv.R \
 #                --maf [path to MAF file with all mutations for that subtype] \
 #                --cancer_subtype [cancer subtype of interest] \
 #                --target_genome_version hg19 \
 #                --output [path to folder to write files to] \
 #
 # OPTIONS: Run 
-#          Rscript --vanilla  2a_write_mutations_to_dndscv.R -h
+#          Rscript --vanilla  2c_write_mutations_to_dndscv.R -h
 #          to see the full list of options and their descriptions.
 #
 # REQUIREMENTS: 

@@ -4,14 +4,14 @@
 # DESCRIPTION: Formats BED12 file containing genomic regions for one tumor 
 #              subtype to OncodriveFML input format.
 #
-# USAGE: Rscript --vanilla 3e_write_regions_for_oncodrivefml.R \
+# USAGE: Rscript --vanilla 3f_write_regions_for_oncodrivefml.R \
 #                --bed [path to BED12 file with all regions for that subtype] \
 #                --cancer_subtype [cancer subtype of interest] \
 #                --gr_id [list of genomic regions IDs] \
 #                --output [path to folder to write files to] \
 #
 # OPTIONS: Run 
-#          Rscript --vanilla  3e_write_regions_for_oncodrivefml.R -h
+#          Rscript --vanilla  3f_write_regions_for_oncodrivefml.R -h
 #          to see the full list of options and their descriptions.
 #
 # REQUIREMENTS: 
