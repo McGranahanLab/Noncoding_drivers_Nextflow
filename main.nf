@@ -272,8 +272,8 @@ process create_rda_for_dndscv_digdriver {
                                   --target_genome_version ${params.target_genome_version} \
                                   --chain ${chain} \
                                   --cores ${task.cpus} --output '.' \
-                                  1>rda_for_dndscv_digdriver.out \
-                                  2>rda_for_dndscv_digdriver.err
+                                  1>rda_for_dndscv_digdriver_${tumor_subtype}.out \
+                                  2>rda_for_dndscv_digdriver_${tumor_subtype}.err
     """
 }
 
@@ -606,7 +606,9 @@ workflow {
     */
     software = analysis_inv.splitCsv(header: true).map{row -> row.software}
                            .unique()
-    // check that all needed files are present
+    /*
+    This code makes nextflow never finish
+     check that all needed files are present
     software.map { it ->
         if (it == 'digdriver') {
             Channel.fromPath(params.digdriver_models_inventory, checkIfExists: true)
@@ -630,7 +632,8 @@ workflow {
                                                    checkIfExists: true)
                                          .ifEmpty { exit 1, "[ERROR]: oncodrivefml_config not found" }
         }
-    } 
+    }*/
+     
     // now all the files needed for individual software could be loaded via
     // channel_from_params_path function. If file does not exist, it will just 
     // create an empty file & continue 
