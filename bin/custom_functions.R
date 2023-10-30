@@ -23,6 +23,7 @@ box::use(data.table[...])
 box::use(GenomeInfoDb[...])
 box::use(GenomicRanges[...])
 box::use(rtracklayer[...])
+box::use(utils[...])
 
 # GLOBAL ARGUMENTS ------------------------------------------------------------
 #' @export

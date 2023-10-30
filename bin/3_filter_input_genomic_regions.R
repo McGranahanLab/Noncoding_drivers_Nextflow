@@ -32,6 +32,7 @@ suppressWarnings(suppressPackageStartupMessages(library(GenomicRanges)))
 suppressWarnings(suppressPackageStartupMessages(library(plyranges)))
 suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
 suppressWarnings(suppressPackageStartupMessages(library(strex)))
+suppressWarnings(suppressPackageStartupMessages(library(utils)))
 options(scipen = 999)
 
 # FUNCTIONS: conversion to txdb -----------------------------------------------
