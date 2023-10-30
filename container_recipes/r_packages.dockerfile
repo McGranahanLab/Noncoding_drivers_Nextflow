@@ -6,9 +6,9 @@ ARG DEBCONF_NONINTERACTIVE_SEEN=true
 
 # install R v 4.3.0, CRAN packages & BioConductor packages
 # For BioConductor packages, version is controlled though BiocManager 
-# version (3.17): GenomicFeatures v1.52.2, GenomicRanges v1.52.0 
+# version (3.17): biomaRt v2.56.1 GenomicFeatures v1.52.2, GenomicRanges v1.52.0
 # org.Hs.eg.db v3.17.0, BSgenome.Hsapiens.UCSC.hg19 v1.4.3
-# TxDb.Hsapiens.UCSC.hg19.knownGene v3.2.2
+# TxDb.Hsapiens.UCSC.hg19.knownGene v3.2.2, TxDb.Hsapiens.UCSC.hg38.knownGene v3.17.0
 # VariantAnnotation v1.46.0, EmpiricalBrownsMethod v1.28.0
 RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
                 wget vim build-essential software-properties-common \
@@ -38,12 +38,17 @@ RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
     && Rscript -e "devtools::install_version('dplyr', version = '1.1.3', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('plyr', version = '1.8.8', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('poolr', version = '1.1-1', repos = 'http://cran.us.r-project.org')" \
+    && Rscript -e "devtools::install_version('poilog', version = '0.4.2', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('reshape2', version = '1.4.4', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('R.utils', version = '2.12.2', repos = 'http://cran.us.r-project.org')" \
+    && Rscript -e "devtools::install_version('seqinr', version = '4.2-30', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('strex', version = '1.6.0', repos = 'http://cran.us.r-project.org')" \
+    && Rscript -e "BiocManager::install(c('biomaRt'), version = '3.17')" \
     && Rscript -e "BiocManager::install(c('GenomicFeatures', 'GenomicRanges'), version = '3.17')" \
     && Rscript -e "BiocManager::install(c('maftools', 'plyranges', 'rtracklayer'), version = '3.17')" \
-    && Rscript -e "BiocManager::install(c('org.Hs.eg.db', 'BSgenome.Hsapiens.UCSC.hg19', 'TxDb.Hsapiens.UCSC.hg19.knownGene'), version = '3.17')" \
+    && Rscript -e "BiocManager::install(c('org.Hs.eg.db', 'BSgenome.Hsapiens.UCSC.hg19'), version = '3.17')" \
+    && Rscript -e "BiocManager::install(c('TxDb.Hsapiens.UCSC.hg19.knownGene', 'TxDb.Hsapiens.UCSC.hg38.knownGene'), version = '3.17')" \
     && Rscript -e "BiocManager::install(c('VariantAnnotation', 'EmpiricalBrownsMethod'), version = '3.17')"  \
-    && Rscript -e "Sys.setenv(TAR = '/bin/tar');devtools::install_github('im3sanger/dndscv@1b39f8267d320a9fbbd7547c7e71e2d5e133ba3e')" \
+    && git clone https://github.com/marialitovchenko/dNdScv_0.1.0_indel.git \
+    && Rscript -e "install.packages('dNdScv_0.1.0_indel', repos = NULL, type = 'source')" \
     && Rscript -e "devtools::install_github('NKI-CCB/DISCOVER/R@r_v0.9.4')"
