@@ -10,8 +10,11 @@ nextflow.enable.dsl=2
     Notes:
 */
 
-import { PREPARE_INPUT_GENOMIC_REGIONS_FILES } from 'subworkflows/prepare_input_genomic_resions_files.nf'
-import { PREPARE_INPUT_MUTATION_FILES } from 'subworkflows/prepare_input_mutations_files.nf'
+/* ----------------------------------------------------------------------------
+* Include workflows
+*----------------------------------------------------------------------------*/
+include { PREPARE_INPUT_GENOMIC_REGIONS_FILES } from './subworkflows/prepare_input_genomic_resions_files.nf'
+include { PREPARE_INPUT_MUTATION_FILES } from './subworkflows/prepare_input_mutations_files.nf'
 
 /* ----------------------------------------------------------------------------
 * Custom functions
@@ -146,29 +149,31 @@ workflow {
     /* 
         Step 2: create input mutations files
     */
-    input_mutations = PREPARE_INPUT_MUTATION_FILES (analysis_inv, patients_inv,
-                                                    blacklist_inv, 
-                                                    target_genome_fasta, 
-                                                    target_genome_chr_len, 
-                                                    chain,
-                                                    inventories_pass).out
-
+    PREPARE_INPUT_MUTATION_FILES (analysis_inv, patients_inv, blacklist_inv,
+                                  target_genome_fasta, target_genome_chr_len,
+                                  chain, inventories_pass)
     /* 
         Step 3: create input genomic regions files
     */
-    input_regions = PREPARE_INPUT_GENOMIC_REGIONS_FILES (analysis_inv, 
-                                                         blacklist_inv,
-                                                         target_genome_fasta,
-                                                         target_genome_chr_len, 
-                                                         chain, 
-                                                         inventories_pass).out
+    PREPARE_INPUT_GENOMIC_REGIONS_FILES (analysis_inv, blacklist_inv,
+                                         target_genome_fasta,
+                                         target_genome_chr_len, chain,
+                                         inventories_pass)
 }
 
 // inform about completition
 workflow.onComplete {
-    if ( workflow.success ) {
-      log.info "[$workflow.complete] >> Script finished SUCCESSFULLY after $workflow.duration"
-    } else {
-      log.info "[$workflow.complete] >> Script finished with ERRORS after $workflow.duration"
-    }
+    println ( workflow.success ? """
+        Pipeline execution summary
+        ---------------------------
+        Completed at: ${workflow.complete}
+        Duration    : ${workflow.duration}
+        Success     : ${workflow.success}
+        workDir     : ${workflow.workDir}
+        exit status : ${workflow.exitStatus}
+        """ : """
+        Failed: ${workflow.errorReport}
+        exit status : ${workflow.exitStatus}
+        """
+    )
 }
