@@ -58,517 +58,6 @@ process check_inventories {
     """
 }
 
-process filter_input_mutations {
-    tag "$tumor_subtype"
-
-    input:
-    tuple val(inventory_check_res), val(tumor_subtype),
-          path(patients_inventory_path), path(analysis_inventory_path),
-          path(blacklist_inventory_path), path(target_genome_fasta),
-          path(target_genome_chr_len), path(chain)
-
-    output:
-    tuple val(tumor_subtype), path('*.maf'), emit: mutations
-    tuple val(tumor_subtype), path('hypermutated*'), optional: true, emit: hypermutant
-    tuple path('*.out'), path('*.err'), emit: logs
-
-    script:
-    """ 
-    OUT_FILE='inputMutations-'${tumor_subtype}'-'${params.target_genome_version}'.maf'
-    2_filter_input_mutations.R --inventory_patients ${patients_inventory_path} \
-                               --inventory_analysis ${analysis_inventory_path} \
-                               --inventory_blacklisted ${blacklist_inventory_path} \
-                               --cancer_subtype ${tumor_subtype} \
-                               --min_depth ${params.min_depth} \
-                               --min_tumor_vac ${params.min_tumor_vac} \
-                               --min_tumor_vaf ${params.min_tumor_vaf} \
-                               --max_germline_vaf ${params.max_germline_vaf} \
-                               --max_germline_vac ${params.max_germline_vac} \
-                               --max_n_vars ${params.max_n_vars} \
-                               --target_genome_version ${params.target_genome_version} \
-                               --target_genome_path ${target_genome_fasta} \
-                               --target_genome_chr_len ${target_genome_chr_len} \
-                               --chain ${chain} --output \$OUT_FILE  \
-                               --cores ${task.cpus} \
-                               1>filter_mutations_${tumor_subtype}.out \
-                               2>filter_mutations_${tumor_subtype}.err
-    
-    """
-}
-
-process write_mutations_for_chasmplus {
-    tag "$tumor_subtype"
-
-    input:
-    tuple val(tumor_subtype), val(software), path(maf)
-
-    output:
-    tuple val(tumor_subtype), path('inputMutations*')
-
-    when:
-    software == 'chasmplus'
-
-    script:
-    """
-    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
-    2a_write_mutations_for_chasmplus.R --maf ${maf} \
-                                       --cancer_subtype ${tumor_subtype} \
-                                       --output \$OUT_FILE
-    """
-}
-
-process write_mutations_for_digdriver {
-    tag "$tumor_subtype"
-
-    input:
-    tuple val(tumor_subtype), val(software), path(maf)
-
-    output:
-    tuple val(tumor_subtype), path('inputMutations*')
-
-    when:
-    software == 'digdriver'
-
-    script:
-    """
-    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
-    2b_write_mutations_for_digdriver.R --maf ${maf} \
-                                       --cancer_subtype ${tumor_subtype} \
-                                       --output \$OUT_FILE
-    """
-}
-
-process write_mutations_for_dndscv {
-    tag "$tumor_subtype"
-
-    input:
-    tuple val(tumor_subtype), val(software), path(maf)
-
-    output:
-    tuple val(tumor_subtype), path('inputMutations*')
-
-    when:
-    software == 'dndscv'
-
-    script:
-    """
-    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
-    2c_write_mutations_for_dndscv.R --maf ${maf} \
-                                    --cancer_subtype ${tumor_subtype} \
-                                    --output \$OUT_FILE
-    """
-}
-
-
-process write_mutations_for_mutpanning {
-    tag "$tumor_subtype"
-
-    input:
-    tuple val(tumor_subtype), val(software), path(maf)
-
-    output:
-    tuple val(tumor_subtype), path('inputMutations*'), 
-          path('patientsInv*')
-
-    when:
-    software == 'mutpanning'
-
-    script:
-    """
-    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
-    OUT_INV='patientsInv-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
-    2d_write_mutations_for_mutpanning.R --maf ${maf} \
-                                        --cancer_subtype ${tumor_subtype} \
-                                        --output \$OUT_FILE \
-                                        --output_inventory \$OUT_INV
-    """
-}
-
-process write_mutations_for_nbr {
-    tag "$tumor_subtype"
-
-    input:
-    tuple val(tumor_subtype), val(software), path(maf)
-
-    output:
-    tuple val(tumor_subtype), path('inputMutations*')
-
-    when:
-    software == 'nbr'
-
-    script:
-    """
-    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
-    2e_write_mutations_for_nbr.R --maf ${maf} \
-                                 --cancer_subtype ${tumor_subtype} \
-                                 --output \$OUT_FILE
-    """
-}
-
-process write_mutations_for_oncodrivefml {
-    tag "$tumor_subtype"
-
-    input:
-    tuple val(tumor_subtype), val(software), path(maf)
-
-    output:
-    tuple val(tumor_subtype), path('inputMutations*')
-
-    when:
-    software == 'oncodrivefml'
-
-    script:
-    """
-    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
-    2f_write_mutations_for_oncodrivefml.R --maf ${maf} \
-                                          --cancer_subtype ${tumor_subtype} \
-                                          --output \$OUT_FILE
-    """
-}
-
-process filter_genomic_regions {
-    input:
-    tuple val(inventory_check_res), path(analysis_inventory_path),
-          path(blacklist_inventory_path), path(target_genome_fasta),
-          path(target_genome_chr_len), path(chain)
-
-    output:
-    path('*.bed', emit: bed)
-    tuple path('*.out'), path('*.err'), emit: logs
-
-    script:
-    """
-    3_filter_input_genomic_regions.R --inventory_analysis ${analysis_inventory_path} \
-                                     --inventory_blacklisted ${blacklist_inventory_path} \
-                                     --target_genome_path ${target_genome_fasta} \
-                                     --target_genome_chr_len ${target_genome_chr_len} \
-                                     --target_genome_version ${params.target_genome_version} \
-                                     --chain ${chain} \
-                                     --ignore_strand ${params.ignore_strand} \
-                                     --min_reg_len ${params.min_reg_len} \
-                                     --output '.' --cores ${task.cpus} \
-                                     1>filter_genomic_regions.out \
-                                     2>filter_genomic_regions.err
-    """
-}
-
-process create_rda_for_dndscv_digdriver {
-    tag "$tumor_subtype-dndscv-digdriver-rda"
-
-    input:
-    tuple val(tumor_subtype), path(gtf), val(gtf_genome_version), path(bed), 
-          path(target_genome_fasta), path(chain)
-
-    output:
-    tuple val(tumor_subtype), path("*NCBI.Rda"), path("*UCSC.Rda"), emit: rda
-    tuple path('*.out'), path('*.err'), emit: logs
-    
-    script:
-    """
-    gtf_gv=`echo ${gtf_genome_version} | sed 's/\\[//g' | sed 's/,//g' | sed 's/\\]//g'`
-    3c_write_regions_for_dndscv.R --gtf ${gtf} --gtf_genomes \$gtf_gv \
-                                  --cancer_subtype ${tumor_subtype} \
-                                  --target_genome_path ${target_genome_fasta}\
-                                  --target_genome_version ${params.target_genome_version} \
-                                  --chain ${chain} \
-                                  --cores ${task.cpus} --output '.' \
-                                  1>rda_for_dndscv_digdriver_${tumor_subtype}.out \
-                                  2>rda_for_dndscv_digdriver_${tumor_subtype}.err
-    """
-}
-
-process write_regions_for_digdriver {
-    tag "$tumor_subtype-$software"
-
-    input:
-    tuple val(tumor_subtype), val(software), val(gr), path(bed)
-
-    output:
-    path('*.csv')
-
-    when:
-    software == 'digdriver'
-
-    script:
-    """
-    gr_parsed=`echo ${gr} | sed 's/\\[//g' | sed 's/,//g' | sed 's/\\]//g'`
-    IFS=' ' read -r -a gr_parsed <<< "\$gr_parsed"
-
-    for i in "\${!gr_parsed[@]}"; do
-        oneGR="\${gr_parsed[\$i]}"
-        outFileOneGR='inputGR-'${tumor_subtype}'-digdriver-'\$oneGR'-'${params.target_genome_version}'.csv'
-        grep -w \$oneGR ${bed} > \$outFileOneGR
-        # digdriver requires NCBI region format
-        sed -i 's/^chr//g' \$outFileOneGR
-    done
-    """
-}
-
-process write_regions_for_nbr {
-    tag "$tumor_subtype-$software"
-
-    input:
-    tuple val(tumor_subtype), val(software), val(gr), path(bed)
-
-    output:
-    path('*.csv')
-
-    when:
-    software == 'nbr'
-
-    script:
-    """
-    gr_parsed=`echo ${gr} | sed 's/\\[//g' | sed 's/,//g' | sed 's/\\]//g'`
-    3e_write_regions_for_nbr.R --bed ${bed} --gr_id \$gr_parsed \
-                               --cancer_subtype ${tumor_subtype} \
-                               --output '.'
-    """
-}
-
-process write_regions_for_oncodrivefml {
-    tag "$tumor_subtype-$software"
-
-    input:
-    tuple val(tumor_subtype), val(software), val(gr), path(bed)
-
-    output:
-    path('*.csv')
-
-    when:
-    software == 'oncodrivefml'
-
-    script:
-    """
-    gr_parsed=`echo ${gr} | sed 's/\\[//g' | sed 's/,//g' | sed 's/\\]//g'`
-    3f_write_regions_for_oncodrivefml.R --bed ${bed} --gr_id \$gr_parsed \
-                                        --cancer_subtype ${tumor_subtype} \
-                                        --output '.'
-    """
-}
-
-process calculate_mutation_rates {
-    tag "$tumor_subtype"
-
-    input:
-    tuple val(tumor_subtype), path(bed_path), path(maf_path), 
-          path(target_genome_chr_len), path(gene_name_synonyms),
-          path(varanno_conversion_table)
-
-    output:
-    tuple val(tumor_subtype), path('*meanMutRatePerGR.csv'), 
-          path('*mutMapToGR.csv'), path('*varCatEnrich.csv')
-
-    script:
-    """
-    4_calculate_mutation_rates.R --tumor_subtype ${tumor_subtype} \
-                                 --variants ${maf_path} \
-                                 --genomic_regions ${bed_path} \
-                                 --gene_name_synonyms ${gene_name_synonyms} \
-                                 --bin_len ${params.bin_len} \
-                                 --target_genome_version ${params.target_genome_version} \
-                                 --target_genome_chr_len ${target_genome_chr_len} \
-                                 --calc_synonymous ${params.calc_synonymous} \
-                                 --cdsAcceptedClass ${params.cdsAcceptedClass} \
-                                 --ncAcceptedClass ${params.ncAcceptedClass} \
-                                 --varanno_conversion_table ${varanno_conversion_table} \
-                                 --annotation_failed_code ${params.annotation_failed_code} \
-                                 --output 'mutRate-'${tumor_subtype}'-'
-    """
-}
-
-
-
-process digdriver {
-    tag "$tumor_subtype-$gr_id"
-
-    input:
-    tuple val(tumor_subtype), val(gr_id), val(software), path(regions), 
-          path(ncbi_rda), path(ucsc_rda), path(mutations), path(digdriver_model), 
-          path(digdriver_elements), path(target_genome_fasta)
-
-    output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
-    tuple path('*.out'), path('*.err'), emit: logs
-
-    script:
-    """
-    MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
-    ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
-
-    # a unique ID to use in all further commands
-    RUN_CODE=${tumor_subtype}'-'${gr_id}'-'${params.target_genome_version}
-    OUT_FILE=${software}"-results-"\$RUN_CODE'.csv'
-
-    # copy model as it will be modified during the run
-    DIG_MODEL='digdriver-model-'\$RUN_CODE'.h5'
-    cp ${digdriver_model} \$DIG_MODEL
-    # make it writable
-    chmod 700 \$DIG_MODEL
-
-    # path to element_data.h5 referred in DIGdriver tutorials 
-    DIG_ELEMENTS='digdriver-elements-'\$RUN_CODE'.h5'
-    cp ${digdriver_elements} \$DIG_ELEMENTS
-    chmod 700 \$DIG_ELEMENTS
-
-    # STEP 1: annotate the mutation file 
-    ANNOT_VARIANTS=${mutations}'-DIGannotated.csv'
-    touch \$ANNOT_VARIANTS
-    DigPreprocess.py annotMutationFile --n-procs ${task.cpus} \
-        ${mutations} ${ncbi_rda} ${target_genome_fasta} \$ANNOT_VARIANTS \
-        1>\$MSG_FILE 2>\$ERR_FILE
-
-    # STEP 2: preprocess the nucleotide contexts of the annotations
-    DigPreprocess.py preprocess_element_model \$DIG_ELEMENTS \$DIG_MODEL \
-        ${target_genome_fasta} \$RUN_CODE --f-bed ${regions} \
-        1>>\$MSG_FILE 2>>\$ERR_FILE
-
-    # STEP 3: pretrain a neutral mutation model 
-    DigPretrain.py elementModel \$DIG_MODEL \$DIG_ELEMENTS \$RUN_CODE \
-        1>>\$MSG_FILE 2>>\$ERR_FILE
-
-    # geneDriver is not used even for CDS, because it can handle only SNP
-    DigDriver.py elementDriver \$ANNOT_VARIANTS \$DIG_MODEL \$RUN_CODE \
-        --f-bed ${regions} --outdir '.' --outpfx \$RUN_CODE \
-        1>>\$MSG_FILE 2>>\$ERR_FILE
-    mv \$RUN_CODE'.results.txt' \$OUT_FILE
-    """
-}
-
-process dndscv {
-    tag "$tumor_subtype-$gr_id"
-
-    input:
-    tuple val(tumor_subtype), val(gr_id), val(software), path(rda_ncbi),
-          path(rda_ucsc), path(mutations)
-
-    output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
-    path "*global.csv", emit: global
-    path "*Rds", emit: rds
-    tuple path('*.out'), path('*.err'), emit: logs
-
-    script:
-    """
-    OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
-    OUT_GLOBAL_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'_global.csv'
-    OUT_RDS=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.Rds'
-    MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
-    ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
-
-    rda=${rda_ncbi}
-    mut_format=`head -1 ${mutations}`
-    if [[ \$mut_format == "chr*" ]];
-    then
-        rda=${rda_ucsc}
-    fi
-
-    run_dndscv.R --with_covariates T --genomic_regions \$rda \
-                 --variants ${mutations} --computeCI T --output \$OUT_FILE \
-                 --outputGlobal \$OUT_GLOBAL_FILE --outputRds \$OUT_RDS \
-                 1>\$MSG_FILE 2>\$ERR_FILE
-    """
-}
-
-process mutpanning {
-    tag "$tumor_subtype-$gr_id"
-
-    input:
-    tuple val(tumor_subtype), val(gr_id), val(software), path(mutations),
-          path(mutpan_inv)
-
-    output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
-    tuple path('*.out'), path('*.err'), emit: logs
-
-    script:
-    """
-    OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
-    MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
-    ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
-
-    mpPath=/bin/MutPanningV2/commons-math3-3.6.1.jar:/bin/MutPanningV2/jdistlib-0.4.5-bin.jar:/bin/MutPanningV2
-    java -Xmx${params.mutpanning_java_memory} -classpath \$mpPath MutPanning "." \
-        $mutations $mutpan_inv "/bin/MutPanningV2/Hg19/" \
-        1>\$MSG_FILE 2>\$ERR_FILE
-
-    cpFrom=`find SignificanceRaw | grep -v Uniform | grep '.txt\$'`
-    if [[ -f "\$cpFrom" ]]; then
-        cp \$cpFrom \$OUT_FILE
-    else
-        echo 'MutPanning run on '${tumor_subtype}" "${gr_id}' did not yield results.'
-        echo 'It can happen if your cohort is too small. Will create an empty file.'
-        echo -e "Name\tTargetSize\tTargetSizeSyn\tCount\tCountSyn\tSignificanceSyn\tFDRSyn\tSignificance\tFDR" > \$OUT_FILE
-    fi
-    """
-}
-
-process nbr {
-    tag "$tumor_subtype-$gr_id"
-
-    input:
-    tuple val(tumor_subtype), val(gr_id), val(software), path(regions), 
-          path(mutations), path(target_genome_fasta), path(nbr_neutral_bins),
-          path(nbr_neutral_trinucfreq), path(nbr_driver_regs)
-    
-    output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
-    tuple path('*.out'), path('*.err'), emit: logs
-
-    script:
-    """
-    OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
-    MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
-    ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
-
-    NBR_create_intervals.R --region_bed ${regions} \
-                           --genomeFile ${target_genome_fasta} \
-                           1>\$MSG_FILE 2>\$ERR_FILE
-
-    regionsFile=`echo ${regions}| sed 's/.csv\$/.csv.regions/g'`
-    triNuclregionsFile=`echo ${regions} | sed 's/.csv\$/.csv.txt/g'`
-
-    NBR.R --mutations_file ${mutations} --target_regions_path \$regionsFile \
-          --target_regions_trinucfreqs_path \$triNuclregionsFile \
-          --genomeFile ${target_genome_fasta} \
-          --max_num_muts_perRegion_perSample 2 --unique_indelsites_FLAG 1 \
-          --gr_drivers ${nbr_driver_regs} \
-          --regions_neutralbins_file ${nbr_neutral_bins} \
-          --trinucfreq_neutralbins_file ${nbr_neutral_trinucfreq} \
-          --out_prefix \$OUT_FILE \
-          1>>\$MSG_FILE 2>>\$ERR_FILE
-
-    mv \$OUT_FILE"-Selection_output.txt" \$OUT_FILE 
-    OUT_FILE_BASE=`echo \$OUT_FILE | sed 's/.csv//g'`
-    # mv \$OUT_FILE"-global_mle_subs.Rds" \$OUT_FILE_BASE"-global_mle_subs.Rds" 
-    # mv \$OUT_FILE"-globalRates.csv" \$OUT_FILE_BASE"-globalRates.csv"
-    """
-}
-
-process oncodrivefml {
-    tag "$tumor_subtype-$gr_id"
-
-    input:
-    tuple val(tumor_subtype), val(gr_id), val(software), path(regions),
-          path(mutations), path(oncodrivefml_config)
-
-    output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
-    tuple path('*.out'), path('*.err'), emit: logs
-
-    script:
-    """
-    OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
-    MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
-    ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
-
-    oncodrivefml -i ${mutations} -e ${regions} --sequencing wgs \
-                 --configuration ${oncodrivefml_config} \
-                 --output '.'  --cores ${task.cpus} \
-                 1>\$MSG_FILE 2>\$ERR_FILE
-    mv "oncodrivefml-inputMutations-"${tumor_subtype}"-"${params.target_genome_version}"-oncodrivefml.tsv" \$OUT_FILE
-    """
-}
-
 /* ----------------------------------------------------------------------------
 * Workflows
 *----------------------------------------------------------------------------*/
@@ -608,7 +97,7 @@ workflow {
                            .unique()
     /*
     This code makes nextflow never finish
-     check that all needed files are present
+    check that all needed files are present
     software.map { it ->
         if (it == 'digdriver') {
             Channel.fromPath(params.digdriver_models_inventory, checkIfExists: true)
@@ -699,6 +188,9 @@ workflow {
                                         .unique()
                                         .groupTuple(by: [0, 1])
                                         .combine(filtered_regions, by: 0)
+    digdriver_regions = write_regions_for_digdriver(tumor_subtypes_and_gr)
+    nbr_regions = write_regions_for_nbr(tumor_subtypes_and_gr)
+    oncodrivefml_regions = write_regions_for_oncodrivefml(tumor_subtypes_and_gr)
     gtf_for_rda = analysis_inv.splitCsv(header: true)
                               .map{row -> tuple(row.tumor_subtype, row.software, 
                                                 row.gr_code, row.gr_file, row.gr_genome)}
@@ -714,9 +206,6 @@ workflow {
                               .unique()
                               .groupTuple(by: [0])
                               .combine(filtered_regions, by: [0])   
-    digdriver_regions = write_regions_for_digdriver(tumor_subtypes_and_gr)
-    nbr_regions = write_regions_for_nbr(tumor_subtypes_and_gr)
-    oncodrivefml_regions = write_regions_for_oncodrivefml(tumor_subtypes_and_gr)
     dndscv_digdriver_rda = create_rda_for_dndscv_digdriver(gtf_for_rda.combine(target_genome_fasta)
                                                                       .combine(chain))
     /* 
@@ -737,6 +226,55 @@ workflow {
                                                     .combine(digdriver_inv, by: [0])
                                                     .combine(digdriver_elements)
                                                     .combine(target_genome_fasta))
+    /* 
+        Step 4c: run dNdScv
+    */
+    dndscv_results = dndscv(analysis_inv.splitCsv(header: true)
+                                        .map{row -> tuple(row.tumor_subtype, row.software, row.gr_id)}
+                                        .unique()
+                                        .map { it ->
+                                            if (it[1] == 'dndscv') {
+                                                return tuple(it[0], it[2], 'dndscv')
+                                            }
+                                        }
+                                        .combine(dndscv_digdriver_rda.rda, by: [0])
+                                        .combine(dndscv_mutations, by: [0]))
+    /* 
+        Step 4d: run MutPanning
+    */
+    mutpanning_results = mutpanning(analysis_inv.splitCsv(header: true)
+                                                .map{row -> tuple(row.tumor_subtype, row.software, row.gr_id)}
+                                                .unique()
+                                                .map { it ->
+                                                    if (it[1] == 'mutpanning') {
+                                                         return tuple(it[0], it[2], 'mutpanning')
+                                                    }
+                                                }
+                                                .combine(mutpanning_mutations, by: [0]))
+    /* 
+        Step 4e: run NBR
+    */
+    nbr_results = nbr(nbr_regions.flatten()
+                                 .map { it ->
+                                     return tuple(infer_tumor_subtype(it),
+                                                  infer_genomic_region(it), 'nbr',
+                                                  it)
+                                 }
+                                 .combine(nbr_mutations, by: [0])
+                                 .combine(target_genome_fasta)
+                                 .combine(nbr_neutral_bins)
+                                 .combine(nbr_neutral_trinucfreq)
+                                 .combine(nbr_driver_regs))
+    /* 
+        Step 4f: run OncodriveFML
+    */
+    oncodrivefml_results = oncodrivefml(oncodrivefml_regions.flatten()
+                                                            .map { it ->
+                                                               return tuple(infer_tumor_subtype(it),
+                                                                            infer_genomic_region(it),
+                                                                            'oncodrivefml', it)}
+                                                            .combine(oncodrivefml_mutations, by: [0])
+                                                            .combine(oncodrivefml_config))
 }
 
 // inform about completition
