@@ -10,6 +10,9 @@ nextflow.enable.dsl=2
     Notes:
 */
 
+import { PREPARE_INPUT_GENOMIC_REGIONS_FILES } from 'subworkflows/prepare_input_genomic_resions_files.nf'
+import { PREPARE_INPUT_MUTATION_FILES } from 'subworkflows/prepare_input_mutations_files.nf'
+
 /* ----------------------------------------------------------------------------
 * Custom functions
 *----------------------------------------------------------------------------*/
@@ -143,138 +146,22 @@ workflow {
     /* 
         Step 2: create input mutations files
     */
-    // filter mutations
-    tumor_subtypes = analysis_inv.splitCsv(header: true)
-                                 .map{row -> row.tumor_subtype}
-                                 .unique()
-    filtered_mutations = filter_input_mutations(inventories_pass.combine(tumor_subtypes)
-                                                                .combine(patients_inv)
-                                                                .combine(analysis_inv)
-                                                                .combine(blacklist_inv)
-                                                                .combine(target_genome_fasta)
-                                                                .combine(target_genome_chr_len)
-                                                                .combine(chain))
-    // output them in a format suitable to run driver calling tools on
-    tumor_subtypes = analysis_inv.splitCsv(header: true)
-                                 .map{row -> tuple(row.tumor_subtype, row.software)}
-                                 .unique()
-                                 .combine(filtered_mutations.mutations, by: [0])
-    chasmplus_mutations = write_mutations_for_chasmplus(tumor_subtypes)
-    digdriver_mutations = write_mutations_for_digdriver(tumor_subtypes)
-    dndscv_mutations = write_mutations_for_dndscv(tumor_subtypes)
-    mutpanning_mutations = write_mutations_for_mutpanning(tumor_subtypes)
-    nbr_mutations = write_mutations_for_nbr(tumor_subtypes)
-    oncodrivefml_mutations = write_mutations_for_oncodrivefml(tumor_subtypes)
+    input_mutations = PREPARE_INPUT_MUTATION_FILES (analysis_inv, patients_inv,
+                                                    blacklist_inv, 
+                                                    target_genome_fasta, 
+                                                    target_genome_chr_len, 
+                                                    chain,
+                                                    inventories_pass).out
 
     /* 
         Step 3: create input genomic regions files
     */
-    // pre-process regions
-    filtered_regions = filter_genomic_regions(inventories_pass.combine(analysis_inv)
-                                                              .combine(blacklist_inv)
-                                                              .combine(target_genome_fasta)
-                                                              .combine(target_genome_chr_len)
-                                                              .combine(chain)).bed.flatten()
-    filtered_regions.map { it ->
-                           def tumor_subtype = it.name.toString().tokenize('-').get(1)
-                           return tuple(tumor_subtype, it)
-                         }.set{filtered_regions}
-    /* in case set of the same regions is analysed for a lot of tumor subtypes
-       it is faster to create region file for one tumor subtype and then copy 
-       it for the other tumor subtypes (for one software of course). This is 
-       what is done here */
-    tumor_subtypes_and_gr = analysis_inv.splitCsv(header: true)
-                                        .map{row -> tuple(row.tumor_subtype, row.software, row.gr_id)}
-                                        .unique()
-                                        .groupTuple(by: [0, 1])
-                                        .combine(filtered_regions, by: 0)
-    digdriver_regions = write_regions_for_digdriver(tumor_subtypes_and_gr)
-    nbr_regions = write_regions_for_nbr(tumor_subtypes_and_gr)
-    oncodrivefml_regions = write_regions_for_oncodrivefml(tumor_subtypes_and_gr)
-    gtf_for_rda = analysis_inv.splitCsv(header: true)
-                              .map{row -> tuple(row.tumor_subtype, row.software, 
-                                                row.gr_code, row.gr_file, row.gr_genome)}
-                              .unique()
-                              .map { it ->
-                                  if ((it[1] == 'digdriver' || it[1] == 'dndscv') && it[2] == 'CDS') {
-                                      return it
-                                  }
-                              }
-                              .map { it ->
-                                  return tuple(it[0], it[3], it[4])
-                              }
-                              .unique()
-                              .groupTuple(by: [0])
-                              .combine(filtered_regions, by: [0])   
-    dndscv_digdriver_rda = create_rda_for_dndscv_digdriver(gtf_for_rda.combine(target_genome_fasta)
-                                                                      .combine(chain))
-    /* 
-        Step 4b: run DIGdriver
-    */
-    digdriver_inv = digdriver_inv.splitCsv(header: true)
-                                 .map { it ->
-                                     return(tuple(it.tumor_subtype, it.model_file))
-                                 }
-    digdriver_results = digdriver(digdriver_regions.flatten()
-                                                   .map { it ->
-                                                            return tuple(infer_tumor_subtype(it),
-                                                                         infer_genomic_region(it),
-                                                                         'digdriver', it)
-                                                    }
-                                                    .combine(dndscv_digdriver_rda.rda, by: [0])
-                                                    .combine(digdriver_mutations, by: [0])
-                                                    .combine(digdriver_inv, by: [0])
-                                                    .combine(digdriver_elements)
-                                                    .combine(target_genome_fasta))
-    /* 
-        Step 4c: run dNdScv
-    */
-    dndscv_results = dndscv(analysis_inv.splitCsv(header: true)
-                                        .map{row -> tuple(row.tumor_subtype, row.software, row.gr_id)}
-                                        .unique()
-                                        .map { it ->
-                                            if (it[1] == 'dndscv') {
-                                                return tuple(it[0], it[2], 'dndscv')
-                                            }
-                                        }
-                                        .combine(dndscv_digdriver_rda.rda, by: [0])
-                                        .combine(dndscv_mutations, by: [0]))
-    /* 
-        Step 4d: run MutPanning
-    */
-    mutpanning_results = mutpanning(analysis_inv.splitCsv(header: true)
-                                                .map{row -> tuple(row.tumor_subtype, row.software, row.gr_id)}
-                                                .unique()
-                                                .map { it ->
-                                                    if (it[1] == 'mutpanning') {
-                                                         return tuple(it[0], it[2], 'mutpanning')
-                                                    }
-                                                }
-                                                .combine(mutpanning_mutations, by: [0]))
-    /* 
-        Step 4e: run NBR
-    */
-    nbr_results = nbr(nbr_regions.flatten()
-                                 .map { it ->
-                                     return tuple(infer_tumor_subtype(it),
-                                                  infer_genomic_region(it), 'nbr',
-                                                  it)
-                                 }
-                                 .combine(nbr_mutations, by: [0])
-                                 .combine(target_genome_fasta)
-                                 .combine(nbr_neutral_bins)
-                                 .combine(nbr_neutral_trinucfreq)
-                                 .combine(nbr_driver_regs))
-    /* 
-        Step 4f: run OncodriveFML
-    */
-    oncodrivefml_results = oncodrivefml(oncodrivefml_regions.flatten()
-                                                            .map { it ->
-                                                               return tuple(infer_tumor_subtype(it),
-                                                                            infer_genomic_region(it),
-                                                                            'oncodrivefml', it)}
-                                                            .combine(oncodrivefml_mutations, by: [0])
-                                                            .combine(oncodrivefml_config))
+    input_regions = PREPARE_INPUT_GENOMIC_REGIONS_FILES (analysis_inv, 
+                                                         blacklist_inv,
+                                                         target_genome_fasta,
+                                                         target_genome_chr_len, 
+                                                         chain, 
+                                                         inventories_pass).out
 }
 
 // inform about completition
