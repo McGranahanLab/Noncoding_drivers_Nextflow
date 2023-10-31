@@ -126,10 +126,10 @@ printArgs(args)
 
 # Select genes of interest, if required ---------------------------------------
 # load dNdScv data base
-if (is.null(args$refRda)) {
+if (is.null(args$genomic_regions)) {
   data("refcds_hg19", package = "dndscv")
 } else {
-  load(args$refRda)
+  load(args$genomic_regions)
 }
 
 # all genes covered in dNdScv object
@@ -177,7 +177,7 @@ mutsDF <- fread(args$variants, header = T, sep = '\t')
 # Run dNdScv without covariates -----------------------------------------------
 if (!args$with_covariates) {
   results_dNdScvNoCov <- run_dNdScv_ci95(mutsTab = mutsDF, gois = GOIs, 
-                                         CV = NULL, refRda = args$refRda,
+                                         CV = NULL, refRda = args$genomic_regions,
                                          computeCI = args$computeCI)
   # save Rds
   saveRDS(results_dNdScvNoCov, args$outputRds)
@@ -197,10 +197,10 @@ if (args$with_covariates) {
   
   # in order to use covariates with custom RefRda, we need to restrict their 
   # rows to genes which are present in RefRda
-  if (is.null(args$refRda)) {
+  if (is.null(args$genomic_regions)) {
     data("refcds_hg19", package = "dndscv")
   } else {
-    load(args$refRda)
+    load(args$genomic_regions)
   }
   
   genesInRefCDS <- sapply(RefCDS, function(x) x$gene_name)
@@ -209,8 +209,9 @@ if (args$with_covariates) {
   if (length(genesNotInCovs) != 0) {
     stop('[', Sys.time(), '] Genes ', genesNotInCovs, 
          paste(genesNotInCovs, collapse = ', ', ' are listed in the ',
-               'submitted --refRda but are not present in dNdScv covariates ',
-               'table. Run of dNdScv with covariates is not possible.'))
+               'submitted --genomic_regions but are not present in dNdScv ',
+               'covariates table. Run of dNdScv with covariates is not ',
+               'possible.'))
   }
   if (any(genesInRefCDS == 'CDKN2A')) {
     rownames(covs)[rownames(covs) == 'CDKN2A.p14arf'] <- 'CDKN2A'
@@ -219,7 +220,7 @@ if (args$with_covariates) {
   rm(RefCDS, gr_genes)
   
   results_dNdScvCov <- run_dNdScv_ci95(mutsTab = mutsDF, gois = GOIs,
-                                       CV = covs, refRda = args$refRda,
+                                       CV = covs, refRda = args$genomic_regions,
                                        computeCI = args$computeCI)
   # save Rds
   saveRDS(results_dNdScvCov, args$outputRds)
