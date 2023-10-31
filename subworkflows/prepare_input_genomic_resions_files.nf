@@ -37,9 +37,9 @@ workflow PREPARE_INPUT_GENOMIC_REGIONS_FILES {
                                         .combine(filtered_regions, by: 0)
 
     // write regions in software format
-    ch_digdriver_regions = WRITE_REGIONS_FOR_DIGDRIVER(tumor_subtypes_and_gr)
-    ch_nbr_regions = WRITE_REGIONS_FOR_NBR(tumor_subtypes_and_gr)
-    ch_oncodrivefml_regions = WRITE_REGIONS_FOR_ONCODRIVEFML(tumor_subtypes_and_gr)
+    digdriver_regions = WRITE_REGIONS_FOR_DIGDRIVER(tumor_subtypes_and_gr)
+    nbr_regions = WRITE_REGIONS_FOR_NBR(tumor_subtypes_and_gr)
+    oncodrivefml_regions = WRITE_REGIONS_FOR_ONCODRIVEFML(tumor_subtypes_and_gr)
 
     // create Rda files with reference genome information for dNdScv and DIGdriver
     gtf_for_rda = analysis_inv.splitCsv(header: true)
@@ -58,11 +58,11 @@ workflow PREPARE_INPUT_GENOMIC_REGIONS_FILES {
                               .groupTuple(by: [0])
                               .combine(filtered_regions, by: [0])   
     ch_dndscv_digdriver_rda = CREATE_RDA_FOR_DNDSCV_DIGDRIVER(gtf_for_rda.combine(target_genome_fasta)
-                                                                         .combine(chain))
+                                                                         .combine(chain)).rda
 
     emit:
-    digdriver_regions = ch_digdriver_regions
+    digdriver = digdriver_regions
     dndscv_digdriver_rda = ch_dndscv_digdriver_rda
-    nbr_regions = ch_nbr_regions
-    oncodrivefml_regions = ch_oncodrivefml_regions
+    nbr = nbr_regions
+    oncodrivefml = oncodrivefml_regions
 }

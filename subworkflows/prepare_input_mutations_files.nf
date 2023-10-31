@@ -39,18 +39,18 @@ workflow PREPARE_INPUT_MUTATION_FILES {
                                  .map{row -> tuple(row.tumor_subtype, row.software)}
                                  .unique()
                                  .combine(filtered_mutations.mutations, by: [0])
-    ch_chasmplus_mutations = WRITE_MUTATIONS_FOR_CHASMPLUS(tumor_subtypes)
-    ch_digdriver_mutations = WRITE_MUTATIONS_FOR_DIGDRIVER(tumor_subtypes)
-    ch_dndscv_mutations = WRITE_MUTATIONS_FOR_DNDSCV(tumor_subtypes)
-    ch_mutpanning_mutations = WRITE_MUTATIONS_FOR_MUTPANNING(tumor_subtypes)
-    ch_nbr_mutations = WRITE_MUTATIONS_FOR_NBR(tumor_subtypes)
-    ch_oncodrivefml_mutations = WRITE_MUTATIONS_FOR_ONCODRIVEFML(tumor_subtypes)
+    chasmplus_mutations = WRITE_MUTATIONS_FOR_CHASMPLUS(tumor_subtypes)
+    digdriver_mutations = WRITE_MUTATIONS_FOR_DIGDRIVER(tumor_subtypes)
+    dndscv_mutations = WRITE_MUTATIONS_FOR_DNDSCV(tumor_subtypes)
+    mutpanning_mutations = WRITE_MUTATIONS_FOR_MUTPANNING(tumor_subtypes)
+    nbr_mutations = WRITE_MUTATIONS_FOR_NBR(tumor_subtypes)
+    oncodrivefml_mutations = WRITE_MUTATIONS_FOR_ONCODRIVEFML(tumor_subtypes)
 
     emit:
-    chasmplus_mutations = ch_chasmplus_mutations
-    digdriver_mutations = ch_digdriver_mutations
-    dndscv_mutations = ch_dndscv_mutations
-    mutpanning_mutations = ch_mutpanning_mutations
-    nbr_mutations = ch_nbr_mutations
-    oncodrivefml_mutations = ch_nbr_mutations
+    chasmplus = chasmplus_mutations
+    digdriver = digdriver_mutations
+    dndscv = dndscv_mutations
+    mutpanning = mutpanning_mutations
+    nbr = nbr_mutations
+    oncodrivefml = oncodrivefml_mutations
 }

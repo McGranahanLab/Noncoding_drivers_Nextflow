@@ -15,6 +15,11 @@ nextflow.enable.dsl=2
 *----------------------------------------------------------------------------*/
 include { PREPARE_INPUT_GENOMIC_REGIONS_FILES } from './subworkflows/prepare_input_genomic_resions_files.nf'
 include { PREPARE_INPUT_MUTATION_FILES } from './subworkflows/prepare_input_mutations_files.nf'
+include { RUN_DIGDRIVER } from './subworkflows/call_driver_genes.nf'
+include { RUN_DNDSCV } from './subworkflows/call_driver_genes.nf'
+include { RUN_MUTPANNING } from './subworkflows/call_driver_genes.nf'
+include { RUN_NBR } from './subworkflows/call_driver_genes.nf'
+include { RUN_ONCODRIVEFML } from './subworkflows/call_driver_genes.nf'
 
 /* ----------------------------------------------------------------------------
 * Custom functions
@@ -30,16 +35,6 @@ def channel_from_params_path (staticPath) {
         result = Channel.fromPath(staticPath, checkIfExists: true)
                         .ifEmpty { exit 1, "[ERROR]: " + staticPath + "file not found"}
     } 
-    return result
-}
-
-def infer_tumor_subtype (filePath) {
-    result = filePath.name.toString().tokenize('-').get(1)
-    return result
-}
-
-def infer_genomic_region(filePath) {
-    result = filePath.name.toString().tokenize('-').get(3)
     return result
 }
 
@@ -159,6 +154,30 @@ workflow {
                                          target_genome_fasta,
                                          target_genome_chr_len, chain,
                                          inventories_pass)
+
+    /* 
+        Step 4b: run DIGdriver
+    
+    RUN_DIGDRIVER (digdriver_inv, 
+                   PREPARE_INPUT_MUTATION_FILES.out.digdriver,
+                   PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.digdriver,
+                   PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.dndscv_digdriver_rda,
+                   digdriver_elements, target_genome_fasta)*/
+    /* 
+        Step 4c: run dNdScv
+    */
+    RUN_DNDSCV (analysis_inv,
+                PREPARE_INPUT_MUTATION_FILES.out.dndscv,
+                PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.dndscv_digdriver_rda)
+    /* 
+        Step 4d: run MutPanning
+    */
+    /* 
+        Step 4e: run NBR
+    */
+    /* 
+        Step 4f: run OncodriveFML
+    */
 }
 
 // inform about completition
