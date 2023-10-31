@@ -76,7 +76,7 @@ process DNDSCV {
     ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
 
     rda=${rda_ncbi}
-    mut_format=`head -1 ${mutations}`
+    mut_format=`head -2 ${mutations} | tail -n 1 | cut -f2`
     if [[ \$mut_format == "chr*" ]];
     then
         rda=${rda_ucsc}
