@@ -172,6 +172,8 @@ workflow {
     /* 
         Step 4d: run MutPanning
     */
+    RUN_MUTPANNING (analysis_inv, 
+                    PREPARE_INPUT_MUTATION_FILES.out.mutpanning)
     /* 
         Step 4e: run NBR
     */
