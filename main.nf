@@ -177,6 +177,10 @@ workflow {
     /* 
         Step 4e: run NBR
     */
+    RUN_NBR (PREPARE_INPUT_MUTATION_FILES.out.nbr,
+             PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.nbr,
+             target_genome_fasta, nbr_neutral_bins,
+             nbr_neutral_trinucfreq, nbr_driver_regs)
     /* 
         Step 4f: run OncodriveFML
     */
