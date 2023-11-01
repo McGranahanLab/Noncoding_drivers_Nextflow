@@ -47,6 +47,8 @@ workflow PREPARE_INPUT_MUTATION_FILES {
     oncodrivefml_mutations = WRITE_MUTATIONS_FOR_ONCODRIVEFML(tumor_subtypes)
 
     emit:
+    maf = filtered_mutations.mutations
+    hypermutant = filtered_mutations.hypermutant
     chasmplus = chasmplus_mutations
     digdriver = digdriver_mutations
     dndscv = dndscv_mutations

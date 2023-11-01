@@ -15,6 +15,7 @@ nextflow.enable.dsl=2
 *----------------------------------------------------------------------------*/
 include { PREPARE_INPUT_GENOMIC_REGIONS_FILES } from './subworkflows/prepare_input_genomic_resions_files.nf'
 include { PREPARE_INPUT_MUTATION_FILES } from './subworkflows/prepare_input_mutations_files.nf'
+include { CALCULATE_MUTATION_RATES } from './modules/mutation_rates.nf'
 include { RUN_DIGDRIVER } from './subworkflows/call_driver_genes.nf'
 include { RUN_DNDSCV } from './subworkflows/call_driver_genes.nf'
 include { RUN_MUTPANNING } from './subworkflows/call_driver_genes.nf'
@@ -154,35 +155,42 @@ workflow {
                                          target_genome_fasta,
                                          target_genome_chr_len, chain,
                                          inventories_pass)
-
     /* 
-        Step 4b: run DIGdriver
-    
+        Step 4: calculate mutation rates
+    */
+    mut_rates = CALCULATE_MUTATION_RATES (PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.bed
+                                          .combine(PREPARE_INPUT_MUTATION_FILES.out.maf, by: [0])
+                                          .combine(target_genome_chr_len)
+                                          .combine(gene_name_synonyms)
+                                          .combine(varanno_conversion_table))
+    /* 
+        Step 5b: run DIGdriver
+    */
     RUN_DIGDRIVER (digdriver_inv, 
                    PREPARE_INPUT_MUTATION_FILES.out.digdriver,
                    PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.digdriver,
                    PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.dndscv_digdriver_rda,
-                   digdriver_elements, target_genome_fasta)*/
+                   digdriver_elements, target_genome_fasta)
     /* 
-        Step 4c: run dNdScv
+        Step 5c: run dNdScv
     */
     RUN_DNDSCV (analysis_inv,
                 PREPARE_INPUT_MUTATION_FILES.out.dndscv,
                 PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.dndscv_digdriver_rda)
     /* 
-        Step 4d: run MutPanning
+        Step 5d: run MutPanning
     */
     RUN_MUTPANNING (analysis_inv, 
                     PREPARE_INPUT_MUTATION_FILES.out.mutpanning)
     /* 
-        Step 4e: run NBR
+        Step 5e: run NBR
     */
     RUN_NBR (PREPARE_INPUT_MUTATION_FILES.out.nbr,
              PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.nbr,
              target_genome_fasta, nbr_neutral_bins,
              nbr_neutral_trinucfreq, nbr_driver_regs)
     /* 
-        Step 4f: run OncodriveFML
+        Step 5f: run OncodriveFML
     */
 }
 

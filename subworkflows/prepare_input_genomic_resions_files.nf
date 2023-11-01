@@ -61,6 +61,7 @@ workflow PREPARE_INPUT_GENOMIC_REGIONS_FILES {
                                                                          .combine(chain)).rda
 
     emit:
+    bed = filtered_regions
     digdriver = digdriver_regions
     dndscv_digdriver_rda = ch_dndscv_digdriver_rda
     nbr = nbr_regions
