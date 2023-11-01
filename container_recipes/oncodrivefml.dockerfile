@@ -22,8 +22,7 @@ RUN apt-get -y update \
                  pytz==2020.1 PyYAML==5.3.1 ruamel-yaml==0.15.87 \
                  scikit-learn==0.23.2 scipy==1.1.0 six==1.15.0 \
                  sortedcontainers==2.2.2 statsmodels==0.9.0 \
-                 threadpoolctl==2.1.0 tornado==6.0.4 tqdm==4.42.1 \
-    && echo "export LC_ALL=C.UTF-8" >> ~/.bashrc \
-    && echo "export LANG=C.UTF-8" >> ~/.bashrc
+                 threadpoolctl==2.1.0 tornado==6.0.4 tqdm==4.42.1
 
-CMD source /root/.bashrc
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
