@@ -38,6 +38,7 @@ From: ubuntu:22.04
   cd ../
 
   # CRAN packages
+  apt-get install -y r-cran-devtools
   Rscript -e "install.packages('devtools', repos = 'http://cran.us.r-project.org')"
   Rscript -e "devtools::install_version('devtools', version = '2.4.5', repos = 'http://cran.us.r-project.org')"
 
@@ -56,6 +57,7 @@ From: ubuntu:22.04
 
   # BioConductor packages, version is controlled though BiocManager version (3.17)
   # biomaRt v2.56.1
+  Rscript -e "BiocManager::install(version = '3.17', ask = F)"
   Rscript -e "BiocManager::install(c('biomaRt'), version = '3.17')"
   # GenomicFeatures v1.52.2, GenomicRanges v1.52.0 
   Rscript -e "BiocManager::install(c('GenomicFeatures', 'GenomicRanges'), version = '3.17')"

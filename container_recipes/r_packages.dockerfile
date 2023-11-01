@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
     && make -j9 \
     && make install \
     && cd ../ \
+    && apt-get install -y r-cran-devtools \
     && Rscript -e "install.packages('devtools', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('devtools', version = '2.4.5', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('argparse', version = '2.2.2', repos = 'http://cran.us.r-project.org')" \
@@ -43,6 +44,7 @@ RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
     && Rscript -e "devtools::install_version('R.utils', version = '2.12.2', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('seqinr', version = '4.2-30', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('strex', version = '1.6.0', repos = 'http://cran.us.r-project.org')" \
+    && Rscript -e "BiocManager::install(version = '3.17', ask = F)" \
     && Rscript -e "BiocManager::install(c('biomaRt'), version = '3.17')" \
     && Rscript -e "BiocManager::install(c('GenomicFeatures', 'GenomicRanges'), version = '3.17')" \
     && Rscript -e "BiocManager::install(c('maftools', 'plyranges', 'rtracklayer'), version = '3.17')" \

@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
                 libncurses5-dev libsm6 libxrender1 libfontconfig1 \
                 libxt6 libtcl8.6 libtk8.6 glibc-source libharfbuzz-dev \
                 libfribidi-dev libfreetype6-dev libpng-dev libtiff5-dev \
-                libjpeg-dev fontconfig cmake libfontconfig1-dev xclip libtiff5  \
+                libjpeg-dev fontconfig cmake libfontconfig1-dev xclip libtiff5 \
     && apt-get install -y python3-pip \
     && apt-get install -y bedtools=2.30.0+dfsg-2ubuntu0.1 \
     && pip3 install h5py==3.9.0 numpy==1.24.4 pandas==2.0.3 pybbi==0.3.5 \
@@ -38,6 +38,7 @@ RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
     && make -j9 \
     && make install \
     && cd ../ \
+    && apt-get install -y r-cran-devtools \
     && Rscript -e "install.packages('devtools', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('devtools', version = '2.4.5', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('argparse', version = '2.2.2', repos = 'http://cran.us.r-project.org')" \
@@ -51,6 +52,7 @@ RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
     && Rscript -e "devtools::install_version('openssl', version = '2.1.1', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('XML', version = '3.99-0.14', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('xml2', version = '1.3.5', repos = 'http://cran.us.r-project.org')" \
+    && Rscript -e "BiocManager::install(version = '3.17', ask = F)" \
     && Rscript -e "BiocManager::install(c('BiocFileCache', 'biomaRt', 'Biostrings'), version = '3.17')" \
     && Rscript -e "BiocManager::install(c('GenomeInfoDb', 'GenomicFeatures', 'GenomicRanges'), version = '3.17')" \
     && Rscript -e "BiocManager::install(c('rtracklayer'), version = '3.17')" \
@@ -60,7 +62,7 @@ RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
     && git reset --hard 5bb565a \
     && cd scripts/ \
     && sed -i "s/# parse_d.add_argument('refdb'/parse_d.add_argument('refdb'/g" DigPreprocess.py \
-    && sed -i "s/args.fmut, refdb,/args.fmut, args.refdb/g" DigPreprocess.py \
+    && sed -i "s/args.fmut, refdb,/args.fmut, args.refdb,/g" DigPreprocess.py \
     && cd ../ \
     && python3 setup.py install
 
