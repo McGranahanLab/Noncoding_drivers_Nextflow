@@ -7,8 +7,8 @@ process CALCULATE_MUTATION_RATES {
           path(varanno_conversion_table)
 
     output:
-    tuple val(tumor_subtype), path('*meanMutRatePerGR.csv'), 
-          path('*mutMapToGR.csv'), path('*varCatEnrich.csv')
+    tuple val(tumor_subtype), path('*meanMutRatePerGR.csv'), path('*mutMapToGR.csv'), path('*varCatEnrich.csv'), emit: mutrates
+    tuple path('*.out'), path('*.err'), emit: logs
 
     script:
     """
@@ -24,6 +24,8 @@ process CALCULATE_MUTATION_RATES {
                                  --ncAcceptedClass ${params.ncAcceptedClass} \
                                  --varanno_conversion_table ${varanno_conversion_table} \
                                  --annotation_failed_code ${params.annotation_failed_code} \
-                                 --output 'mutRate-'${tumor_subtype}'-'
+                                 --output 'mutRate-'${tumor_subtype}'-' \
+                                 1>mut_rates_${tumor_subtype}.out \
+                                 2>mut_rates_${tumor_subtype}.err
     """
 }
