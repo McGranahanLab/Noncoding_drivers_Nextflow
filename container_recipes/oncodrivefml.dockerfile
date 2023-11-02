@@ -4,7 +4,24 @@ MAINTAINER Maria Litovchenko m.litovchenko@ucl.ac.uk
 # python 3.6 is default for ubuntu:18.04
 RUN apt-get -y update \
     && apt-get -y upgrade \
-    && apt-get install -y procps libcurl4-openssl-dev libssl-dev gcc libz-dev\
+    && apt-get install -y wget procps libcurl4-openssl-dev libssl-dev gcc \
+                          libz-dev libncurses5-dev zlib1g-dev libbz2-dev \
+                          liblzma-dev make tabix \
+    && cd bin \
+    && wget https://github.com/samtools/samtools/releases/download/1.18/samtools-1.18.tar.bz2 \
+    && tar -xf samtools-1.18.tar.bz2 \
+    && cd samtools-1.18 \
+    && ./configure \
+    && make \
+    && make install \
+    && cd ../ \
+    && wget https://github.com/samtools/htslib/releases/download/1.18/htslib-1.18.tar.bz2 \
+    && tar -xf htslib-1.18.tar.bz2 \
+    && cd htslib-1.18 \
+    && ./configure \
+    && make \
+    && make install \
+    && cd ../ \
     && apt-get install -y python3-pip \
     && pip3 install ago==0.0.9 appdirs==1.4.4 bgcache==0.1 bgconfig==0.8 \
                  bgdata==2.0.2 bglogs==0.6 bgparsers==0.9 bgreference==0.5 \
