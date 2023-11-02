@@ -77,7 +77,7 @@ process DNDSCV {
 
     rda=${rda_ncbi}
     mut_format=`head -2 ${mutations} | tail -n 1 | cut -f2`
-    if [[ \$mut_format == "chr*" ]];
+    if [[ \$mut_format == chr* ]];
     then
         rda=${rda_ucsc}
     fi

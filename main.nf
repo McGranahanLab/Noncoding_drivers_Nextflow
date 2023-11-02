@@ -192,6 +192,9 @@ workflow {
     /* 
         Step 5f: run OncodriveFML
     */
+    RUN_ONCODRIVEFML (PREPARE_INPUT_MUTATION_FILES.out.oncodrivefml,
+                      PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.oncodrivefml,
+                      oncodrivefml_config)
 }
 
 // inform about completition
