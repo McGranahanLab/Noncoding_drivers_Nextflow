@@ -185,6 +185,6 @@ process ONCODRIVEFML {
                  --configuration ${oncodrivefml_config} \
                  --output '.'  --cores ${task.cpus} \
                  1>\$MSG_FILE 2>\$ERR_FILE
-    mv "oncodrivefml-inputMutations-"${tumor_subtype}"-"${params.target_genome_version}"-oncodrivefml.tsv" \$OUT_FILE
+    mv "inputMutations-"${tumor_subtype}"-oncodrivefml-"${params.target_genome_version}"-oncodrivefml.tsv" \$OUT_FILE
     """
 }
