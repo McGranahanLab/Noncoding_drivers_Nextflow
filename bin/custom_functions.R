@@ -653,13 +653,12 @@ orderChromosomes <- function(chrs) {
 #' @param nQuants number of quantiles
 #' @return data table with columns topBound (use it as breaks) and quant (use 
 #' it as labels)
-getUniqQuantileBreaks <- function(x, nQuants = 100) {
-  # add quantile of local mutation rate as well
+getUniqQuantileBreaks <- function(x, nQuants = 1001) {
   quantCuts <- data.table(quant = seq(0, 1, length.out = nQuants), 
                           topBound = quantile(x, seq(0, 1,
                                                      length.out = nQuants)))
   quantCuts <- quantCuts[,.(quant = max(quant)), by = topBound]
   quantCuts[topBound == max(topBound)]$topBound <- Inf
-  quantCuts[, quant := round(100 * quant, 2)]
+  quantCuts[, quant := round(100 * quant, 1)]
   quantCuts
 }
