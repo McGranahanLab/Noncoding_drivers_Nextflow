@@ -32,63 +32,6 @@ suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
 suppressWarnings(suppressPackageStartupMessages(library(VariantAnnotation)))
 options(scipen = 999)
 
-# FUNCTIONS: common -----------------------------------------------------------
-#' getGeneSymbolSynonyms
-#' @description Retrieves from the table of gene names synonyms all synonumous 
-#'              names for a given gene.
-#' @author Maria Litovchenko
-#' @param geneSymbol vector of gene symbols
-#' @param geneNameSynsDT data table with information about gene name synonyms.
-#'                       Should have columns idx and gene_name. Synonymous gene
-#'                       names will have the same idx.
-#' @return data.table with columns gene_name_orig, containing submitted as 
-#'         input geneSymbol and gene_name_syn - retrieved synonymous names.
-getGeneSymbolSynonyms <- function(geneSymbols, geneNameSynsDT) {
-  geneSymbols <- unique(geneSymbols)
-  
-  result <- data.table(gene_name_orig = geneSymbols, 
-                       gene_name_syn = as.character(NA))
-  
-  if (any(geneSymbols %in% geneNameSynsDT$gene_name)) {
-    setkey(geneNameSynsDT, 'gene_name')
-    result <- geneNameSynsDT[idx %in% geneNameSynsDT[geneSymbols]$idx]
-    setkey(result, 'gene_name')
-    foundSyn <- intersect(geneSymbols, result$gene_name)
-    # unfortunately, geneSymbols can contain synonymous values
-    result <- lapply(foundSyn, 
-                     function(x) cbind(gene_name_orig = x,
-                                       result[idx %in% result[x]$idx]))
-    result <- do.call(rbind, result)
-    result <- result[gene_name_orig != gene_name]
-    setnames(result, 'gene_name', 'gene_name_syn')
-    result <- result[,.(gene_name_orig, gene_name_syn)]
-    
-    foundSyn <- length(intersect(geneSymbols, result$gene_name_orig))
-    message('[', Sys.time(), '] Found synonymous gene names for ',
-            foundSyn, '(', round(100 * foundSyn/length(geneSymbols)), 
-            '%) genes.')
-  }
-  result
-}
-
-#' getUniqQuantileBreaks
-#' @description Creates data table containing unique breaks and their labels
-#' based on data vector
-#' @param x numeric vector
-#' @param nQuants number of quantiles
-#' @return data table with columns topBound (use it as breaks) and quant (use 
-#' it as labels)
-getUniqQuantileBreaks <- function(x, nQuants = 100) {
-  # add quantile of local mutation rate as well
-  quantCuts <- data.table(quant = seq(0, 1, length.out = nQuants), 
-                          topBound = quantile(x, seq(0, 1,
-                                                     length.out = nQuants)))
-  quantCuts <- quantCuts[,.(quant = max(quant)), by = topBound]
-  quantCuts[topBound == max(topBound)]$topBound <- Inf
-  quantCuts[, quant := round(100 * quant, 2)]
-  quantCuts
-}
-
 # FUNCTIONS: matching variants to regions -------------------------------------
 #' matchVariantsToRegions
 #' @description Matches mutations to genomic regions of interest. It is 
@@ -284,7 +227,7 @@ checkGeneMatchBetweenVarAnnoAndGR <- function(mutsToGRmap, synonymsDT = NULL) {
                 sum(result$matched), ' out of ', nrow(result), ') mutations.')
   
   # Let's check gene names synonyms, maybe genomic regions and variant 
-  # annotations are actually meant the same gene, but known under different 
+  # annotations are actually meant the same gene, but known under different
   # names.
   namesNotMatchedSyns <- getGeneSymbolSynonyms(result[matched == F]$gene_name, 
                                                synonymsDT)
