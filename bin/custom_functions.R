@@ -368,6 +368,7 @@ readInAndFilterBWregions <- function(bwFile, chrStyle, bwScoreCol = NA,
 #' @param nameStr vector of strings
 #' @return data table with number of rows = length of nameStr with columns 
 #'         target_genome_version, gr_id, gene_id, gene_name, name
+#' @export
 parseBED12regName <- function(nameStr, sepStr = '--') {
   result <- lapply(nameStr, strsplit, sepStr)
   result <- do.call(rbind, lapply(result, function(x) x[[1]]))
@@ -586,6 +587,7 @@ checkLiftOverByTr <- function(origGR, loGR) {
 #'                       names will have the same idx.
 #' @return data.table with columns gene_name_orig, containing submitted as 
 #'         input geneSymbol and gene_name_syn - retrieved synonymous names.
+#' @export
 getGeneSymbolSynonyms <- function(geneSymbols, geneNameSynsDT) {
   geneSymbols <- unique(geneSymbols)
   
@@ -611,6 +613,49 @@ getGeneSymbolSynonyms <- function(geneSymbols, geneNameSynsDT) {
             foundSyn, '(', round(100 * foundSyn/length(geneSymbols)), 
             '%) genes.')
   }
+  result
+}
+
+# Bining into quantiles -------------------------------------------------------
+#' getUniqQuantileBreaks
+#' @description Creates data table containing unique breaks and their labels
+#' based on data vector
+#' @param x numeric vector
+#' @param nQuants number of quantiles
+#' @return data table with columns topBound (use it as breaks) and quant (use 
+#' it as labels)
+#' @export
+getUniqQuantileBreaks <- function(x, nQuants = 1001) {
+  quantCuts <- data.table(quant = seq(0, 1, length.out = nQuants), 
+                          topBound = quantile(x, seq(0, 1,
+                                                     length.out = nQuants)))
+  quantCuts <- quantCuts[,.(quant = max(quant)), by = topBound]
+  quantCuts[topBound == max(topBound)]$topBound <- Inf
+  quantCuts[, quant := round(100 * quant, 1)]
+  quantCuts
+}
+
+#' assignQuantileBreaks
+#' @description Assigns quantile in which a numeric value falls in the 
+#'              distribution
+#' @author Maria Litovchenko
+#' @param inDT input data table
+#' @param colName name of the column containing numerical values. Cells with 0
+#'        will not be taken into account
+#' @return input data table with extra column named colName+Quant containing 
+#'         quantile.
+#' @export
+assignQuantileBreaks <- function(inDT, colName) {
+  setnames(inDT, colName, 'coi')
+  
+  quantBreaks <- getUniqQuantileBreaks(inDT[coi != 0]$coi)
+  result <- copy(inDT)
+  result[, coiQuant := cut(coi, breaks = c(-1, quantBreaks$topBound),
+                           labels = quantBreaks$quant)]
+  result[, coiQuant := as.numeric(as.character(coiQuant))]
+  result[coi == 0]$coiQuant <- NA
+  
+  setnames(result, c('coi', 'coiQuant'), c(colName, paste0(colName, 'Quant')))
   result
 }
 
@@ -644,21 +689,4 @@ orderChromosomes <- function(chrs) {
   result[chr == 'Y']$chrInt <- 24
   result <- result[order(chrInt, chr)]
   result$chr
-}
-
-#' getUniqQuantileBreaks
-#' @description Creates data table containing unique breaks and their labels
-#' based on data vector
-#' @param x numeric vector
-#' @param nQuants number of quantiles
-#' @return data table with columns topBound (use it as breaks) and quant (use 
-#' it as labels)
-getUniqQuantileBreaks <- function(x, nQuants = 1001) {
-  quantCuts <- data.table(quant = seq(0, 1, length.out = nQuants), 
-                          topBound = quantile(x, seq(0, 1,
-                                                     length.out = nQuants)))
-  quantCuts <- quantCuts[,.(quant = max(quant)), by = topBound]
-  quantCuts[topBound == max(topBound)]$topBound <- Inf
-  quantCuts[, quant := round(100 * quant, 1)]
-  quantCuts
 }
