@@ -39,6 +39,18 @@ def channel_from_params_path (staticPath) {
     return result
 }
 
+// same function is also defined in call_driver_genes.nf
+def infer_tumor_subtype (filePath) {
+    result = filePath.name.toString().tokenize('-').get(1)
+    return result
+}
+
+// same function is also defined in call_driver_genes.nf
+def infer_genomic_region(filePath) {
+    result = filePath.name.toString().tokenize('-').get(3)
+    return result
+}
+
 /* ----------------------------------------------------------------------------
 * Processes
 *----------------------------------------------------------------------------*/
@@ -189,12 +201,28 @@ workflow {
              PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.nbr,
              target_genome_fasta, nbr_neutral_bins,
              nbr_neutral_trinucfreq, nbr_driver_regs)
+    nbr_results = RUN_NBR.out.results
+                         .map { it ->
+                                    return tuple(infer_tumor_subtype(it),
+                                                 infer_genomic_region(it), 
+                                                 'nbr', it)
+                              }
     /* 
         Step 5f: run OncodriveFML
     */
     RUN_ONCODRIVEFML (PREPARE_INPUT_MUTATION_FILES.out.oncodrivefml,
                       PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.oncodrivefml,
                       oncodrivefml_config)
+    oncodrivefml_results = RUN_NBR.out.results
+                                  .map { it ->
+                                             return tuple(infer_tumor_subtype(it),
+                                                          infer_genomic_region(it), 
+                                                          'oncodrivefml', it)
+                                        }
+
+
+    /* PERFORM CHECK FOR THE */
+    nbr_results.join(oncodrivefml_results, by: [0, 1], remainder: true).view()
 }
 
 // inform about completition

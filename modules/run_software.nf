@@ -7,7 +7,7 @@ process DIGDRIVER {
           path(digdriver_elements), path(target_genome_fasta)
 
     output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
+    path "${software}Results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
@@ -17,7 +17,7 @@ process DIGDRIVER {
 
     # a unique ID to use in all further commands
     RUN_CODE=${tumor_subtype}'-'${gr_id}'-'${params.target_genome_version}
-    OUT_FILE=${software}"-results-"\$RUN_CODE'.csv'
+    OUT_FILE=${software}"Results-"\$RUN_CODE'.csv'
 
     # copy model as it will be modified during the run
     DIG_MODEL='digdriver-model-'\$RUN_CODE'.h5'
@@ -62,16 +62,16 @@ process DNDSCV {
           path(rda_ucsc), path(mutations)
 
     output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
+    path "${software}Results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
     path "*global.csv", emit: global
     path "*Rds", emit: rds
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
     """
-    OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
-    OUT_GLOBAL_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'_global.csv'
-    OUT_RDS=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.Rds'
+    OUT_FILE=${software}"Results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
+    OUT_GLOBAL_FILE=${software}"Results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'_global.csv'
+    OUT_RDS=${software}"Results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.Rds'
     MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
     ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
 
@@ -97,12 +97,12 @@ process MUTPANNING {
           path(mutpan_inv)
 
     output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
+    path "${software}Results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
     """
-    OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
+    OUT_FILE=${software}"Results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
     MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
     ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
 
@@ -111,12 +111,12 @@ process MUTPANNING {
         $mutations $mutpan_inv "/bin/MutPanningV2/Hg19/" \
         1>\$MSG_FILE 2>\$ERR_FILE
 
-    cpFrom=`find SignificanceRaw | grep -v Uniform | grep '.txt\$'`
-    if [[ -f "\$cpFrom" ]]; then
-        cp \$cpFrom \$OUT_FILE
-    else
-        echo 'MutPanning run on '${tumor_subtype}" "${gr_id}' did not yield results.'
-        echo 'It can happen if your cohort is too small. Will create an empty file.'
+    nResultFiles=\$(ls -l SignificanceRaw | wc -l)
+    if [ \$nResultFiles -ne 1 ]; then
+        cp SignificanceRaw/Significancecustom.txt \$OUT_FILE
+    else 
+        echo 'MutPanning run on '${tumor_subtype}" "${gr_id}' did not yield results.' >> \$MSG_FILE
+        echo 'It can happen if your cohort is too small. Will create an empty file.' >> \$MSG_FILE
         echo -e "Name\tTargetSize\tTargetSizeSyn\tCount\tCountSyn\tSignificanceSyn\tFDRSyn\tSignificance\tFDR" > \$OUT_FILE
     fi
     """
@@ -131,12 +131,12 @@ process NBR {
           path(nbr_neutral_trinucfreq), path(nbr_driver_regs)
     
     output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
+    path "${software}Results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
     """
-    OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
+    OUT_FILE=${software}"Results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
     MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
     ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
 
@@ -172,12 +172,12 @@ process ONCODRIVEFML {
           path(mutations), path(oncodrivefml_config)
 
     output:
-    path "${software}-results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
+    path "${software}Results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
     """
-    OUT_FILE=${software}"-results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
+    OUT_FILE=${software}"Results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
     MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
     ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
 
