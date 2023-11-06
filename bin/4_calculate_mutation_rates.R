@@ -33,67 +33,16 @@ suppressWarnings(suppressPackageStartupMessages(library(VariantAnnotation)))
 options(scipen = 999)
 
 # FUNCTIONS: matching variants to regions -------------------------------------
-#' matchVariantsToRegions
-#' @description Matches mutations to genomic regions of interest. It is 
-#'              possible to submit mutations either as maf file via mafPath 
-#'              argument or as data table via varsDT argument. Same goes 
-#'              towards genomic regions, which can be submitted either though
-#'              file (bed12Path) or genomic regions (GRs)
+#' overlapVariantsToRegions
+#' @description Overlaps mutations to genomic regions of interest.
 #' @author Maria Litovchenko
-#' @param mafPath path to MAF file with mutations
 #' @param varsDT data table with essential columns chr, start, end
-#' @param bed12Path path to BED12 file with genomic regions
 #' @param GRs genomic ranges object with gr_name column. Other annotation 
 #'            columns may be present too.
 #' @param nCores number of cores to use
 #' @return data table with columns gr_name + all annotation columns from 
 #'         genomic regions file + all columns from variants data table
-matchVariantsToRegions <- function(mafPath = NULL, varsDT = NULL,
-                                   bed12Path = NULL, GRs = NULL,
-                                   nCores = 1) {
-  if ((is.null(bed12Path) & is.null(GRs)) | 
-      (!is.null(bed12Path) & !is.null(GRs))) {
-    stop('[', Sys.time(), '] matchVariantsToRegions: please submit either ',
-         'bed12Path or GRs')
-  }
-  if ((is.null(mafPath) & is.null(varsDT)) | 
-      (!is.null(mafPath) & !is.null(varsDT))) {
-    stop('[', Sys.time(), '] matchVariantsToRegions: please submit either ',
-         'mafPath or varsDT')
-  }
-  
-  # read genomic regions from BED12
-  if (!is.null(bed12Path)) { 
-    GRs <- import(bed12Path)
-    GRs <- unlist(GRangesList(blocks(GRs)))
-    GR_parsed <- parseBED12regName(unique(names(GR)))
-    setkey(GR_parsed, name)
-    mcols(GR) <- GR_parsed[names(GR)]
-    rm(GR_parsed)
-    message('[', Sys.time(), '] Read ', bed12Path)
-    message('[', Sys.time(), '] rtracklayer import function while reading ',
-            'bed12 assumes that it is 0-based. Therefore it adds 1 to all ',
-            'coordinates. We will correct it.')
-    start(GRs) <- start(GRs) - 1
-    end(GRs) <- end(GRs) - 1
-  }
-  
-  # read variants from MAF
-  if (!is.null(mafPath)) {
-    message('[', Sys.time(), '] Started reading ', mafPath)
-    colsToRead <- c('Tumor_Sample_Barcode', 'key', 'Chromosome',
-                    'Start_Position', 'End_Position', 'Gene.refGene', 
-                    'Variant_Classification', 'Variant_Type', 'mut_len', 
-                    'struct_type', 'patient_tumor_subtype')
-    newColNames <- c('participant_id', 'key', 'chr', 'start', 'end', 
-                     'gene_name_var', 'var_class', 'var_type', 'mut_len',
-                     'struct_type', 'patient_tumor_subtype')
-    varsDT <- fread(mafPath, header = T, stringsAsFactors = F, 
-                    nThread = nCores, select = colsToRead)
-    setnames(varsDT, colsToRead, newColNames, skip_absent = T) 
-    message('[', Sys.time(), '] Finished reading ', mafPath)
-  }
-  
+overlapVariantsToRegions <- function(varsDT, GRs, nCores = 1) {
   if (!'gr_name' %in% colnames(mcols(GRs))) {
     stop('[', Sys.time(), '] Genomic regions should have gr_name column')
   }
@@ -401,6 +350,75 @@ checkNCVarClassBetweenVarAnnoAndGR <- function(mutsToGRmap,
   result
 }
 
+#' matchVariantsToRegions
+#' @description Matches mutations (genetic variants) to corresponding genomic
+#'              region. If option checkAnnoMatch is enabled, also takes into 
+#'              account annotation of a variant (i.e. nonsense) and nature of
+#'              genomic region (i.e. CDS). For example, a variant annotated as
+#'              5'UTR should not overlap CDS. Such situations will be corrected
+#' @author Maria Litovchenko
+#' @param varsDT data table with essential columns chr, start, end. If
+#'        checkAnnoMatch or calc_synonymous is requested, var_class is also
+#'        needed
+#' @param GRs genomic ranges object with gr_name column. Other annotation 
+#'            columns may be present too.
+#' @param checkAnnoMatch logical, indicates, if check that regions type (i.e. 
+#'                      coding or noncoding) corresponds to variant annotation,
+#'                      (i.e. if variant is annotated as 3'UTR it should not be
+#'                       mapped to CDS) should be performed
+#' @param synonymsDT data table with information about gene name synonyms.
+#'                   Should have columns idx and gene_name. Synonymous gene
+#'                   names will have the same idx. Used to check gene name 
+#'                   match between genomic region and mutation. Optional.
+#' @param cdsAcceptedClass variant annotation which are expected to be found in 
+#'                      coding regions of the genome
+#' @param ncAcceptedClass variant annotation which are expected to be found in 
+#'                      noncoding regions of the genome
+#' @param specieCode string denoting specie. I.e. Hsapiens for human and 
+#'        Mmusculus for mouse
+#' @param targetGenomeVersion string, target genome version code, i.e. hg19
+#' @return data table with columns gr_name + all annotation columns from 
+#'         genomic regions file + all columns from variants data table
+matchVariantsToRegions <- function(varsDT, GRs, checkAnnoMatch = F, 
+                                   synonymsDT = NULL, cdsAcceptedClass = NULL, 
+                                   ncAcceptedClass = NULL, specieCode = NULL, 
+                                   targetGenomeVersion = NULL, 
+                                   codesConversionDT = NULL, 
+                                   annoFailedCode = 'Unknown', nCores = 1) {
+  message('[', Sys.time(), '] Started mapping variants to genomic regions')
+  result <- overlapVariantsToRegions(varsDT, GRs, nCores)
+  if (checkAnnoMatch) {
+    result <- checkGeneMatchBetweenVarAnnoAndGR(result, synonymsDT)
+    
+    # check variant class (i.e. missence, nonsence, frameshift, etc) for 
+    # coding mutations
+    result <- checkCodVarClassBetweenVarAnnoAndGR(result, cdsAcceptedClass)
+    result[, reannotated := F]
+    if (nrow(result[matchedVarClassCod == F]) > 0) {
+      varsToReAnnot <- result[matchedVarClassCod == F]
+      varsReAnnoted <- reannotateCodVars(varsToReAnnot, specieCode, 
+                                         targetGenomeVersion, 
+                                         codesConversionDT, annoFailedCode)
+      varsReAnnoted[, reannotated := T]
+      result <- rbind(result[matchedVarClassCod == T], varsReAnnoted)
+      rm(varsReAnnoted)
+      gc()
+    }
+    result[, matchedVarClassCod := NULL]
+    
+    # check variant class for noncoding mutations
+    result <- checkNCVarClassBetweenVarAnnoAndGR(result, ncAcceptedClass)
+    result[matchedVarClassNC == F]$reannotated <- T
+    result[matchedVarClassNC == F]$var_class <- annoFailedCode
+    result[, matchedVarClassNC := NULL]
+  } 
+  setcolorder(result, intersect(c('gr_id', 'gr_name', 'gene_id', 'gene_name', 
+                                  'participant_id', 'key', 'var_type', 
+                                  'var_class'),  colnames(result)))
+  message('[', Sys.time(), '] Finished mapping variants to genomic regions')
+  result
+}
+
 # FUNCTIONS: coding variants re-annotation ------------------------------------
 #' parseKeys
 #' @description Parses vector of variant keys into data table with columns chr,
@@ -660,20 +678,45 @@ reannotateCodVars <- function(varsDT, specieCode = 'Hsapiens',
 }
 
 # FUNCTIONS: mutational rate --------------------------------------------------
+#' calcTotalGrLen
+#' @description Calculates a total length of genomic regions for each gr_name 
+#'              in GRs. Assigns quantiles of length distribution.
+#' @author Maria Litovchenko
+#' @param GRs genomic regions in GRanges, gr_name in mcols is essential
+#' @return data table with columns gr_name, gr_id, gene_name, gene_id, gr_len
+#'         and gr_lenQuant. Where gr_len is the total length of a genomic 
+#'         range with gr_name and gr_lenQuant is quantile of length 
+#'         distributions where it falls in.
+calcTotalGrLen <- function(GRs) {
+  result <- data.table(gr_name = GRs$gr_name, gr_len = width(GRs))
+  result[, gr_len := sum(gr_len), by = gr_name]
+  result <- unique(result)
+  setnames(result, 'gr_name', 'name')
+  result <- merge(parseBED12regName(result$name), result, by = 'name')
+  result[, target_genome_version := NULL]
+  setnames(result, 'name', 'gr_name')
+  # add quantile of length
+  result <- lapply(split(result, by = 'gr_id'), assignQuantileBreaks, 'gr_len')
+  result <- do.call(rbind, result)
+  
+  result
+}
+
 #' calcMutRate
-#' @description 
-#' @author 
-#' @param mutsToGRmap
-#' @param allParticipantsID 
-#' @param GRs
-#' @param average_across_patients
-#' @return 
-calcMutRate <- function(mutsToGRmap, allParticipantsID, GRs,
-                        average_across_patients = T) {
-  # calculate length of each genomic region
-  grsLen <- GRangesList(split(GRs, GRs$gr_name))
-  grsLen <- sum(width(grsLen))
-  grsLen <- data.table(gr_name = names(grsLen), gr_len = grsLen)
+#' @description Calculates averaged across participants mutation rate 
+#'              (in mutations per bp)
+#' @author Maria Litovchenko
+#' @param mutsToGRmap data table, match between mutations and genomic regions.
+#'                    Each row = one mutation. Columns participant_id
+#'                    and gr_name are required.
+#' @param allParticipantsID character vector of all participants' IDs.
+#' @param GRs Granges of genomic regions to which mutations were mapped. Column
+#'        gr_name is required.
+#' @return data table with columns gr_name, gr_id, gene_id, gene_name, gr_len,
+#'         gr_lenQuant, meanMutRate
+calcMutRate <- function(mutsToGRmap, allParticipantsID, GRs) {
+  # calculate length & quantile of length for each genomic region
+  grsLen <- calcTotalGrLen(GRs)
   
   # in order to take into account regions which are not mutated in certain 
   # participants, create a data table with all possible combinations of 
@@ -682,7 +725,8 @@ calcMutRate <- function(mutsToGRmap, allParticipantsID, GRs,
   result <- as.data.table(result)
   colnames(result) <- c('participant_id', 'gr_name')
   
-  result <- merge(result, mutsToGRmap[,.N, by = .(participant_id, gr_name)], 
+  # mutation rate per patient
+  result <- merge(result, mutsToGRmap[,.N, by = .(participant_id, gr_name)],
                   by = c('participant_id', 'gr_name'), all.x = T)
   setnames(result, 'N', 'nVars')
   # if a participant didn't have any variants in a genomic bin
@@ -690,148 +734,14 @@ calcMutRate <- function(mutsToGRmap, allParticipantsID, GRs,
   result <- merge(result, grsLen, by = 'gr_name', all.x = T)
   result[, mutRate := nVars/gr_len]
   
-  # calculate, to which quantile of mutation rate each region belongs. Do not 
-  # take into account regions with 0 mutation rate
-  quantBreaks <- result[mutRate != 0]
-  quantBreaks <- getUniqQuantileBreaks(quantBreaks$mutRate)
-  result[, mutRateQuant := cut(mutRate, 
-                               breaks = c(-1, quantBreaks$topBound),
-                               labels = quantBreaks$quant)]
-  result[, mutRateQuant := as.numeric(as.character(mutRateQuant))]
-  result[mutRate == 0]$mutRateQuant <- NA
-  
-  if (average_across_patients) {
-    meanResult <- result[,.(mean(mutRate)), by = gr_name]
-    setnames(meanResult, 'V1', 'meanMutRate')
-    # calculate, to which quantile of mutation rate each region belongs. Do not 
-    # take into account regions with 0 mutation rate
-    quantBreaks <- meanResult[meanMutRate != 0]
-    quantBreaks <- getUniqQuantileBreaks(quantBreaks$meanMutRate)
-    meanResult[, meanMutRateQuant := cut(meanMutRate, 
-                                         breaks = c(-1, quantBreaks$topBound),
-                                         labels = quantBreaks$quant)]
-    meanResult[, meanMutRateQuant := as.character(meanMutRateQuant)]
-    meanResult[, meanMutRateQuant := as.numeric(meanMutRateQuant)]
-    meanResult[meanMutRate == 0]$meanMutRateQuant <- NA
-    result <- merge(result, meanResult, by = 'gr_name')
-  }
-  
-  result
-}
-
-#' mutRate_wrapper
-#' @description A wrapper function around matchVariantsToRegions and 
-#'              calcMutRate functions.
-#' @author Maria Litovchenko
-#' @param varsDT data table with essential columns chr, start, end. If
-#'        checkAnnoMatch or calc_synonymous is requested, var_class is also
-#'        needed
-#' @param GRs genomic ranges object with gr_name column. Other annotation 
-#'            columns may be present too.
-#' @param checkAnnoMatch logical, indicates, if check that regions type (i.e. 
-#'                      coding or noncoding) corresponds to variant annotation,
-#'                      (i.e. if variant is annotated as 3'UTR it should not be
-#'                       mapped to CDS) should be performed
-#' @param synonymsDT data table with information about gene name synonyms.
-#'                   Should have columns idx and gene_name. Synonymous gene
-#'                   names will have the same idx. Used to check gene name 
-#'                   match between genomic region and mutation. Optional.
-#' @param calc_synonymous logical, indicates, if synonymous mutation rate 
-#'                        should be computed
-#' @param cdsAcceptedClass variant annotation which are expected to be found in 
-#'                      coding regions of the genome
-#' @param ncAcceptedClass variant annotation which are expected to be found in 
-#'                      noncoding regions of the genome
-#' @param specieCode string denoting specie. I.e. Hsapiens for human and 
-#'        Mmusculus for mouse
-#' @param targetGenomeVersion string, target genome version code, i.e. hg19
-#' @return named list with values varsToRegsMap - result of 
-#'         matchVariantsToRegions function, mutRatesDT and synMutRatesDT -
-#'         optional.
-mutRate_wrapper <- function(varsDT, GRs, checkAnnoMatch = F, 
-                            synonymsDT = NULL, calc_synonymous = F, 
-                            cdsAcceptedClass = NULL, ncAcceptedClass = NULL, 
-                            specieCode = NULL, targetGenomeVersion = NULL, 
-                            codesConversionDT = NULL, 
-                            annoFailedCode = 'Unknown') {
-  if (checkAnnoMatch & (is.null(cdsAcceptedClass) | is.null(ncAcceptedClass))) {
-    stop('[', Sys.time(), '] checkAnnoMatch is requested, but ',
-         'cdsAcceptedClass or ncAcceptedClass are not submitted.')
-  }
-  
-  message('[', Sys.time(), '] Started mapping variants to genomic regions')
-  varsToRegsMap <- matchVariantsToRegions(varsDT = varsDT, GRs = GRs)
-  if (checkAnnoMatch) {
-    varsToRegsMap <- checkGeneMatchBetweenVarAnnoAndGR(varsToRegsMap,  
-                                                       synonymsDT)
-    
-    # check variant class (i.e. missence, nonsence, frameshift, etc) for 
-    # coding mutations
-    varsToRegsMap <- checkCodVarClassBetweenVarAnnoAndGR(varsToRegsMap, 
-                                                         cdsAcceptedClass)
-    varsToRegsMap[, reannotated := F]
-    if (nrow(varsToRegsMap[matchedVarClassCod == F]) > 0) {
-      varsToReAnnot <- varsToRegsMap[matchedVarClassCod == F]
-      varsReAnnoted <- reannotateCodVars(varsToReAnnot, specieCode, 
-                                         targetGenomeVersion, 
-                                         codesConversionDT, annoFailedCode)
-      varsReAnnoted[, reannotated := T]
-      varsToRegsMap <- rbind(varsToRegsMap[matchedVarClassCod == T],
-                             varsReAnnoted)
-    }
-    varsToRegsMap[, matchedVarClassCod := NULL]
-    
-    # check variant class for noncoding mutations
-    varsToRegsMap <- checkNCVarClassBetweenVarAnnoAndGR(varsToRegsMap,
-                                                        ncAcceptedClass)
-    varsToRegsMap[matchedVarClassNC == F]$reannotated <- T
-    varsToRegsMap[matchedVarClassNC == F]$var_class <- annoFailedCode
-    varsToRegsMap[, matchedVarClassNC := NULL]
-  } 
-  setcolorder(varsToRegsMap, 
-              intersect(c('gr_id', 'gr_name', 'gene_id', 'gene_name', 
-                          'participant_id', 'key', 'var_type', 'var_class'), 
-                        colnames(varsToRegsMap)))
-  message('[', Sys.time(), '] Finished mapping variants to genomic regions')
-  
-  message('[', Sys.time(), '] Started calculating averaged across ',
-          'participants mutation rate')
-  mutRatesDT <- calcMutRate(mutsToGRmap = varsToRegsMap, 
-                            allParticipantsID = unique(varsDT$participant_id),
-                            GRs = GRs, average_across_patients = T)
-  message('[', Sys.time(), '] Finished calculating averaged across ',
-          'participants mutation rate')
-  
-  # add info about quantiles of mut.rates to variants to GR map
-  varsToRegsMap <- merge(varsToRegsMap, 
-                         mutRatesDT[,.(gr_name, participant_id, mutRate,
-                                       mutRateQuant, meanMutRate, 
-                                       meanMutRateQuant)],
-                         by = c('participant_id', 'gr_name'), all.x = T)
-  
-  if (calc_synonymous) {
-    message('[', Sys.time(), '] Started calculating averaged across ',
-            'participants synonymous mutation rate')
-    synMutRatesDT <- calcMutRate(mutsToGRmap = varsToRegsMap[var_class == 'Silent'], 
-                                 allParticipantsID = unique(varsDT$participant_id),
-                                 GRs = GRs, average_across_patients = T)
-    setnames(synMutRatesDT, 
-             c('mutRate', 'mutRateQuant', 'meanMutRate', 'meanMutRateQuant'),
-             c('synMutRate', 'synMutRateQuant', 'synMeanMutRate', 
-               'synMeanMutRateQuant'))
-    message('[', Sys.time(), '] Finished calculating averaged across ',
-            'participants synonymous mutation rate')
-    varsToRegsMap <- merge(varsToRegsMap, 
-                           synMutRatesDT[,.(gr_name, participant_id, 
-                                            synMutRate, synMutRateQuant,
-                                            synMeanMutRate,
-                                            synMeanMutRateQuant)],
-                           by = c('participant_id', 'gr_name'), all.x = T)
-  }
-  result <- list('varsToRegsMap' = varsToRegsMap, 'mutRatesDT' = mutRatesDT)
-  if (calc_synonymous) {
-    result[['synMutRatesDT']] <- synMutRatesDT
-  }
+  # average across participants
+  result <- result[,.(mean(mutRate)), 
+                   by = setdiff(colnames(result), 
+                                c('participant_id', 'nVars', 'mutRate'))]
+  setnames(result, 'V1', 'meanMutRate')
+  # calculate, to which quantile of mean mutation rate each region belongs. 
+  # Do not take into account regions with 0 mean mutation rate.
+  result <- assignQuantileBreaks(result, 'meanMutRate')
   
   result
 }
@@ -845,11 +755,11 @@ mutRate_wrapper <- function(varsDT, GRs, checkAnnoMatch = F,
 #'            if bed12Path is not available. 
 #' @param genomicTilesGR GenomicRanges with genomic coordinates of tiles across
 #'        the genome
-#' @param genomeTilesMutDT data table with local mutation rates. Columns chr, 
-#'        start, end, meanMutRate are required 
+#' @param genomeTilesRates data table with local mutation rates. Columns 
+#'        gr_name, meanMutRate are required 
 #' @return GRs updated with 2 columns meanMutRate_local and  
 #'         meanMutRateQuant_local
-matchLocalMutRateToRegions <- function(GRs, genomicTilesGR, genomeTilesMutDT) {
+matchLocalMutRateToRegions <- function(GRs, genomicTilesGR, genomeTilesRates) {
   seqlevelsStyle(genomicTilesGR) <- seqlevelsStyle(GRs)
   
   # add mean local mutation rate to genomic regions. If a region overlaps 
@@ -861,14 +771,14 @@ matchLocalMutRateToRegions <- function(GRs, genomicTilesGR, genomeTilesMutDT) {
                                 genomicTilesGR[ovrl$mutRateIdx])
   percentOvrl <- width(overlappingRegs) / width(GRs[ovrl$grIdx])
   ovrl[, percOvrl := percentOvrl]
-  rm(overlappingRegs)
-  rm(percentOvrl)
+  rm(overlappingRegs, percentOvrl)
+  gc()
   # add gr_name
   ovrl[, gr_name := GRs[ovrl$grIdx]$gr_name]
   ovrl[, tiles_name := genomicTilesGR[ovrl$mutRateIdx]$gr_name]
   # add local mutation rate & calculate weighted mean
-  setkey(genomeTilesMutDT, 'gr_name')
-  ovrl[, meanMutRate_local := genomeTilesMutDT[ovrl$tiles_name]$meanMutRate]
+  setkey(genomeTilesRates, 'gr_name')
+  ovrl[, meanMutRate_local := genomeTilesRates[ovrl$tiles_name]$meanMutRate]
   ovrl[, meanMutRate_local := sum(meanMutRate_local * percOvrl), by = grIdx]
   ovrl <- unique(ovrl[,.(gr_name, grIdx, meanMutRate_local)])
   # now, each individual genomic region has mutation rate assigned. But the
@@ -884,7 +794,7 @@ matchLocalMutRateToRegions <- function(GRs, genomicTilesGR, genomeTilesMutDT) {
   result$meanMutRate_local <- ovrl[result$gr_name]$meanMutRate_local
   # calculate, to which quantile of meanMutRate each region belongs. Do not 
   # take into account regions with 0 meanMutRate
-  quantBreaks <- genomeTilesMutDT[meanMutRate != 0]$meanMutRate
+  quantBreaks <- genomeTilesRates[meanMutRate != 0]$meanMutRate
   quantBreaks <- getUniqQuantileBreaks(quantBreaks)
   result$meanMutRateQuant_local <- cut(result$meanMutRate_local, 
                                        breaks = c(-1, quantBreaks$topBound),
@@ -955,13 +865,13 @@ variantsHelp <- paste('Path to maf file containing genomic variants',
 parser$add_argument("-v", "--variants", required = T, type = 'character',
                     help = variantsHelp)
 
-grHelp <- paste('Part to file containing genomic ranges of region of ',
+grHelp <- paste('Part to file containing genomic ranges of region of',
                 'interest, bed12 format')
 parser$add_argument("-g", "--genomic_regions", required = T, 
                     type = 'character', help = grHelp)
 
-synTabHelp <- paste('Path to table containing information about gene names ',
-                    '(symbols) and their synonyms. Required columns: idx and ',
+synTabHelp <- paste('Path to table containing information about gene names',
+                    '(symbols) and their synonyms. Required columns: idx and',
                     'gene_name.')
 parser$add_argument("-m", "--gene_name_synonyms", required = F, default = NULL,  
                     type = 'character', help = synTabHelp)
@@ -972,66 +882,73 @@ parser$add_argument("-b", "--bin_len", required = F, default = NULL,
                     type = 'integer', help = binHelp)
 
 subtypeHelp <- paste('Tumor subtype for which mutation rates are computed.',
-                     'If given, a column tumor_subtype will be added to ',
+                     'If given, a column tumor_subtype will be added to',
                      'all the output.')
 parser$add_argument("-t", "--tumor_subtype", required = T, default = NULL,
                     type = 'character', help = subtypeHelp)
 
-synHelp <- paste('Tumor subtype for which mutation rates are computed. If ',
-                 'given, a column tumor_subtype will be added to output.')
+synHelp <- paste('Boolean, indicating whether mutation rate based on',
+                 'synonymous mutations should be computed in addition to',
+                 'mutation rate based on all mutations.')
 parser$add_argument("-s", "--calc_synonymous", required = F, default = T,
                     type = 'logical', help = synHelp)
 
-targetGenomeChrHelp <- paste('Path to the tab-separated file containing ', 
-                             'chromosomal lengths of the target genome. ',
-                             'Must have 3 columns: chr, start(1) and length ',
+targetGenomeChrHelp <- paste('Path to the tab-separated file containing', 
+                             'chromosomal lengths of the target genome.',
+                             'Must have 3 columns: chr, start(1) and length',
                              'of the chromosome. No header.')
 parser$add_argument("-l", "--target_genome_chr_len", required = F,
                     default = '', type = 'character', 
                     help = targetGenomeChrHelp)
 
-cdsClassHelp <- paste('Variant_Classification-s from MAF format which are ',
-                      'acceptable as annotation of coding variants. ',
+cdsClassHelp <- paste('Variant_Classification-s from MAF format which are',
+                      'acceptable as annotation of coding variants.',
                       'Suggested values: Frame_Shift_Del, Frame_Shift_Ins',
-                      "In_Frame_Del, In_Frame_Ins, Missense_Mutation, ",
-                      "Nonsense_Mutation, Silent, Translation_Start_Site, ",
+                      "In_Frame_Del, In_Frame_Ins, Missense_Mutation,",
+                      "Nonsense_Mutation, Silent, Translation_Start_Site,",
                       "Nonstop_Mutation, De_novo_Start_InFrame,",
-                      "De_novo_Start_OutOfFrame, Unknown. It is higly ",
-                      'reccomended to include Unknown to handle MNPs')
+                      "De_novo_Start_OutOfFrame, Unknown. It is higly",
+                      'reccomended to include Unknown to handle MNPs.')
 parser$add_argument("-c", "--cdsAcceptedClass", required = T, nargs = '+',
                     type = 'character', help = cdsClassHelp)
 
-ncClassHelp <- paste('Variant_Classification-s from MAF format which are ',
-                     'acceptable as annotation of noncoding variants. ',
-                     "Suggested values: 3primeUTR, 3primeFlank, 5primeUTR, ",
-                     "5primeFlank, IGR, Intron, RNA, Targeted_Region, ", 
-                     "Splice_Site, Unknown")
+ncClassHelp <- paste('Variant_Classification-s from MAF format which are',
+                     'acceptable as annotation of noncoding variants.',
+                     "Suggested values: 3primeUTR, 3primeFlank, 5primeUTR,",
+                     "5primeFlank, IGR, Intron, RNA, Targeted_Region,", 
+                     "Splice_Site, Unknown.")
 parser$add_argument("-n", "--ncAcceptedClass", required = T, nargs = '+',
                     type = 'character', help = ncClassHelp)
 
-targetVersionHelp <- paste0('Target genome version')
+synClassHelp <- paste('Variant_Classification-s from MAF format which are',
+                      'acceptable as markers of synonymous variants.',
+                      'Suggested values: Silent')
+parser$add_argument("-sc", "--synAcceptedClass", required = F, nargs = '+',
+                    type = 'character', help = synClassHelp, default = NULL)
+
+targetVersionHelp <- paste('Target genome version')
 parser$add_argument("-gv", "--target_genome_version", required = T, nargs = 1, 
                     type = 'character', help = targetVersionHelp)
 
-conversionTabHelp <- paste0('Path to table with columns: ',
-                            'variantAnnotation_anno, var_type, var_class ',
-                            'which denotes conversion from variantAnnotation ',
-                            'terms of protein coding variant annotations (i.',
-                            'e. synonymous) to the ones given by tool used ',
-                            'by a user to annotate their variants (i.e. ',
-                            'Silent in case of annovar). var_type should be ',
-                            'one of SNP, DEL, INS, MNP.')
+conversionTabHelp <- paste('Path to table with columns:',
+                           'variantAnnotation_anno, var_type, var_class which',
+                           'denotes conversion from variantAnnotation terms',
+                           'of protein coding variant annotations (i.e.',
+                           'synonymous) to the ones given by tool used by a',
+                           'user to annotate their variants (i.e. Silent in',
+                           'case of annovar). var_type should be one of SNP,',
+                           'DEL, INS, MNP.')
 parser$add_argument("-a", "--varanno_conversion_table", required = F,
                     nargs = 1, type = 'character', help = conversionTabHelp)
 
-notAnnotatedVarCodeHelp <- paste0('String which should be used if ',
-                                  'variantAnnotation package fails to ',
-                                  're-annotate a variant, i.e. Unknown.')
+notAnnotatedVarCodeHelp <- paste('String which should be used if',
+                                 'variantAnnotation package fails to',
+                                 're-annotate a variant, i.e. Unknown.')
 parser$add_argument("-f", "--annotation_failed_code", required = T, nargs = 1,
                     type = 'character', help = notAnnotatedVarCodeHelp)
 
-outputHelp <- paste("Prefix to use in the output files.",
-                    "All files will start with this.")
+outputHelp <- paste("Prefix to use in the output files. All files will start",
+                    "with this.")
 parser$add_argument("-p", "--output", required = T, type = 'character',
                     help = outputHelp)
 args <- parser$parse_args()
@@ -1051,6 +968,10 @@ if (is.null(args$target_genome_chr_len) & args$bin_len > 1) {
        '--bin_len =', args$bin_len, '), but --target_genome_chr_len is not ',
        'given.')
 }
+if (args$calc_synonymous & is.null(args$synAcceptedClass)) {
+  stop('[', Sys.time(), '] --calc_synonymous is set to True, but ',
+       'synAcceptedClass is NULL.')
+}
 
 check_input_arguments(args, outputType = 'file')
 
@@ -1059,10 +980,10 @@ message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
 # Test arguments --------------------------------------------------------------
-# args <- list('variants' = '../work/46/4f35fcb3f86675007be24a347c6f5b/inputs/inputMutations-LUSC-hg19.maf',
-#              'genomic_regions' = '../work/8c/3bb3b24a9af0a805dc0cc73ca1a6de/inputs/inputGR-LUSC-hg19.bed',
+# args <- list('variants' = '../inputMutations-LUAD-hg19.maf',
+#              'genomic_regions' = '../inputGR-LUAD-hg19.bed',
 #              'tumor_subtype' = 'LUSC', 'target_genome_version' = 'hg19',
-#              'target_genome_chr_len' = '../data/assets/reference_genome/Homo_sapiens_assembly19.chrom.sizes',
+#              'target_genome_chr_len' = '../data/assets/reference_genome/Homo_sapiens_assembly19.chrom.sizes.bed',
 #              'gene_name_synonyms' = '../data/assets/gene_names_synonyms/hgnc_complete_set_2022-07-01_proc.csv',
 #              'varanno_conversion_table' = '../data/assets/variantAnnotation_to_annovar_conversion.txt',
 #              'bin_len' = 5*(10^4), 'calc_synonymous' = T,
@@ -1079,6 +1000,7 @@ printArgs(args)
 #                                       "5'Flank", "IGR", "Intron", "RNA", 
 #                                       "Targeted_Region", "Splice_Site", 
 #                                       'Unknown'), 
+#              'synAcceptedClass' = 'Silent',
 #              'annotation_failed_code' = 'Unknown',
 #              'output' = 'mutRate-MET_PANCAN-hg19-')
 
@@ -1130,20 +1052,73 @@ if (!is.null(args$varanno_conversion_table)) {
           'table')
 }
 
-# Match mutations to genomic regions, calculate mut.rates ---------------------
-# for custom genomic regions
-message('[', Sys.time(), '] Working with genomic regions from bed12 file')
-mutRates_GR <- mutRate_wrapper(varsDT = allVars, GRs = GR, 
-                               checkAnnoMatch = T, 
-                               synonymsDT = symbolSynsDT,
-                               calc_synonymous = args$calc_synonymous,
-                               cdsAcceptedClass = args$cdsAcceptedClass, 
-                               ncAcceptedClass = args$ncAcceptedClass, 
-                               specieCode = 'Hsapiens',
-                               targetGenomeVersion = args$target_genome_version,
-                               codesConversionDT = codesConvertDT, 
-                               annoFailedCode = args$annotation_failed_code)
+# Match mutations to genomic regions ------------------------------------------
+varsToRegsMap <- matchVariantsToRegions(varsDT = allVars, GRs = GR, 
+                                        checkAnnoMatch = T, 
+                                        synonymsDT = symbolSynsDT,
+                                        cdsAcceptedClass = args$cdsAcceptedClass,
+                                        ncAcceptedClass = args$ncAcceptedClass, 
+                                        specieCode = 'Hsapiens',
+                                        targetGenomeVersion = args$target_genome_version,
+                                        codesConversionDT = codesConvertDT, 
+                                        annoFailedCode = args$annotation_failed_code)
 
+# Calculate N mutations, N unique mutated sites and N participants ------------
+# count number of mutations (nMuts), unique mutation sites (nMutsUniq) and 
+# number of participants with mutations per genomic region PER PATIENT TUMOR 
+# SUBTYPE. Counting per patient tumor subtype is done to preserve information
+# regarding mutations distribution in the composite (i.e. created out of 
+# several independent tumor types) tumor_subtype. We can count number of 
+# mutations as .N and not as length(unique(key)) because mutations can occur  
+# at the same spot in different patients.
+varsToRegsMap[, pos := gsub(':[ATGC].*', '', key)]
+grMutStats <- varsToRegsMap[,.(nMuts = .N, nMutsUniq = length(unique(pos)),
+                               nParts = length(unique(participant_id))),
+                            by = .(gr_name, gr_id, gene_id, gene_name, 
+                                   patient_tumor_subtype)]
+
+# nParts_total will hold a total number of participants with mutation in that
+# region regardless of patient_tumor_subtype
+grMutStats <- merge(grMutStats, 
+                    varsToRegsMap[,.(nMuts_total = .N, 
+                                     nMutsUniq_total = length(unique(pos)),
+                                     nParts_total = length(unique(participant_id))),
+                                by = .(gr_name, gr_id, gene_id, gene_name)],
+                    by = c('gr_name', 'gr_id', 'gene_id', 'gene_name'),
+                    all = T)
+varsToRegsMap[, pos := NULL]
+
+# Calculate mutation rates averaged across participants for custom regions ----
+message('[', Sys.time(), '] Started calculating averaged across ',
+        'participants mutation rate (genomic regions from bed12 file)')
+mutRate <- calcMutRate(mutsToGRmap = varsToRegsMap, GRs = GR,
+                       allParticipantsID = unique(allVars$participant_id))
+message('[', Sys.time(), '] Finished calculating averaged across ',
+        'participants mutation rate (genomic regions from bed12 file)')
+
+if (args$calc_synonymous) {
+  message('[', Sys.time(), '] Started calculating averaged across ',
+          'participants synonymous mutation rate (genomic regions from bed12 ',
+          'file)')
+  synMutRate <- calcMutRate(mutsToGRmap = varsToRegsMap[var_class %in% args$synAcceptedClass],
+                            allParticipantsID = unique(allVars$participant_id),
+                            GRs = GR)
+  synMutRate <- synMutRate[,.(gr_name, meanMutRate, meanMutRateQuant)]
+  setnames(synMutRate, c('meanMutRate', 'meanMutRateQuant'),
+           c('synMeanMutRate', 'synMeanMutRateQuant'))
+  message('[', Sys.time(), '] Finished calculating averaged across ',
+          'participants synonymous mutation rate genomic regions from bed12 ',
+          'file')
+  mutRate <- merge(mutRate, synMutRate, by = 'gr_name', all.x = T)
+  rm(synMutRate)
+}
+
+# add info about number of mutations
+mutRate <- merge(grMutStats, mutRate, all = T,
+                 by = c('gr_name', 'gr_id', 'gene_name', 'gene_id'))
+mutRate <- mutRate[!is.na(nMuts)]
+rm(grMutStats)
+gc()
 
 # Calculate local (bin-wise) mut.rates ----------------------------------------
 if (args$bin_len > 1) {
@@ -1154,17 +1129,24 @@ if (args$bin_len > 1) {
   genomeTilesGR <- tileGenome(chrLensVect, tilewidth = args$bin_len, 
                               cut.last.tile.in.chrom = T)
   mcols(genomeTilesGR)$gr_name <- apply(as.data.table(genomeTilesGR), 1,
-                                        function(x) paste(x['seqnames'],
+                                        function(x) paste(args$target_genome_version,
+                                                          x['seqnames'],
                                                           x['start'], x['end'],
                                                           sep = '--'))
   mcols(genomeTilesGR)$gr_name <- gsub(' ', '', mcols(genomeTilesGR)$gr_name)
   message('[', Sys.time(), '] Finished binning genome on bins sized ', 
           args$bin_len, 'bp.')
   
-  message('[', Sys.time(), '] Working with genomic regions created as bins')
-  mutRates_GenomeTiles <- mutRate_wrapper(varsDT = allVars, checkAnnoMatch = F,
-                                          GRs = genomeTilesGR, 
-                                          calc_synonymous = args$calc_synonymous)
+  message('[', Sys.time(), '] Started calculating averaged across ',
+          'participants mutation rate (', args$bin_len, 'bp tiles)')
+  varsToTilesMap <- matchVariantsToRegions(varsDT = allVars, 
+                                           GRs = genomeTilesGR, 
+                                           checkAnnoMatch = F)
+  mutRateTiles <- calcMutRate(mutsToGRmap = varsToTilesMap, 
+                              GRs = genomeTilesGR,
+                              allParticipantsID = unique(allVars$participant_id))
+  message('[', Sys.time(), '] Finished calculating averaged across ',
+          'participants mutation rate (', args$bin_len, 'bp tiles)')
 } else {
   message('[', Sys.time(), '] --bin_len is not given. Will not calculate ',
           'local mutation rates.')
@@ -1176,17 +1158,14 @@ gc()
 # Matched local mut.rates(tiled genome) to custom regions ---------------------
 if (args$bin_len > 1) {
   GR <- matchLocalMutRateToRegions(GR, genomeTilesGR, 
-                                   unique(mutRates_GenomeTiles$mutRatesDT[,.(gr_name,
-                                                                             meanMutRate)]))
+                                   mutRateTiles[,.(gr_name, meanMutRate)])
   message('[', Sys.time(), '] Because local mutation rates are available, ',
           'will also add them to the variats to genomic regions map in ',
           'columns meanMutRate_local and meanMutRateQuant_local')
   GRdt <- as.data.table(mcols(GR))
   GRdt <- GRdt[,.(gr_name, meanMutRate_local, meanMutRateQuant_local)]
   GRdt <- unique(GRdt)
-  mutRates_GR$varsToRegsMap <- merge(mutRates_GR$varsToRegsMap, GRdt,
-                                     by = 'gr_name', all.x = T)
-  
+  mutRate <- merge(mutRate, GRdt, by = 'gr_name', all.x = T)
   rm(genomeTilesGR, GRdt)
 }
 
@@ -1196,17 +1175,15 @@ gc()
 # Check if there is a significant enrichment of variant types (i.e.INDELs)-----
 message('[', Sys.time(), '] Started calculations of variant types enrichment ',
         'across genes')
-varCatEnrich <- checkVarTypeEnrichment(mutRates_GR$varsToRegsMap)
+varCatEnrich <- checkVarTypeEnrichment(varsToRegsMap)
 message('[', Sys.time(), '] Finished calculations of variant types ',
         'enrichment across genes')
 
 # OUTPUT to files -------------------------------------------------------------
-write.table(cbind('tumor_subtype' = args$tumor_subtype, 
-                  mutRates_GR$mutRatesDT), 
+write.table(cbind('tumor_subtype' = args$tumor_subtype, mutRate),
             sep = '\t', row.names = F, col.names = T, append = F, quote = F,
             file = paste0(args$output, '-meanMutRatePerGR.csv'))
-write.table(cbind('tumor_subtype' = args$tumor_subtype, 
-                  mutRates_GR$varsToRegsMap), 
+write.table(cbind('tumor_subtype' = args$tumor_subtype, varsToRegsMap), 
             sep = '\t', row.names = F, col.names = T, append = F, quote = F,
             file = paste0(args$output, '-mutMapToGR.csv'))
 write.table(cbind('tumor_subtype' = args$tumor_subtype, varCatEnrich), 
