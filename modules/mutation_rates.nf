@@ -21,6 +21,7 @@ process CALCULATE_MUTATION_RATES {
                                  --target_genome_chr_len ${target_genome_chr_len} \
                                  --calc_synonymous ${params.calc_synonymous} \
                                  --cdsAcceptedClass ${params.cdsAcceptedClass} \
+                                 --synAcceptedClass ${params.synAcceptedClass} \
                                  --ncAcceptedClass ${params.ncAcceptedClass} \
                                  --varanno_conversion_table ${varanno_conversion_table} \
                                  --annotation_failed_code ${params.annotation_failed_code} \
