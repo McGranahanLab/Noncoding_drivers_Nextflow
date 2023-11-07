@@ -1033,7 +1033,7 @@ if (outChrStyle == 'UCSC') {
 patientsInv[, participant_id := as.character(participant_id)]
 allVars[, participant_id := as.character(participant_id)]
 setkey(patientsInv, participant_id)
-allVars[, patient_tumor_subtype := patientsInv[allVars$participant_id]$tumor_subtype]
+allVars[, participant_tumor_subtype := patientsInv[allVars$participant_id]$participant_tumor_subtype]
 allVarsMAF <- mutTabToMAF(allVars)
 
 # sort by chromosome & start

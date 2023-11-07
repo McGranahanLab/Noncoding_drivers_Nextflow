@@ -1010,10 +1010,10 @@ message('[', Sys.time(), '] Started reading ', args$variants)
 colsToKeep <- c('Tumor_Sample_Barcode', 'key', 'Chromosome',
                 'Start_Position', 'End_Position', 'Gene.refGene', 
                 'Variant_Classification', 'Variant_Type', 'mut_len', 
-                'struct_type', 'patient_tumor_subtype')
+                'struct_type', 'participant_tumor_subtype')
 updColNames <- c('participant_id', 'key', 'chr', 'start', 'end', 
                  'gene_name_var', 'var_class', 'var_type', 'mut_len',
-                 'struct_type', 'patient_tumor_subtype')
+                 'struct_type', 'participant_tumor_subtype')
 allVars <- fread(args$variants, header = T, stringsAsFactors = F, 
                  select = colsToKeep)
 setnames(allVars, colsToKeep, updColNames, skip_absent = T)
@@ -1075,10 +1075,10 @@ varsToRegsMap[, pos := gsub(':[ATGC].*', '', key)]
 grMutStats <- varsToRegsMap[,.(nMuts = .N, nMutsUniq = length(unique(pos)),
                                nParts = length(unique(participant_id))),
                             by = .(gr_name, gr_id, gene_id, gene_name, 
-                                   patient_tumor_subtype)]
+                                   participant_tumor_subtype)]
 
 # nParts_total will hold a total number of participants with mutation in that
-# region regardless of patient_tumor_subtype
+# region regardless of participant_tumor_subtype
 grMutStats <- merge(grMutStats, 
                     varsToRegsMap[,.(nMuts_total = .N, 
                                      nMutsUniq_total = length(unique(pos)),
