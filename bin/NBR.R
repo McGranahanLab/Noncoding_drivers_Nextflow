@@ -79,7 +79,7 @@
 #    to choose your own output naming choices.
 #
 
-box::use(./custom_functions[...])
+box::use(./custom_functions_preprocessing[...])
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 suppressWarnings(suppressPackageStartupMessages(library(GenomicRanges)))

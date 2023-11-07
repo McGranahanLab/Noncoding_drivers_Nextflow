@@ -20,7 +20,7 @@
 # CREATED:  22.01.2022
 # REVISION: 22.09.2023
 
-box::use(./custom_functions[...])
+box::use(./custom_functions_preprocessing[...])
 
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
@@ -973,7 +973,7 @@ if (args$calc_synonymous & is.null(args$synAcceptedClass)) {
        'synAcceptedClass is NULL.')
 }
 
-check_input_arguments(args, outputType = 'file')
+check_input_arguments_preproc(args, outputType = 'file')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')

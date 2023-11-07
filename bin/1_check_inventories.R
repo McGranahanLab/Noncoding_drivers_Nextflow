@@ -75,7 +75,7 @@
 # CREATED:  22.06.2023
 # REVISION: 26.07.2023
 
-box::use(./custom_functions[...])
+box::use(./custom_functions_preprocessing[...])
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 
@@ -704,7 +704,7 @@ timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 
 # check arguments are correct
-check_input_arguments(args)
+check_input_arguments_preproc(args)
 printArgs(args)
 
 # Check the inventory----------------------------------------------------------

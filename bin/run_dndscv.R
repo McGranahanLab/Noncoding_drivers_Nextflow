@@ -33,7 +33,7 @@
 # CREATED:  15.01.2021
 # REVISION: 04.10.2023
 
-box::use(./custom_functions[...])
+box::use(./custom_functions_preprocessing[...])
 
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(biomaRt)))
@@ -118,7 +118,7 @@ parser$add_argument('-or', '--outputRds', nargs = 1, required = T,
 args <- parser$parse_args()
 args$with_covariates <- as.logical(args$with_covariates)
 args$computeCI <- as.logical(args$computeCI)
-check_input_arguments(args, outputType = 'file')
+check_input_arguments_preproc(args, outputType = 'file')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')

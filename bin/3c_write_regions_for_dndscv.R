@@ -28,7 +28,7 @@
 # CREATED:  03.10.2023
 # REVISION: 03.10.2023
 
-box::use(./custom_functions[...])
+box::use(./custom_functions_preprocessing[...])
 box::use(./faster_buildref_dNdScv[...])
 
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
@@ -309,7 +309,7 @@ parser$add_argument("-o", "--output", required = T, type = 'character',
                     help = "Path to the output folder")
 
 args <- parser$parse_args()
-check_input_arguments(args, outputType = 'folder')
+check_input_arguments_preproc(args, outputType = 'folder')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')

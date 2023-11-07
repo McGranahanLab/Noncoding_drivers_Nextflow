@@ -23,7 +23,7 @@
 # CREATED:  28.09.2023
 # REVISION: 28.09.2023
 
-box::use(./custom_functions[...])
+box::use(./custom_functions_preprocessing[...])
 
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
@@ -56,7 +56,7 @@ parser$add_argument("-o", "--output", required = T, type = 'character',
                     help = "Path to the output file")
 
 args <- parser$parse_args()
-check_input_arguments(args, outputType = 'file')
+check_input_arguments_preproc(args, outputType = 'file')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')

@@ -21,7 +21,7 @@
 # REVISION: 29.09.2023
 
 
-box::use(./custom_functions[...])
+box::use(./custom_functions_preprocessing[...])
 
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
@@ -1494,7 +1494,7 @@ parser$add_argument("-o", "--output", required = T, type = 'character',
 
 args <- parser$parse_args()
 args$ignore_strand <- as.logical(args$ignore_strand)
-check_input_arguments(args, outputType = 'folder')
+check_input_arguments_preproc(args, outputType = 'folder')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
