@@ -17,4 +17,5 @@ module load tools/singularity/3.8.3
 export TMPDIR=/re_scratch/mlitovchenko/
 mkdir -p $TMPDIR
 
-./nextflow-23.04.2-all run main.nf -profile genomicsEngland -resume
+./nextflow-23.04.2-all run main.nf -profile genomicsEngland \
+                                   -entry CALL_DE_NOVO_CANCER_DRIVERS -resume

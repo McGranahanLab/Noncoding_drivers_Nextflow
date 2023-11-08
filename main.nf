@@ -75,7 +75,7 @@ process check_inventories {
 /* ----------------------------------------------------------------------------
 * Workflows
 *----------------------------------------------------------------------------*/
-workflow {
+workflow CALL_DE_NOVO_CANCER_DRIVERS {
     /*
         Step 1: convert inventories & reference genome files to channels
     */
@@ -213,13 +213,12 @@ workflow {
     RUN_ONCODRIVEFML (PREPARE_INPUT_MUTATION_FILES.out.oncodrivefml,
                       PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.oncodrivefml,
                       oncodrivefml_config)
-    oncodrivefml_results = RUN_NBR.out.results
-                                  .map { it ->
-                                             return tuple(infer_tumor_subtype(it),
-                                                          infer_genomic_region(it), 
-                                                          'oncodrivefml', it)
-                                        }
-
+    oncodrivefml_results = RUN_ONCODRIVEFML.out.results
+                                           .map { it ->
+                                                    return tuple(infer_tumor_subtype(it),
+                                                                 infer_genomic_region(it), 
+                                                                 'oncodrivefml', it)
+                                                }
 
     /* PERFORM CHECK FOR THE */
     nbr_results.join(oncodrivefml_results, by: [0, 1], remainder: true).view()

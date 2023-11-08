@@ -23,9 +23,13 @@ will take care of this.
 
 do not forget to add the check that gtf does not contain "--" and that there is either protein_id or ccdsid
 
+How cgc_intogen_mc3_knownCancerGenes and olfactory_barnes_2020.csv was created? Do not forget that both gene_id and gene_name is used to match known genes to the results of analysis
+
 ## Oncodrivefml
 downloading bgdata is done properly if and only if example is run.
 is big 17GB
+
+https://oncodrivefml.readthedocs.io/en/latest/includes.html#readme-example
 
 ## DIGdriver
 mkdir -p $DIG_MODELS_DIR
@@ -56,6 +60,7 @@ cd ../
 ## MISC
 
 Do not forget to add chmod +x on R file into tutorial
+note on binding for singularity containers
 Grep Use.For.Plots because it can still appear in scripts
 Add a small workflow on how to prepare ensemble gtf to the biotyped gtf
 Provide with the pipeline biotype annotated GTF files on hg38 and on hg19
@@ -89,7 +94,7 @@ We do not recommend running both dNdScv and NBR on CDS
 
 ### Participants inventory
 
-Essential file. Recommended name: . It is recommended, no necessary.
+Essential file. Recommended name: . It is recommended, not necessary.
 
 | **participant_id** | **tumor_subtype** |   **somatic_path**   | **somatic_genome** | **cohort_name** |
 |:------------------:|:-----------------:|:--------------------:|:------------------:|:---------------:|
@@ -174,6 +179,8 @@ files are allowed ones.
 
 We highly recommend to bring this files to target genome version as this process
 can be long and high memory
+
+**Comma separated**
 
 ## Input files
 
