@@ -18,14 +18,38 @@
 # CREATED:  22.06.2023
 # REVISION: 07.11.2023
 
-box::use(./custom_functions[...])
+# Source custom functions -----------------------------------------------------
+#' get_script_dir
+#' @description Returns parent directory of the currently executing script
+#' @author https://stackoverflow.com/questions/47044068/get-the-path-of-current-script
+#' @return string, absolute path
+#' @note this functions has to be present in all R scripts sourcing any other
+#' script. Sourcing R scripts with use of box library is unstable then multiple
+#' processes try to execute the source at the same time.
+get_script_dir <- function() {
+  cArgs <- tibble::enframe(commandArgs(), name = NULL)
+  cArgsSplit <- tidyr::separate(cArgs, col = value, into = c("key", "value"),
+                                sep = "=", fill = "right")
+  cArgsFltr <- dplyr::filter(cArgsSplit, key == "--file")
+  
+  result <- dplyr::pull(cArgsFltr, value)
+  result <- tools::file_path_as_absolute(dirname(result))
+  result
+}
 
-box::use(argparse[...])
-box::use(data.table[...])
-box::use(GenomeInfoDb[...])
-box::use(GenomicRanges[...])
-box::use(rtracklayer[...])
-box::use(utils[...])
+srcDir <- get_script_dir()
+# to spread out multiple processes accessing the same file
+Sys.sleep(sample(1:15, 1))
+source(paste0(srcDir, '/custom_functions.R'))
+
+# Libraries -------------------------------------------------------------------
+suppressWarnings(suppressPackageStartupMessages(library(argparse)))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressWarnings(suppressPackageStartupMessages(library(GenomeInfoDb)))
+suppressWarnings(suppressPackageStartupMessages(library(GenomicRanges)))
+suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
+suppressWarnings(suppressPackageStartupMessages(library(stats)))
+suppressWarnings(suppressPackageStartupMessages(library(utils)))
 
 # Parsing input arguments -----------------------------------------------------
 #' check_input_arguments_preproc

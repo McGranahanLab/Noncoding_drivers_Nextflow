@@ -19,12 +19,14 @@
 # CREATED:  07.11.2023
 # REVISION: 07.11.2023
 
-box::use(argparse[...])
-box::use(data.table[...])
-box::use(GenomeInfoDb[...])
-box::use(GenomicRanges[...])
-box::use(rtracklayer[...])
-box::use(utils[...])
+# Libraries -------------------------------------------------------------------
+suppressWarnings(suppressPackageStartupMessages(library(argparse)))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressWarnings(suppressPackageStartupMessages(library(GenomeInfoDb)))
+suppressWarnings(suppressPackageStartupMessages(library(GenomicRanges)))
+suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
+suppressWarnings(suppressPackageStartupMessages(library(stats)))
+suppressWarnings(suppressPackageStartupMessages(library(utils)))
 
 # GLOBAL ARGUMENTS ------------------------------------------------------------
 #' @export

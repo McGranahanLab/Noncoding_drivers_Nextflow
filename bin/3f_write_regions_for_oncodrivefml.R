@@ -23,9 +23,32 @@
 # CREATED:  28.09.2023
 # REVISION: 28.09.2023
 
-box::use(./custom_functions[...])
-box::use(./custom_functions_preprocessing[...])
+# Source custom functions -----------------------------------------------------
+#' get_script_dir
+#' @description Returns parent directory of the currently executing script
+#' @author https://stackoverflow.com/questions/47044068/get-the-path-of-current-script
+#' @return string, absolute path
+#' @note this functions has to be present in all R scripts sourcing any other
+#' script. Sourcing R scripts with use of box library is unstable then multiple
+#' processes try to execute the source at the same time.
+get_script_dir <- function() {
+  cArgs <- tibble::enframe(commandArgs(), name = NULL)
+  cArgsSplit <- tidyr::separate(cArgs, col = value, into = c("key", "value"),
+                                sep = "=", fill = "right")
+  cArgsFltr <- dplyr::filter(cArgsSplit, key == "--file")
+  
+  result <- dplyr::pull(cArgsFltr, value)
+  result <- tools::file_path_as_absolute(dirname(result))
+  result
+}
 
+srcDir <- get_script_dir()
+# to spread out multiple processes accessing the same file
+Sys.sleep(sample(1:15, 1))
+source(paste0(srcDir, '/custom_functions.R'))
+source(paste0(srcDir, '/custom_functions_preprocessing.R'))
+
+# Libraries -------------------------------------------------------------------
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
@@ -90,7 +113,7 @@ mcols(bed) <- mcols(bed)[, c('gr_id', 'gene_id', 'gene_name')]
 bed <- as.data.table(bed)
 bed <- split(bed, by = 'gr_id')
 bed <- lapply(bed, function(x) x[, colsToGet, with = F])
-bed <-  lapply(bed, setnames, colsToGet, colsOutNames)
+bed <- lapply(bed, setnames, colsToGet, colsOutNames)
 
 # WRITE -----------------------------------------------------------------------
 lapply(names(bed),

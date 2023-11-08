@@ -20,9 +20,32 @@
 # CREATED:  08.10.2020
 # REVISION: 29.09.2023
 
-box::use(./custom_functions[...])
-box::use(./custom_functions_preprocessing[...])
+# Source custom functions -----------------------------------------------------
+#' get_script_dir
+#' @description Returns parent directory of the currently executing script
+#' @author https://stackoverflow.com/questions/47044068/get-the-path-of-current-script
+#' @return string, absolute path
+#' @note this functions has to be present in all R scripts sourcing any other
+#' script. Sourcing R scripts with use of box library is unstable then multiple
+#' processes try to execute the source at the same time.
+get_script_dir <- function() {
+  cArgs <- tibble::enframe(commandArgs(), name = NULL)
+  cArgsSplit <- tidyr::separate(cArgs, col = value, into = c("key", "value"),
+                                sep = "=", fill = "right")
+  cArgsFltr <- dplyr::filter(cArgsSplit, key == "--file")
+  
+  result <- dplyr::pull(cArgsFltr, value)
+  result <- tools::file_path_as_absolute(dirname(result))
+  result
+}
 
+srcDir <- get_script_dir()
+# to spread out multiple processes accessing the same file
+Sys.sleep(sample(1:15, 1))
+source(paste0(srcDir, '/custom_functions.R'))
+source(paste0(srcDir, '/custom_functions_preprocessing.R'))
+
+# Libraries -------------------------------------------------------------------
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 suppressWarnings(suppressPackageStartupMessages(library(dndscv)))
@@ -49,9 +72,8 @@ options(scipen = 999)
 #' NULL, selection on transcript_biotype/gene_biotype will be performed.
 extractGeneToIDmap <- function(gtfGR, tx_biotypes = NULL) {
   result <- as.data.table(mcols(gtfGR))
-  result <- result[, intersect(c('gene_name', 'gene_id', 
-                                 'gene_type', 'gene_biotype',
-                                 'transcript_id', 
+  result <- result[, intersect(c('gene_name', 'gene_id', 'gene_type', 
+                                 'gene_biotype', 'transcript_id', 
                                  'transcript_type', 'transcript_biotype'),
                                colnames(result)), with = F]
   
@@ -706,8 +728,10 @@ excludeFromTarget <- function(targetGR, excludeGR, type, ignore.strand = T) {
   # here ignore.strand is F because we gave all possible strand combinations
   # of strand in excludeGR and we want to preserve strand in targetGR
   result <- switch(type, 
-                   'black' = setdiff(targetGR, excludeGR, ignore.strand = F), 
-                   'white' = intersect(targetGR, excludeGR, ignore.strand = F))
+                   'black' = GenomicRanges::setdiff(targetGR, excludeGR, 
+                                                    ignore.strand = F), 
+                   'white' = GenomicRanges::intersect(targetGR, excludeGR, 
+                                                      ignore.strand = F))
   if (length(result) == 0) {
     return(result)
   }

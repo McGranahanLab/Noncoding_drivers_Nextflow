@@ -6,7 +6,7 @@
 # package. Speed increase is achieved by using mclapply instead of loops and
 # by introducing support for multiple cores.
 #
-# USAGE: source('faster_buildref_dNdScv.R') or box::use(./faster_buildref_dNdScv[...])
+# USAGE: source('faster_buildref_dNdScv.R') or suppressWarnings(suppressPackageStartupMessages(library(./faster_buildref_dNdScv)))
 #
 # OPTIONS: None
 #
@@ -19,15 +19,17 @@
 # CREATED:  03.10.2023
 # REVISION: 03.10.2023
 
-box::use(Biostrings[...])
-box::use(dndscv[...])
-box::use(GenomicRanges[...])
-box::use(IRanges[...])
-box::use(parallel[...])
-box::use(Rsamtools[...])
-box::use(seqinr[...])
-box::use(utils[...])
+# Libraries -------------------------------------------------------------------
+suppressWarnings(suppressPackageStartupMessages(library(Biostrings)))
+suppressWarnings(suppressPackageStartupMessages(library(dndscv)))
+suppressWarnings(suppressPackageStartupMessages(library(GenomicRanges)))
+suppressWarnings(suppressPackageStartupMessages(library(IRanges)))
+suppressWarnings(suppressPackageStartupMessages(library(parallel)))
+suppressWarnings(suppressPackageStartupMessages(library(Rsamtools)))
+suppressWarnings(suppressPackageStartupMessages(library(seqinr)))
+suppressWarnings(suppressPackageStartupMessages(library(utils)))
 
+# Functions -------------------------------------------------------------------
 get_CDSseq = function(gr, strand, genomefile) {
   cdsseq = strsplit(paste(as.vector(Rsamtools::scanFa(genomefile, gr)), 
                           collapse = ""), "")[[1]]
