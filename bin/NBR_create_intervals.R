@@ -22,11 +22,12 @@
 # CREATED:  2014
 # REVISION: 17.02.2020
 
-suppressPackageStartupMessages(library(argparse))
-suppressPackageStartupMessages(library(Biostrings))
-suppressPackageStartupMessages(library(data.table))
-suppressPackageStartupMessages(library(GenomicRanges))
-suppressPackageStartupMessages(library(Rsamtools))
+# Libraries -------------------------------------------------------------------
+suppressWarnings(suppressPackageStartupMessages(library(argparse)))
+suppressWarnings(suppressPackageStartupMessages(library(Biostrings)))
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressWarnings(suppressPackageStartupMessages(library(GenomicRanges)))
+suppressWarnings(suppressPackageStartupMessages(library(Rsamtools)))
 
 # Functions -------------------------------------------------------------------
 #' getSeqlevelsStyle
