@@ -684,6 +684,62 @@ checkBlacklistInventory <- function(inventoryPath, targetGenomeVersion,
   result
 }
 
+#' checkDIGdriverInventory
+#' @description Checks for validity inventory table with DIGdriver models.
+#' Checks that:
+#' 1) If DIGdriver analysis is requested, the inventory file exists and not
+#' empty
+#' 2) columns tumor_subtype and model_file are present
+#' 3) model files do exist
+#' 4) all tumor subtypes for which DIGdriver analysis is requested, have a 
+#' model assigned
+#' @author Maria Litovchenko
+#' @param inventoryPath DIGdriver models' inventory path
+#' @param analysis_tumor_subtypes vector with tumor subtypes names for which
+#' DIGdriver analysis was requested. Could be empty/NULL is DIGdriver is not
+#' requested.
+checkDIGdriverInventory <- function(inventoryPath, analysis_tumor_subtypes, 
+                                    cores = 1) {
+  # DIGdriver analysis is not requested
+  if (is.null(analysis_tumor_subtypes) | 
+      identical(analysis_tumor_subtypes,
+                character(0))) {
+    return(NULL)
+  }
+  
+  if (is.null(inventoryPath)) {
+    stop('[', Sys.time(), '] DIGdriver analysis is requested, but DIGdriver ',
+         'model file is not given.')
+  }
+  if (file.size(inventoryPath) == 0) {
+    stop('[', Sys.time(), '] DIGdriver analysis is requested, but DIGdriver ',
+         'model inventory file is empty. File path: ', inventoryPath)
+  }
+  
+  # 1) all needed columns are present
+  essenCols <- c('tumor_subtype', 'model_file')
+  result <- checkHaveEssentialColumns(inventoryPath, essenCols,
+                                      'digdriver model', cores)
+  
+  # 2) check, that files exist
+  modelExists <- file.exists(result$model_file)
+  if (!all(modelExists)) {
+    stop('[', Sys.time(), '] Files do not exist: ', 
+         paste(result$model_file[!modelExists], collapse = ', '))
+  }
+  
+  # 3) check, that for all tumor subtypes in the analysis table there is a 
+  # model
+  notInTable <- setdiff(analysis_tumor_subtypes, result$tumor_subtype)
+  if (length(notInTable) > 0) {
+    stop('[', Sys.time(), '] DIGdriver analysis is requested for ',
+         paste(notInTable, collapse = ', '), ', but model files are not ',
+         'provided.')
+  }
+  
+  result
+}
+
 # Parse input arguments -------------------------------------------------------
 # create parser object
 parser <- ArgumentParser(prog = '1_check_inventories.R')
@@ -714,6 +770,13 @@ blackListHelp <- paste('Path to inventory table containing details of the',
 parser$add_argument("-b", "--inventory_blacklisted", 
                     required = F, type = 'character', default = NULL,
                     help = blackListHelp)
+
+digModelsHelp <- paste('Path to inventory table containing details of the',
+                       'DIGdriver models. Minimal columns: tumor_subtype and ',
+                       'model_file')
+parser$add_argument("-d", "--inventory_digdriver", 
+                    required = F, type = 'character', default = NULL,
+                    help = digModelsHelp)
 
 parser$add_argument('-m', '--min_n_participants', 
                     required = F, type = 'integer', default = 1, 
@@ -806,6 +869,14 @@ if (length(genomesVersions) > 2) {
 }
 
 print(paste0('[', Sys.time(), '] Analysis inventory is OK'))
+
+# check, that DIGdriver model inventory is OK. Function takes care to check 
+# that DIGdriver analysis was requested.
+digInv <- checkDIGdriverInventory(args$inventory_digdriver, 
+                                  unique(analysisInv[software == 'digdriver']$tumor_subtype))
+if (!is.null(digInv)) {
+  print(paste0('[', Sys.time(), '] DIGdriver inventory is OK'))
+}
 
 message("End time of run: ", Sys.time())
 message('Total execution time: ',  

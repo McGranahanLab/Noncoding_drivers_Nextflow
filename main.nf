@@ -77,7 +77,8 @@ process check_inventories {
 *----------------------------------------------------------------------------*/
 workflow CALL_DE_NOVO_CANCER_DRIVERS {
     /*
-        Step 1: convert inventories & reference genome files to channels
+        Step 1a: check that inventories have all the needed columns and values
+                 are acceptable
     */
     // create channels to all inventories
     patients_inv = Channel.fromPath(params.patients_inventory, 
@@ -87,6 +88,11 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
                                     checkIfExists: true)
                           .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" }
     blacklist_inv = channel_from_params_path(params.blacklist_inventory)
+    digdriver_inv = channel_from_params_path(params.digdriver_models_inventory)
+    // perform the checks
+    inventories_pass = check_inventories(patients_inv, analysis_inv, 
+                                         blacklist_inv, digdriver_inv)
+    inventories_pass = inventories_pass.collect()
 
     // create channels to target genome verion and to chain file for liftover
     target_genome_fasta = Channel.fromPath(params.target_genome_path,
@@ -146,13 +152,6 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
     nbr_neutral_trinucfreq = channel_from_params_path(params.nbr_trinucfreq_neutralbins_file)
     nbr_driver_regs = channel_from_params_path(params.nbr_driver_regs_file)
     oncodrivefml_config = channel_from_params_path(params.oncodrivefml_config)
-
-    /*
-        Step 1: check that inventories have all the needed columns and values
-                are acceptable 
-    */
-    inventories_pass = check_inventories(patients_inv, analysis_inv, blacklist_inv)
-    inventories_pass = inventories_pass.collect()
 
     /* 
         Step 2: create input mutations files
