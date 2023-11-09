@@ -64,6 +64,7 @@ check_input_arguments_preproc <- function(argsList, outputType = NULL) {
   lapply(argsList$inventory_patients, check_file_existence_msg)
   lapply(argsList$inventory_analysis, check_file_existence_msg)
   lapply(argsList$inventory_blacklisted, check_file_existence_msg)
+  lapply(argsList$inventory_digdriver, check_file_existence_msg)
   check_min_int_msg(argsList$min_n_participants, 'min_n_participants', 1)
   check_min_int_msg(argsList$min_depth, 'min_depth', 1)
   check_min_int_msg(argsList$min_tumor_vac, 'min_tumor_vac', 1)

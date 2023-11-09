@@ -96,6 +96,108 @@ process check_fasta_is_uscs {
     """
 }
 
+process check_fasta_is_uscs {
+    input:
+    path fasta_file
+
+    output:
+    stdout emit: fasta_pass
+
+    script:
+    """
+    grep '>' ${fasta_file} > chrs.txt
+    nChr=`wc -l chrs.txt | sed 's/ chrs.txt//g'`
+    nChrUCSC=`grep '>chr' chrs.txt | wc -l`
+    if [[ \$nChr -eq \$nChrUCSC ]]
+    then
+        echo 'FASTA is UCSC'
+    else
+        echo ${fasta_file} is not in UCSC format
+        exit 1
+    fi
+    """
+}
+
+process check_digdriver_files {
+    input:
+    tuple val(software), path(digdriverElements), path(nbrNeutralBins),
+          path(nbrNeutralTrinucfreq), path(nbrDriverRegs),
+          path(oncodrivefmlConfig)
+
+    when:
+    software == 'digdriver'
+
+    output:
+    stdout emit: digdriver_pass
+
+    script:
+    """
+    if [ ! -f ${digdriverElements} ]
+    then
+        echo DIGDRIVER was requested, but ${digdriverElements} does not exist
+        exit 1
+    fi
+    echo "DIGDRIVER files are OK"
+    """
+}
+
+process check_nbr_files {
+    input:
+    tuple val(software), path(digdriverElements), path(nbrNeutralBins),
+          path(nbrNeutralTrinucfreq), path(nbrDriverRegs),
+          path(oncodrivefmlConfig)
+
+    when:
+    software == 'nbr'
+
+    output:
+    stdout emit: nbr_pass
+
+    script:
+    """
+    if [ ! -f ${nbrNeutralBins} ]
+    then
+        echo NBR was requested, but ${nbrNeutralBins} does not exist
+        exit 1
+    fi
+    if [ ! -f ${nbrNeutralTrinucfreq} ]
+    then
+        echo NBR was requested, but ${nbrNeutralTrinucfreq} does not exist
+        exit 1
+    fi
+    if [ ! -f ${nbrDriverRegs} ]
+    then
+        echo NBR was requested, but ${nbrDriverRegs} does not exist
+        exit 1
+    fi
+
+    echo "NBR files are OK"
+    """
+}
+
+process check_oncodrivefml_files {
+    input:
+    tuple val(software), path(digdriverElements), path(nbrNeutralBins),
+          path(nbrNeutralTrinucfreq), path(nbrDriverRegs),
+          path(oncodrivefmlConfig)
+
+    when:
+    software == 'oncodrivefml'
+
+    output:
+    stdout emit: oncodrivefml_pass
+
+    script:
+    """
+    if [ ! -f ${oncodrivefmlConfig} ]
+    then
+        echo OncodriveFML was requested, but ${oncodrivefmlConfig} does not exist
+        exit 1
+    fi
+    echo "OncodriveFML files are OK"
+    """
+}
+
 /* ----------------------------------------------------------------------------
 * Workflows
 *----------------------------------------------------------------------------*/
@@ -104,7 +206,6 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
         Step 1a: check that inventories have all the needed columns and values
                  are acceptable
     */
-    // create channels to all inventories
     patients_inv = Channel.fromPath(params.patients_inventory, 
                                     checkIfExists: true)
                           .ifEmpty { exit 1, "[ERROR]: patients inventory file not found" }
@@ -121,7 +222,6 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
     /*
         Step 1b: check that given reference genome is in UCSC format
     */
-    // create channels to target genome verion and to chain file for liftover
     target_genome_fasta = Channel.fromPath(params.target_genome_path,
                                            checkIfExists: true)
                                  .ifEmpty { exit 1, 
@@ -131,59 +231,36 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
                                    .ifEmpty { exit 1, 
                                             "[ERROR]: chromosomal lengths of target genome file not found" }
     chain = channel_from_params_path(params.chain)
-    // perform the checks
+    // perform the check for reference genome format (only UCSC)
     target_genome_pass = check_fasta_is_uscs(target_genome_fasta)
 
-
-
-    // create channels to gene name synonyms (needed for mutation rate calc)
-    gene_name_synonyms = channel_from_params_path(params.gene_name_synonyms)
-    varanno_conversion_table = channel_from_params_path(params.varanno_conversion_table)
-
     /*
-        Step 2: convert additional files for the software (loaded only if 
-        corresponding software is requested) to channels
+        Step 1c: check that essential files for various softwares are present
     */
     software = analysis_inv.splitCsv(header: true).map{row -> row.software}
                            .unique()
-    /*
-    This code makes nextflow never finish
-    check that all needed files are present
-    software.map { it ->
-        if (it == 'digdriver') {
-            Channel.fromPath(params.digdriver_models_inventory, checkIfExists: true)
-                           .ifEmpty { exit 1, "[ERROR]: digdriver models inventory file not found" }
-            Channel.fromPath(params.digdriver_elements, checkIfExists: true)
-                           .ifEmpty { exit 1, "[ERROR]: digdriver elements file not found" }
-        }
-        if (it == 'nbr') {
-            nbr_neutral_bins = Channel.fromPath(params.nbr_regions_neutralbins_file,
-                                                checkIfExists: true)
-                                      .ifEmpty { exit 1, "[ERROR]: nbr_regions_neutralbins_file not found" }
-            nbr_neutral_trinucfreq = Channel.fromPath(params.nbr_trinucfreq_neutralbins_file, 
-                                                      checkIfExists: true)
-                                            .ifEmpty { exit 1, "[ERROR]: nbr_trinucfreq_neutralbins_file not found" }
-            nbr_driver_regs = Channel.fromPath(params.nbr_driver_regs_file, 
-                                               checkIfExists: true)
-                                     .ifEmpty { exit 1, "[ERROR]: nbr_driver_regs_file not found" }
-        }
-        if (it == 'oncodrivefml') {
-            oncodrivefml_config = Channel.fromPath(params.oncodrivefml_config,
-                                                   checkIfExists: true)
-                                         .ifEmpty { exit 1, "[ERROR]: oncodrivefml_config not found" }
-        }
-    }*/
-     
-    // now all the files needed for individual software could be loaded via
-    // channel_from_params_path function. If file does not exist, it will just 
-    // create an empty file & continue 
-    digdriver_inv = channel_from_params_path(params.digdriver_models_inventory)
     digdriver_elements = channel_from_params_path(params.digdriver_elements)
     nbr_neutral_bins = channel_from_params_path(params.nbr_regions_neutralbins_file)
     nbr_neutral_trinucfreq = channel_from_params_path(params.nbr_trinucfreq_neutralbins_file)
     nbr_driver_regs = channel_from_params_path(params.nbr_driver_regs_file)
     oncodrivefml_config = channel_from_params_path(params.oncodrivefml_config)
+    essential_files = software.combine(digdriver_elements)
+                               .combine(nbr_neutral_bins)
+                               .combine(nbr_neutral_trinucfreq)
+                               .combine(nbr_driver_regs)
+                               .combine(oncodrivefml_config)
+    // perform the checks
+    digdriver_files_pass = check_digdriver_files(essential_files)
+    nbr_files_pass = check_nbr_files(essential_files)
+    oncodrivefml_files_pass = check_oncodrivefml_files(essential_files)
 
+    // combine all the checks together. Will work if and only if all checks are
+    // passed.
+    inventories_pass = inventories_pass.combine(target_genome_pass)
+                                       .combine(digdriver_files_pass)
+                                       .combine(nbr_files_pass)
+                                       .combine(oncodrivefml_files_pass)
+     
     /* 
         Step 2: create input mutations files
     */
@@ -200,6 +277,8 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
     /* 
         Step 4: calculate mutation rates
     */
+    gene_name_synonyms = channel_from_params_path(params.gene_name_synonyms)
+    varanno_conversion_table = channel_from_params_path(params.varanno_conversion_table)
     mut_rates = CALCULATE_MUTATION_RATES (PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.bed
                                           .combine(PREPARE_INPUT_MUTATION_FILES.out.maf, by: [0])
                                           .combine(target_genome_chr_len)
@@ -249,8 +328,9 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
                                                                  infer_genomic_region(it), 
                                                                  'oncodrivefml', it)
                                                 }
-
-    /* PERFORM CHECK FOR THE */
+    /* 
+        Step 6: match results of different softwares' runs 
+    */
     nbr_results.join(oncodrivefml_results, by: [0, 1], remainder: true).view()
 }
 
