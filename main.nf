@@ -74,6 +74,28 @@ process check_inventories {
     """
 }
 
+process check_fasta_is_uscs {
+    input:
+    path fasta_file
+
+    output:
+    stdout emit: fasta_pass
+
+    script:
+    """
+    grep '>' ${fasta_file} > chrs.txt
+    nChr=`wc -l chrs.txt | sed 's/ chrs.txt//g'`
+    nChrUCSC=`grep '>chr' chrs.txt | wc -l`
+    if [[ \$nChr -eq \$nChrUCSC ]]
+    then
+        echo 'FASTA is UCSC'
+    else
+        echo ${fasta_file} is not in UCSC format
+        exit 1
+    fi
+    """
+}
+
 /* ----------------------------------------------------------------------------
 * Workflows
 *----------------------------------------------------------------------------*/
@@ -96,6 +118,9 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
                                          blacklist_inv, digdriver_inv)
     inventories_pass = inventories_pass.collect()
 
+    /*
+        Step 1b: check that given reference genome is in UCSC format
+    */
     // create channels to target genome verion and to chain file for liftover
     target_genome_fasta = Channel.fromPath(params.target_genome_path,
                                            checkIfExists: true)
@@ -106,6 +131,10 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
                                    .ifEmpty { exit 1, 
                                             "[ERROR]: chromosomal lengths of target genome file not found" }
     chain = channel_from_params_path(params.chain)
+    // perform the checks
+    target_genome_pass = check_fasta_is_uscs(target_genome_fasta)
+
+
 
     // create channels to gene name synonyms (needed for mutation rate calc)
     gene_name_synonyms = channel_from_params_path(params.gene_name_synonyms)
