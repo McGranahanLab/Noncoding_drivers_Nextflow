@@ -10,18 +10,17 @@ date: "`r Sys.Date()`"
 knitr::opts_chunk$set(echo = T)
 ```
 
-ADD DIGDRIVER INVENTORY TO INVENTORY CHECK SCRIPT
+do not forget to add the check that gtf does not contain "--" and that there is either protein_id or ccdsid
+Add GTEx and TCGA inventories too, but only for the postprocessing script
 
 https://github.com/OpenGenomics/mc3/blob/aff72c9696031c2f2bdedbb549ceb8102e0c0ef0/refdocs_tree.txt#L17
 https://data.broadinstitute.org/snowman/hg19/annotation/
 wget https://data.broadinstitute.org/snowman/hg19/Homo_sapiens_assembly19.fasta
 wget https://data.broadinstitute.org/snowman/hg19/annotation/Homo_sapiens_assembly19.gtf
 
-because DIGdriver can only handle reference genome in UCSC format, we have to add 'chr' to the name
+because DIGdriver can only handle **reference genome in UCSC format**, we have to add 'chr' to the name
 of each chromosome in fasta file. no need to do that for your mutations or gtf regions, the code
 will take care of this.
-
-do not forget to add the check that gtf does not contain "--" and that there is either protein_id or ccdsid
 
 How cgc_intogen_mc3_knownCancerGenes and olfactory_barnes_2020.csv was created? Do not forget that both gene_id and gene_name is used to match known genes to the results of analysis
 
