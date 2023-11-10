@@ -72,9 +72,11 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
                           .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" }
     blacklist_inv = channel_from_params_path(params.blacklist_inventory)
     digdriver_inv = channel_from_params_path(params.digdriver_models_inventory)
+    chasmplus_inv = channel_from_params_path(params.chasmplus_annotators_inventory)
     // perform the checks
     inventories_pass = check_inventories(patients_inv, analysis_inv, 
-                                         blacklist_inv, digdriver_inv)
+                                         blacklist_inv, digdriver_inv, 
+                                         chasmplus_inv)
     inventories_pass = inventories_pass.collect()
 
     /*
@@ -142,6 +144,13 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
                                           .combine(target_genome_chr_len)
                                           .combine(gene_name_synonyms)
                                           .combine(varanno_conversion_table))
+
+    /* 
+        Step 5a: run CHASMplus
+    */
+    RUN_CHASMplus (analysis_inv, PREPARE_INPUT_MUTATION_FILES.out.chasmplus, 
+                   chasmplus_inv)
+
     /* 
         Step 5b: run DIGdriver
     */
