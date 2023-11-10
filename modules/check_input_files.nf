@@ -4,6 +4,7 @@ process check_inventories {
     path analysis_inventory_path
     path blacklist_inventory_path
     path digdriverModels_inventory_path
+    path chasmplusAnno_inventory_path
 
     output:
     stdout emit: inventories_pass
@@ -14,7 +15,8 @@ process check_inventories {
                           --inventory_analysis ${analysis_inventory_path} \
                           --target_genome_version ${params.target_genome_version} \
                           --inventory_blacklisted ${blacklist_inventory_path} \
-                          --inventory_digdriver ${digdriverModels_inventory_path}
+                          --inventory_digdriver ${digdriverModels_inventory_path} \
+                          --inventory_chasmplus ${chasmplusAnno_inventory_path}
     """
 }
 

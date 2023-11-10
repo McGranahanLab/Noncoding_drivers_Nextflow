@@ -684,6 +684,73 @@ checkBlacklistInventory <- function(inventoryPath, targetGenomeVersion,
   result
 }
 
+#' checkCHASMplusInventory
+#' @description 
+#' @author Maria Litovchenko
+#' @param inventoryPath CHASMplus annotators inventory path
+#' @param analysis_tumor_subtypes vector with tumor subtypes names for which
+#' CHASMplys analysis was requested. Could be empty/NULL is CHASMplys is not
+#' requested.
+#' @param cores integer, number of cores to use
+#' @return data table with CHASMplus inventory of annotators or NULL in case 
+#' CHASMplus analysis was not requested.
+checkCHASMplusInventory <- function(inventoryPath, analysis_tumor_subtypes,
+                                    cores = 1) {
+  # CHASMplus analysis is not requested
+  if (is.null(analysis_tumor_subtypes) | 
+      identical(analysis_tumor_subtypes,
+                character(0))) {
+    return(NULL)
+  }
+  
+  if (is.null(inventoryPath)) {
+    stop('[', Sys.time(), '] CHASMplus analysis is requested, but CHASMplus ',
+         'annotator inventory is not given.')
+  }
+  if (file.size(inventoryPath) == 0) {
+    stop('[', Sys.time(), '] CHASMplus analysis is requested, but CHASMplus ',
+         'annotator inventory file is empty. File path: ', inventoryPath)
+  }
+  
+  # 1) all needed columns are present
+  essenCols <- c('tumor_subtype', 'chasm_annotator')
+  result <- checkHaveEssentialColumns(inventoryPath, essenCols,
+                                      'chasm annotator', cores)
+  # 2) checks that chasm_annotator(s) are one of the accepted ones
+  acceptedAnno <- c('chasmplus', 'chasmplus_LAML', 'chasmplus_ACC', 
+                    'chasmplus_BLCA', 'chasmplus_LGG', 'chasmplus_BRCA', 
+                    'chasmplus_CESC', 'chasmplus_CHOL', 'chasmplus_COAD', 
+                    'chasmplus_ESCA', 'chasmplus_GBM', 'chasmplus_HNSC', 
+                    'chasmplus_KICH', 'chasmplus_KIRC', 'chasmplus_KIRP', 
+                    'chasmplus_LIHC', 'chasmplus_LUAD', 'chasmplus_LUSC', 
+                    'chasmplus_DLBC', 'chasmplus_MESO', 'chasmplus_OV', 
+                    'chasmplus_PAAD', 'chasmplus_PCPG', 'chasmplus_PRAD', 
+                    'chasmplus_READ', 'chasmplus_SARC', 'chasmplus_SKCM', 
+                    'chasmplus_STAD', 'chasmplus_TGCT', 'chasmplus_THYM', 
+                    'chasmplus_THCA', 'chasmplus_UCS', 'chasmplus_UCEC', 
+                    'chasmplus_UVM')
+  if (any(!result$chasm_annotator %in% acceptedAnno)) {
+    stop('[', Sys.time(), '] Following CHASMplus annotators are not ',
+         'acceptable: ', 
+         paste(result[!chasm_annotator %in% acceptedAnno]$chasm_annotator, 
+               collapse = ', '), '. Please select one of the accepted ones: ',
+         paste(acceptedAnno, collapse = ', '), '. See ',
+         'https://chasmplus.readthedocs.io/en/latest/models.html for more ',
+         'details on them.')
+  }
+
+  # 3) check, that for all tumor subtypes in the analysis table there is an
+  # annotator
+  notInTable <- setdiff(analysis_tumor_subtypes, result$tumor_subtype)
+  if (length(notInTable) > 0) {
+    stop('[', Sys.time(), '] CHASMplus analysis is requested for ',
+         paste(notInTable, collapse = ', '), ', but annotator is not ',
+         'provided.')
+  }
+  
+  result  
+}
+
 #' checkDIGdriverInventory
 #' @description Checks for validity inventory table with DIGdriver models.
 #' Checks that:
@@ -698,6 +765,9 @@ checkBlacklistInventory <- function(inventoryPath, targetGenomeVersion,
 #' @param analysis_tumor_subtypes vector with tumor subtypes names for which
 #' DIGdriver analysis was requested. Could be empty/NULL is DIGdriver is not
 #' requested.
+#' @param cores integer, number of cores to use
+#' @return data table with DIGdriver inventory or NULL in case analysis with 
+#' DIGdriver was not requested.
 checkDIGdriverInventory <- function(inventoryPath, analysis_tumor_subtypes, 
                                     cores = 1) {
   # DIGdriver analysis is not requested
@@ -709,7 +779,7 @@ checkDIGdriverInventory <- function(inventoryPath, analysis_tumor_subtypes,
   
   if (is.null(inventoryPath)) {
     stop('[', Sys.time(), '] DIGdriver analysis is requested, but DIGdriver ',
-         'model file is not given.')
+         'model inventory file is not given.')
   }
   if (file.size(inventoryPath) == 0) {
     stop('[', Sys.time(), '] DIGdriver analysis is requested, but DIGdriver ',
@@ -771,9 +841,16 @@ parser$add_argument("-b", "--inventory_blacklisted",
                     required = F, type = 'character', default = NULL,
                     help = blackListHelp)
 
+chasmAnnoHelp <- paste('Path to inventory table containing details of the',
+                       'CHASMplus annotators. Minimal columns: tumor_subtype',
+                       'and chasm_annotator.')
+parser$add_argument("-c", "--inventory_chasmplus", 
+                    required = F, type = 'character', default = NULL,
+                    help = chasmAnnoHelp)
+
 digModelsHelp <- paste('Path to inventory table containing details of the',
-                       'DIGdriver models. Minimal columns: tumor_subtype and ',
-                       'model_file')
+                       'DIGdriver models. Minimal columns: tumor_subtype and',
+                       'model_file.')
 parser$add_argument("-d", "--inventory_digdriver", 
                     required = F, type = 'character', default = NULL,
                     help = digModelsHelp)
@@ -876,6 +953,14 @@ digInv <- checkDIGdriverInventory(args$inventory_digdriver,
                                   unique(analysisInv[software == 'digdriver']$tumor_subtype))
 if (!is.null(digInv)) {
   print(paste0('[', Sys.time(), '] DIGdriver inventory is OK'))
+}
+
+# check, that CHASMplus annotator inventory is OK. Function takes care to check 
+# that CHASMplus analysis was requested.
+chasmInv <- checkCHASMplusInventory(args$inventory_chasmplus, 
+                                    unique(analysisInv[software == 'chasmplus']$tumor_subtype))
+if (!is.null(chasmInv)) {
+  print(paste0('[', Sys.time(), '] CHASMplus inventory is OK'))
 }
 
 message("End time of run: ", Sys.time())
