@@ -1,3 +1,58 @@
+process CHASMplus {
+    tag "$tumor_subtype-$gr_id"
+
+    input:
+    tuple val(tumor_subtype), val(gr_id), val(software), path(mutations), 
+          val(annotator)
+
+    output:
+    path "${software}Results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
+    tuple path('*.out'), path('*.err'), emit: logs
+
+    when:
+    software == 'chasmplus'
+
+    script:
+    """
+    MSG_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.out'
+    ERR_FILE=${software}"-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.err'
+
+    # a unique ID to use in all further commands
+    RUN_CODE=${software}'Results-'${tumor_subtype}'-'${gr_id}'-'${params.target_genome_version}
+    OUT_FILE=\$RUN_CODE'.csv'
+
+    oc run ${mutations} -a ${annotator} -t text -l ${params.target_genome_version} \
+       --mp ${task.cpus}
+
+    # move error and log files for their final location
+    mv ${mutations}'.err' \$ERR_FILE
+    mv ${mutations}'.log' \$MSG_FILE
+    mv ${mutations}'.sqlite' \$RUN_CODE'.sqlite'
+
+    # unfortunately, chasm plus puts results in the same folder as input files
+    # It also collates 4 tables together, so we need to disentangle them
+    chasmOutTsv=$mutations'.tsv'
+    reportLevels=(\$(grep '^#Report level' \$chasmOutTsv | sed 's/.* //g'))
+    tabsStartIdx=(\$(grep -n '^#Report level' \$chasmOutTsv | sed 's/:.*//g'))
+    tabsStartIdx+=(`wc -l \$chasmOutTsv | sed 's/ .*//g'`)
+    iterateTo="\${#tabsStartIdx[@]}"
+    iterateTo=\$((iterateTo - 2)) # -2 due to counting from 0
+    for tsi in `seq 0 \$iterateTo`; do
+        startRead="\${tabsStartIdx[\$tsi]}"
+        startRead=\$((startRead + 3))
+        endRead=\$((tsi + 1))
+        endRead="\${tabsStartIdx[\$endRead]}"
+
+        readRegion=`echo \$startRead','\$endRead'p'`
+        reportLvl="\${reportLevels[\$tsi]}"
+        sed -n "\$readRegion" \$chasmOutTsv | grep -v '^#' > \$RUN_CODE'_'\$reportLvl
+    done
+
+    awk -F'\t' '\$17!=""' \$RUN_CODE'_variant' > \$OUT_FILE
+    
+    """
+}
+
 process DIGDRIVER {
     tag "$tumor_subtype-$gr_id"
 
@@ -9,6 +64,9 @@ process DIGDRIVER {
     output:
     path "${software}Results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
     tuple path('*.out'), path('*.err'), emit: logs
+
+    when:
+    software == 'digdriver'
 
     script:
     """
@@ -67,6 +125,9 @@ process DNDSCV {
     path "*Rds", emit: rds
     tuple path('*.out'), path('*.err'), emit: logs
 
+    when:
+    software == 'dndscv'
+
     script:
     """
     OUT_FILE=${software}"Results-"${tumor_subtype}"-"${gr_id}'-'${params.target_genome_version}'.csv'
@@ -99,6 +160,9 @@ process MUTPANNING {
     output:
     path "${software}Results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
     tuple path('*.out'), path('*.err'), emit: logs
+
+    when:
+    software == 'mutpanning'
 
     script:
     """
@@ -133,6 +197,9 @@ process NBR {
     output:
     path "${software}Results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
     tuple path('*.out'), path('*.err'), emit: logs
+
+    when:
+    software == 'nbr'
 
     script:
     """
@@ -174,6 +241,9 @@ process ONCODRIVEFML {
     output:
     path "${software}Results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
     tuple path('*.out'), path('*.err'), emit: logs
+
+    when:
+    software == 'oncodrivefml'
 
     script:
     """

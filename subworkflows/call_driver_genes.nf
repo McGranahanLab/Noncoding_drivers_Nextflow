@@ -13,11 +13,39 @@ def infer_genomic_region(filePath) {
     MutPanning, NBR and OncodriveFML.
 */
 
+include { CHASMplus } from '../modules/run_software.nf'
 include { DIGDRIVER } from '../modules/run_software.nf'
 include { DNDSCV } from '../modules/run_software.nf'
 include { MUTPANNING } from '../modules/run_software.nf'
 include { NBR } from '../modules/run_software.nf'
 include { ONCODRIVEFML } from '../modules/run_software.nf'
+
+workflow RUN_CHASMplus {
+    take:
+    analysis_inv_path
+    chasmplus_mutations
+    chusmplusAnno_inv_path
+    target_genome_version
+
+    main:
+    chasm_analysis_inv = analysis_inv_path.splitCsv(header: true)
+                                          .map {row -> 
+                                              return tuple(row.tumor_subtype,
+                                                           row.gr_id,
+                                                           row.software)
+                                          }
+                                          .unique()
+    chusmplusAnno_inv = chusmplusAnno_inv_path.splitCsv(header: true)
+                                              .map {row -> 
+                                                  return tuple(row.tumor_subtype,
+                                                               row.chasm_annotator)
+                                              }
+    chasmplus_results = CHASMplus(chasm_analysis_inv.combine(chasmplus_mutations, by: [0])
+                                                    .filter{ it[2] == 'chasmplus' }
+                                                    .combine(chusmplusAnno_inv, by: [0])).csv
+    emit:
+    results = chasmplus_results
+}
 
 workflow RUN_DIGDRIVER {
     take:
