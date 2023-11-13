@@ -46,31 +46,135 @@ suppressWarnings(suppressPackageStartupMessages(library(EmpiricalBrownsMethod)))
 suppressWarnings(suppressPackageStartupMessages(library(plyr)))
 suppressWarnings(suppressPackageStartupMessages(library(poolr)))
 
-# [FUNCTIONS] Reading data ----------------------------------------------------
+# [FUNCTIONS] Reading results of de-novo cancer driver genes calling  ---------
+#' read_DIGdriver_results
+#' @description Reads raw results files from DIGdriver
+#' @author Maria Litovchenko
+#' @param filePath path to the file
+#' @return data.table with columns 
+read_DIGdriver_results <- function(filePath) {
+  colsToRead <- c('ELT', 'PVAL_MUT_BURDEN', 'PVAL_SNV_BURDEN',
+                  'PVAL_INDEL_BURDEN')
+  result <- fread(filePath, header = T, stringsAsFactors = F, 
+                  select = colsToRead)
+  if (ncol(result) < 2) {
+    stop('[', Sys.time(), '] DigDriver output lacks all 3 columns: ',
+         'PVAL_SNV_BURDEN, PVAL_INDEL_BURDEN, PVAL_MUT_BURDEN') 
+  }
+  result <- result[, intersect(colnames(result), colsToRead)[1:2], with = F]
+  setnames(result, colsToRead, c('binID', 'raw_p'), skip_absent = T)
+  result <- cbind(result, parseBED12regName(result$binID))
+  result <- result[, !colnames(result) %in% c('binID', 'name', 
+                                              'target_genome_version'),
+                   with = F]
+  setnames(result, 'gr_id', 'grID')
+  
+  result
+}
+
+#' read_dNdScv_results
+#' @description Reads raw results files from dNdScv
+#' @author Maria Litovchenko
+#' @param filePath path to the file
+#' @return data.table with columns gene_name and raw_p.
+read_dNdScv_results <- function(filePath) {
+  colsToRead <- c('gene_name', 'pallsubs_cv', 'pglobal_cv')
+  result <- fread(filePath, header = T, stringsAsFactors = F,
+                  select = colsToRead)
+  if (!'pglobal_cv' %in% colnames(result)) {
+    message('[', Sys.time(),  '] pglobal_cv is not found as a columns in ',
+            'dNdScv output. Most likely that there were no indels. Using ',
+            'pallsubs_cv instead. pallsubs_cv will be modified according ',
+            'to formula: ',
+            'pglobal_cv := 1 - pchisq(-2 * (log(pallsubs_cv)), df = 4) ',
+            'see dNdScv code as reference')
+    result[, pglobal_cv := 1 - pchisq(-2 * (log(pallsubs_cv)), df = 4)]
+  }
+  result <- result[,.(gene_name, pglobal_cv)]
+  setnames(result, 'pglobal_cv', 'raw_p')
+
+  result
+}
+
+#' read_MutPanning_results
+#' @description Reads raw results files from MutPanning
+#' @author Maria Litovchenko
+#' @param filePath path to the file
+#' @return data.table with columns gene_name and raw_p.
+read_MutPanning_results <- function(filePath) {
+  result <- fread(filePath, header = T, stringsAsFactors = F,
+                  select = c('Name', 'Significance'))
+  setnames(result, c('Name', 'Significance'), c('gene_name', 'raw_p'),
+           skip_absent = T)
+  result
+}
+
+#' read_NBR_results
+#' @description Reads raw results files from NBR
+#' @author Maria Litovchenko
+#' @param filePath path to the file
+#' @return data.table with columns gene_id, raw_p.
+read_NBR_results <- function(filePath) {
+  colsToRead <- c('region', 'pval_subs_CV', 'pval_indels_CV', 'pval_both_CV')
+  result <- fread(filePath, header = T, stringsAsFactors = F, 
+                  select = colsToRead)
+  result[, pval_subs_CV := as.double(pval_subs_CV)]
+  result[, pval_indels_CV := as.double(pval_indels_CV)]
+  if (!'pval_both_CV' %in% colnames(result)) {
+    result[, pval_both_CV := NA]
+  } else {
+    result[, pval_both_CV := as.double(pval_both_CV)]
+  }
+  result[is.na(pval_both_CV)]$pval_both_CV <- result[is.na(pval_both_CV)]$pval_subs_CV
+  result[is.na(pval_both_CV)]$pval_both_CV <- result[is.na(pval_both_CV)]$pval_indels_CV
+  result <- result[,.(region, pval_both_CV)]
+  setnames(result, c('region', 'pval_both_CV'), c('gene_id', 'raw_p'),
+           skip_absent = T)
+  if (nrow(result[is.na(raw_p)]) != 0) {
+    message('[', Sys.time(), '] Found ', nrow(result[is.na(raw_p)]),
+            ' entries in ', filePath, ' with all pval_subs_CV, ',
+            'pval_indels_CV, pval_both_CV equal to NA. Removed them.')
+    result <- result[!is.na(raw_p)]
+  }
+  result
+}
+
+#' read_OncodriveFML_results
+#' @description Reads raw results files from OncodriveFML
+#' @author Maria Litovchenko
+#' @param filePath path to the file
+#' @return data.table with columns gene_id, gene_name, raw_p.
+read_OncodriveFML_results <- function(filePath) {
+  result <- fread(filePath, header = T, stringsAsFactors = F,
+                  select = c('GENE_ID', 'SYMBOL', 'P_VALUE'))
+  setnames(result, c('GENE_ID', 'SYMBOL', 'P_VALUE'), 
+           c('gene_id', 'gene_name', 'raw_p'), skip_absent = T)
+  result
+}
+
 #' readSoftwareResults
 #' @description Reads in result files from dndscv, driverpower, mutpanning, 
 #' nbr, oncodrivefml into uniformal data table.
 #' @author Maria Litovchenko
 #' @param softName name of the software filePath corresponds to. One of dndscv,
 #' driverpower, mutpanning, nbr, oncodrivefml
+#' @param acceptedSoftware vector of accepted software
 #' @param filePath path to result file
 #' @param infoStr named vector with at least items cancer_subtype, gr_id
 #' @return data table with columns software, tumor_subtype, gr_id
-readSoftwareResults <- function(softName, filePath, infoStr) {
+readSoftwareResults <- function(softName, acceptedSoftware, filePath, infoStr){
   if (!file.exists(filePath)) {
     message('[', Sys.time(), '] File not found: ', filePath, '. Return empty ',
             'data table.')
     return(data.table())
   }
-  if (!softName %in% c('activedriverwgs', 'dndscv', 'driverpower',
-                       'mutpanning', 'nbr', 'oncodrivefml', 'oncodriveclustl',
-                       'digdriver')) {
+  if (!softName %in% acceptedSoftware) {
     stop('[', Sys.time(), '] readSoftwareResults: softName should be one of ',
-         'activedriverwgs, dndscv, driverpower, mutpanning, nbr, ',
-         'oncodrivefml, oncodriveclustl, digdriver. Current value: ', softName)
+         paste0(acceptedSoftware, collapse = ','), '. Current value: ',
+         softName)
   }
   
-  if (!all(names(c('cancer_subtype', 'gr_id') %in% infoStr))) {
+  if (!all(c('cancer_subtype', 'gr_id') %in% names(infoStr))) {
     stop('[', Sys.time(), '] readSoftwareResults: infoStr vector should have ',
          'items under names cancer_subtype, gr_id')
   }
@@ -79,105 +183,18 @@ readSoftwareResults <- function(softName, filePath, infoStr) {
   infoStr <- as.data.table(t(infoStr))
   
   message('[', Sys.time(), '] Reading: ', filePath)
+  result <- switch(softName,
+                   "digdriver"    = read_DIGdriver_results(filePath), 
+                   "dndscv"       = read_dNdScv_results(filePath),
+                   "mutpanning"   = read_MutPanning_results(filePath),
+                   "nbr"          = read_NBR_results(filePath),
+                   "oncodrivefml" = read_OncodriveFML_results(filePath))
+  result <- cbind(result, infoStr)
   
-  if (softName %in% c('driverpower', 'digdriver')) {
-    result <- fread(filePath, header = T, stringsAsFactors = F)
-    
-    colsToRead <- c('binID', 'CADD_p')
-    if (softName == 'digdriver') {
-      colsToRead <- c('ELT', 'PVAL_MUT_BURDEN')
-      if (!'PVAL_SNV_BURDEN' %in% colnames(result) &
-          !'PVAL_INDEL_BURDEN' %in% colnames(result) ) {
-        stop('[', Sys.time(), '] DigDriver output lacks all 3 columns: ',
-             'PVAL_SNV_BURDEN, PVAL_INDEL_BURDEN, PVAL_MUT_BURDEN') 
-      }
-      if (!'PVAL_MUT_BURDEN' %in% colnames(result) & 
-          'PVAL_SNV_BURDEN' %in% colnames(result)) {
-        colsToRead <- c('ELT', 'PVAL_SNV_BURDEN')
-      }
-      if (!'PVAL_MUT_BURDEN' %in% colnames(result) & 
-          'PVAL_INDEL_BURDEN' %in% colnames(result)) {
-        colsToRead <- c('ELT', 'PVAL_INDEL_BURDEN')
-      }
-    }
-    
-    result <- result[, colnames(result) %in% colsToRead, with = F]
-    setnames(result, colsToRead, c('binID', 'raw_p'), skip_absent = T)
-    result <- cbind(result, parseBED12regName(result$binID))
-    result <- result[, !colnames(result) %in% c('binID', 'name', 
-                                                'target_genome_version'),
-                     with = F]
-    setnames(result, 'gr_id', 'grID')
-    result <- cbind(result, infoStr)
+  if (softName == 'digdriver') {
     result <- result[grID == gr_id]
     result[, grID := NULL]
   }
-  
-  if (softName == 'dndscv') {
-    result <- fread(filePath, header = T, stringsAsFactors = F)
-    if (!'pglobal_cv' %in% colnames(result)) {
-      message('[', Sys.time(),  '] pglobal_cv is not found as a columns in ',
-              'dNdScv output. Most likely that there were no indels. Using ',
-              'pallsubs_cv instead. pallsubs_cv will be modified according ',
-              'to formula: ',
-              'pglobal_cv := 1 - pchisq(-2 * (log(pallsubs_cv)), df = 4) ',
-              'see dNdScv code as reference')
-      result[, pglobal_cv := 1 - pchisq(-2 * (log(pallsubs_cv)), df = 4)]
-    }
-    result <- result[,.(gene_name, pglobal_cv)]
-    setnames(result,  'pglobal_cv', 'raw_p')
-    result <- cbind(result, infoStr)
-  }
-  
-  if (softName == 'mutpanning') {
-    result <- fread(filePath, header = T, stringsAsFactors = F,
-                    select = c('Name', 'Significance'))
-    setnames(result, c('Name', 'Significance'), c('gene_name', 'raw_p'),
-             skip_absent = T)
-    result <- cbind(result, infoStr)
-  }
-  
-  if (softName == 'nbr') {
-    result <- fread(filePath, header = T, stringsAsFactors = F,
-                    select = c('region', 'pval_subs_CV', 'pval_indels_CV',
-                               'pval_both_CV'))
-    result[, pval_subs_CV := as.double(pval_subs_CV)]
-    result[, pval_indels_CV := as.double(pval_indels_CV)]
-    if (!'pval_both_CV' %in% colnames(result)) {
-      result[, pval_both_CV := NA]
-    } else {
-      result[, pval_both_CV := as.double(pval_both_CV)]
-    }
-    result[is.na(pval_both_CV)]$pval_both_CV <- result[is.na(pval_both_CV)]$pval_subs_CV
-    result[is.na(pval_both_CV)]$pval_both_CV <- result[is.na(pval_both_CV)]$pval_indels_CV
-    result <- result[,.(region, pval_both_CV)]
-    setnames(result, c('region', 'pval_both_CV'), c('gene_id', 'raw_p'),
-             skip_absent = T)
-    if (nrow(result[is.na(raw_p)]) != 0) {
-      message('[', Sys.time(), '] Found ', nrow(result[is.na(raw_p)]),
-              ' entries in ', filePath, ' with all pval_subs_CV, ',
-              'pval_indels_CV, pval_both_CV equal to NA. Removed them.')
-      result <- result[!is.na(raw_p)]
-    }
-    result <- cbind(result, infoStr)
-  }
-  
-  if (softName == 'oncodrivefml') {
-    result <- fread(filePath, header = T, stringsAsFactors = F,
-                    select = c('GENE_ID', 'SYMBOL', 'P_VALUE'))
-    setnames(result, c('GENE_ID', 'SYMBOL', 'P_VALUE'), 
-             c('gene_id', 'gene_name', 'raw_p'), skip_absent = T)
-    result <- cbind(result, infoStr)
-  }
-  
-  if (softName == 'oncodriveclustl') {
-    result <- fread(filePath, header = T, stringsAsFactors = F,
-                    select = c('ENSID', 'SYMBOL', 'P_ANALYTICAL'))
-    setnames(result, c('ENSID', 'SYMBOL', 'P_ANALYTICAL'),
-             c('gene_id', 'gene_name', 'raw_p'), skip_absent = T)
-    result <- cbind(result, infoStr)
-  }
-  
   result[, software := softName]
   finalCols <- c('software', 'tumor_subtype', 'gr_id', 'gene_id', 'gene_name',
                  'raw_p')
@@ -493,38 +510,43 @@ combineRawPvalues <- function(resDTwide) {
   result
 }
 
+
 # Test inputs -----------------------------------------------------------------
 # -c --cancer_subtype, -g --gr_id
 args <- list(cancer_subtype = 'LUAD', gr_id = 'CDS',
-             mut_rate = '../results/mut_rates/mutRate-LUAD-hg19--meanMutRatePerGR.csv',
+             software = list('dndscv', 'oncodrivefml'),
+             run_results = list('../TEST/results/dndscv/dndscv-results-LUSC-CDS-hg19.csv', 
+                                '../TEST/results/oncodrivefml/oncodrivefml-results-LUAD-CDS-hg19.csv'),
+             mut_rate = '../TEST/results/mut_rates/mutRate-LUAD--mutMapToGR.csv',
              gene_name_synonyms = '../data/assets/gene_names_synonyms/hgnc_complete_set_2022-07-01_proc.csv',
              rawP_cap = 10^(-8),
              known_cancer_genes = '../data/assets/cgc_knownCancerGenes.csv',
              known_db_to_use = list('CGC'),
-             olfactory_genes = '../data/assets/olfactory_barnes_2020.csv',
-             results_files = list('dndscv', '../results/dndscv/dndscv-results-LUSC-CDS-hg19.csv',
-                                  'oncodrivefml', '../results/oncodrivefml/oncodrivefml-results-LUAD-CDS-hg19.csv'))
+             olfactory_genes = '../data/assets/olfactory_barnes_2020.csv')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
+names(args[['run_results']]) <- unlist(args$software)
+
 # Process input --results_files -----------------------------------------------
-args$results_files <- args$results_files[args$results_files != 'null']
-if (length(args$results_files) == 0) {
-  stop('[', Sys.time(), '] No results files are given for ', 
-       args$cancer_subtype, ' on ',  args$gr_id)
-}
-softwareNames <- unlist(args$results_files[seq(1, length(args$results_files),
-                                               2)])
-names(args$results_files) <- rep(softwareNames, each = 2)
-args$results_files <- args$results_files[seq(2, length(args$results_files), 2)]
+# args$results_files <- args$results_files[args$results_files != 'null']
+# if (length(args$results_files) == 0) {
+#   stop('[', Sys.time(), '] No results files are given for ', 
+#        args$cancer_subtype, ' on ',  args$gr_id)
+# }
+# softwareNames <- unlist(args$results_files[seq(1, length(args$results_files),
+#                                                2)])
+# names(args$results_files) <- rep(softwareNames, each = 2)
+# args$results_files <- args$results_files[seq(2, length(args$results_files), 2)]
 
 # [READ] in raw results of software runs --------------------------------------
 message('[', Sys.time(), '] Started reading results of de-novo driver ',
         'discovery')
-rawPs <- lapply(names(args$results_files), 
-                function(x) readSoftwareResults(x, args$results_files[[x]],
+rawPs <- lapply(names(args$run_results), 
+                function(x) readSoftwareResults(x, names(SOFTWARE_GR_CODES),
+                                                args$run_results[[x]],
                                                 unlist(args)))
 rawPs <- do.call(rbind, rawPs)
 message('[', Sys.time(), '] Finished reading results of de-novo driver ',
@@ -577,21 +599,20 @@ if (!is.null(args$rawP_cap)) {
 }
 
 # Combine p-values: Fisher, Brown, Stouffer, harmonic -------------------------
+combinedPs <- meltToWide(rawPs)
 if (length(unique(rawPs[!is.na(raw_p)]$software)) == 1) {
   message('[', Sys.time(), '] Results from only 1 software (',
           unique(rawPs[!is.na(raw_p)]$software), ') are present. Can not ',
           'perform p-values combination.')
-  combinedPs <- copy(meltToWide(rawPs))
 } else {
   # remove entries where only 1 gene was found significant, because combined 
   # p-values can't be calculated on 1x1 matrices
-  rawPs <- meltToWide(rawPs)
   if (nrow(rawPs) == 1) {
     stop('[', Sys.time(), '] Detected gene only 1 gene. Can not perform ',
          'p-values combination.')
   }
   message('[', Sys.time(), '] Started combining p-values')
-  combinedPs <- as.data.table(combineRawPvalues(rawPs))
+  combinedPs <- as.data.table(combineRawPvalues(combinedPs))
   message('[', Sys.time(), '] Finished combining p-values')
 }
 
@@ -605,17 +626,7 @@ baseDT <- copy(combinedPs)
 toAddDT <- copy(known_cancer)
 keyCols <- c('gene_id', 'gene_name')
 
-result <- merge(baseDT, toAddDT, by = keyCols)
-notKeys <- setdiff(colnames(toAddDT), keyCols)
-for (oneKeyCol in keyCols) {
-  notMatched <- merge(baseDT, cbind(result[, keyCols, with = F], matched = T), 
-                      by = keyCols, all.x = T)
-  notMatched <- notMatched[is.na(matched)]
-  notMatched[, matched := NULL]
-  result <- rbind(result, 
-                  merge(notMatched, toAddDT[, c(oneKeyCol, notKeys), with = F], by = oneKeyCol))
-}
-
+                
 o <- merge(combinedPs, known_cancer, by = c('gene_id', 'gene_name'))[,.(gene_id, gene_name)]
 a <- merge(combinedPs[!gene_name %in% o$gene_name & !gene_id %in% o$gene_id],
            known_cancer, by = 'gene_id')
@@ -673,7 +684,6 @@ message('[', Sys.time(), '] Found ', nrow(mismatched), '(',
                                                       by = gr_id][order(-N)], 
                                            format = "markdown")), 
                collapse = '\n'))
-
 rm(mutRate)
 gc()
 
@@ -725,6 +735,7 @@ if (!is.null(args$tcga)) {
   }
   rawPs <- do.call(rbind, rawPs)
 }
+
 # [SAVE] Raw results of software run as table ---------------------------------
 write.table(rawPs, args$output, append = F, quote = F,  sep = '\t', 
             row.names = F, col.names = T)
