@@ -905,10 +905,10 @@ binHelp <- paste('Length of bin (in bp) in which local mutation rates should',
 parser$add_argument("-b", "--bin_len", required = F, default = NULL,
                     type = 'integer', help = binHelp)
 
-subtypeHelp <- paste('Tumor subtype for which mutation rates are computed.',
+subtypeHelp <- paste('Cancer subtype for which mutation rates are computed.',
                      'If given, a column tumor_subtype will be added to',
                      'all the output.')
-parser$add_argument("-t", "--tumor_subtype", required = T, default = NULL,
+parser$add_argument("-t", "--cancer_subtype", required = T, default = NULL,
                     type = 'character', help = subtypeHelp)
 
 synHelp <- paste('Boolean, indicating whether mutation rate based on',
@@ -971,8 +971,10 @@ notAnnotatedVarCodeHelp <- paste('String which should be used if',
 parser$add_argument("-f", "--annotation_failed_code", required = T, nargs = 1,
                     type = 'character', help = notAnnotatedVarCodeHelp)
 
-outputHelp <- paste("Prefix to use in the output files. All files will start",
-                    "with this.")
+outputHelp <- paste("Path to folder to store result files. Files which will ",
+                    'be produced are: meanMutRatePerGR-cancer_subtype--target_genome_version.csv,',
+                    'mutMapToGR-cancer_subtype--target_genome_version.csv,',
+                    'varCatEnrich-cancer_subtype--target_genome_version.csv')
 parser$add_argument("-p", "--output", required = T, type = 'character',
                     help = outputHelp)
 args <- parser$parse_args()
@@ -997,7 +999,7 @@ if (args$calc_synonymous & is.null(args$synAcceptedClass)) {
        'synAcceptedClass is NULL.')
 }
 
-check_input_arguments_preproc(args, outputType = 'file')
+check_input_arguments_preproc(args, outputType = 'folder')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
@@ -1006,7 +1008,7 @@ printArgs(args)
 # Test arguments --------------------------------------------------------------
 # args <- list('variants' = '../inputMutations-LUAD-hg19.maf',
 #              'genomic_regions' = '../inputGR-LUAD-hg19.bed',
-#              'tumor_subtype' = 'LUSC', 'target_genome_version' = 'hg19',
+#              'cancer_subtype' = 'LUSC', 'target_genome_version' = 'hg19',
 #              'target_genome_chr_len' = '../data/assets/reference_genome/Homo_sapiens_assembly19.chrom.sizes.bed',
 #              'gene_name_synonyms' = '../data/assets/gene_names_synonyms/hgnc_complete_set_2022-07-01_proc.csv',
 #              'varanno_conversion_table' = '../data/assets/variantAnnotation_to_annovar_conversion.txt',
@@ -1026,7 +1028,7 @@ printArgs(args)
 #                                       'Unknown'), 
 #              'synAcceptedClass' = 'Silent',
 #              'annotation_failed_code' = 'Unknown',
-#              'output' = 'mutRate-MET_PANCAN-hg19-')
+#              'output' = '.')
 
 # READ in mutation, genome region and chr lengths files -----------------------
 message('[', Sys.time(), '] Started reading input mutation file')
@@ -1206,13 +1208,18 @@ message('[', Sys.time(), '] Finished calculations of variant types ',
 # OUTPUT to files -------------------------------------------------------------
 write.table(cbind('tumor_subtype' = args$tumor_subtype, mutRate),
             sep = '\t', row.names = F, col.names = T, append = F, quote = F,
-            file = paste0(args$output, '-meanMutRatePerGR.csv'))
+            file = paste0(args$output, '/meanMutRatePerGR-', 
+                          args$cancer_subtype, '--', 
+                          args$target_genome_version, '.csv'))
+varsToRegsMap[, target_genome_version := NULL]
 write.table(cbind('tumor_subtype' = args$tumor_subtype, varsToRegsMap), 
             sep = '\t', row.names = F, col.names = T, append = F, quote = F,
-            file = paste0(args$output, '-mutMapToGR.csv'))
+            file = paste0(args$output, '/mutMapToGR-', args$cancer_subtype,
+                          '--', args$target_genome_version, '.csv'))
 write.table(cbind('tumor_subtype' = args$tumor_subtype, varCatEnrich), 
             sep = '\t', row.names = F, col.names = T, append = F, quote = F,
-            file = paste0(args$output, '-varCatEnrich.csv'))
+            file = paste0(args$output, '/varCatEnrich-', args$cancer_subtype,
+                         '--', args$target_genome_version, '.csv'))
 
 message("End time of run: ", Sys.time())
 message('Total execution time: ', 
