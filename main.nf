@@ -44,20 +44,8 @@ def channel_from_params_path (staticPath) {
     return result
 }
 
-// same function is also defined in call_driver_genes.nf
-def infer_tumor_subtype (filePath) {
-    result = filePath.name.toString().tokenize('-').get(1)
-    return result
-}
-
-// same function is also defined in call_driver_genes.nf
-def infer_genomic_region(filePath) {
-    result = filePath.name.toString().tokenize('-').get(3)
-    return result
-}
-
 /* ----------------------------------------------------------------------------
-* Workflows
+* Main workflows
 *----------------------------------------------------------------------------*/
 workflow CALL_DE_NOVO_CANCER_DRIVERS {
     /*
@@ -147,9 +135,10 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
 
     /* 
         Step 5a: run CHASMplus
-    */
+    
     RUN_CHASMplus (analysis_inv, PREPARE_INPUT_MUTATION_FILES.out.chasmplus, 
                    chasmplus_inv)
+    */
 
     /* 
         Step 5b: run DIGdriver
@@ -177,29 +166,36 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
              PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.nbr,
              target_genome_fasta, nbr_neutral_bins,
              nbr_neutral_trinucfreq, nbr_driver_regs)
-    nbr_results = RUN_NBR.out.results
-                         .map { it ->
-                                    return tuple(infer_tumor_subtype(it),
-                                                 infer_genomic_region(it), 
-                                                 'nbr', it)
-                              }
     /* 
         Step 5f: run OncodriveFML
     */
     RUN_ONCODRIVEFML (PREPARE_INPUT_MUTATION_FILES.out.oncodrivefml,
                       PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.oncodrivefml,
                       oncodrivefml_config)
-    oncodrivefml_results = RUN_ONCODRIVEFML.out.results
-                                           .map { it ->
-                                                    return tuple(infer_tumor_subtype(it),
-                                                                 infer_genomic_region(it), 
-                                                                 'oncodrivefml', it)
-                                                }
-    /* 
-        Step 6: match results of different softwares' runs 
-    */
-    nbr_results.join(oncodrivefml_results, by: [0, 1], remainder: true).view()
+ }
+
+workflow POSTPROCESSING {
+    analysis_inv = Channel.fromPath(params.analysis_inventory,
+                                    checkIfExists: true)
+                          .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" }
+    analysis_inv = analysis_inv.splitCsv(header: true).map { row -> 
+                                                                 return tuple(row.tumor_subtype, 
+                                                                              row.gr_id, 
+                                                                              row.software)
+                                                           }.unique()
+    analysis_inv = analysis_inv.map { it ->
+                                         return tuple(it[0], it[1], it[2],
+                                                      file(params.outdir + '/results/' +
+                                                           it[2] + '-results-' +
+                                                           it[0] + '-' + it[1] + '-' +
+                                                           params.target_genome_version +
+                                                           '.csv', checkIfExists: false))
+                                    }
+                                .groupTuple(by: [0, 1], remainder: true)
+
+    analysis_inv.view()
 }
+
 
 // inform about completition
 workflow.onComplete {
