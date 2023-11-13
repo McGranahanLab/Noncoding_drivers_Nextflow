@@ -20,11 +20,10 @@ workflow PREPARE_INPUT_GENOMIC_REGIONS_FILES {
 
     main:
     // pre-process regions
-    filtered_regions = FILTER_GENOMIC_REGIONS(inventories_pass.combine(analysis_inv)
-                                                              .combine(blacklist_inv)
-                                                              .combine(target_genome_fasta)
-                                                              .combine(target_genome_chr_len)
-                                                              .combine(chain)).bed.flatten()
+    filtered_regions = FILTER_GENOMIC_REGIONS(analysis_inv.combine(blacklist_inv)
+                                                          .combine(target_genome_fasta)
+                                                          .combine(target_genome_chr_len)
+                                                          .combine(chain)).bed.flatten()
     filtered_regions.map{ it ->
                            def tumor_subtype = it.name.toString().tokenize('-').get(1)
                            return tuple(tumor_subtype, it)

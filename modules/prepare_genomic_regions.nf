@@ -1,8 +1,7 @@
 process FILTER_GENOMIC_REGIONS {
     input:
-    tuple val(inventory_check_res), path(analysis_inventory_path),
-          path(blacklist_inventory_path), path(target_genome_fasta),
-          path(target_genome_chr_len), path(chain)
+    tuple path(analysis_inventory_path), path(blacklist_inventory_path),
+          path(target_genome_fasta), path(target_genome_chr_len), path(chain)
 
     output:
     path('*.bed', emit: bed)

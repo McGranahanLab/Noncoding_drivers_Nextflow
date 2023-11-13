@@ -2,10 +2,9 @@ process FILTER_INPUT_MUTATIONS {
     tag "$tumor_subtype"
 
     input:
-    tuple val(inventory_check_res), val(tumor_subtype),
-          path(patients_inventory_path), path(analysis_inventory_path),
-          path(blacklist_inventory_path), path(target_genome_fasta),
-          path(target_genome_chr_len), path(chain)
+    tuple val(tumor_subtype), path(patients_inventory_path),
+          path(analysis_inventory_path), path(blacklist_inventory_path),
+          path(target_genome_fasta), path(target_genome_chr_len), path(chain)
 
     output:
     tuple val(tumor_subtype), path('*.maf'), emit: mutations

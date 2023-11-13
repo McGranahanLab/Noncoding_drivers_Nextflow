@@ -26,13 +26,12 @@ workflow PREPARE_INPUT_MUTATION_FILES {
     tumor_subtypes = analysis_inv.splitCsv(header: true)
                                  .map{row -> row.tumor_subtype}
                                  .unique()
-    filtered_mutations = FILTER_INPUT_MUTATIONS(inventories_pass.combine(tumor_subtypes)
-                                                                .combine(patients_inv)
-                                                                .combine(analysis_inv)
-                                                                .combine(blacklist_inv)
-                                                                .combine(target_genome_fasta)
-                                                                .combine(target_genome_chr_len)
-                                                                .combine(chain))
+    filtered_mutations = FILTER_INPUT_MUTATIONS(tumor_subtypes.combine(patients_inv)
+                                                              .combine(analysis_inv)
+                                                              .combine(blacklist_inv)
+                                                              .combine(target_genome_fasta)
+                                                              .combine(target_genome_chr_len)
+                                                              .combine(chain))
 
     // output them in a format suitable to run driver calling tools on
     tumor_subtypes = analysis_inv.splitCsv(header: true)

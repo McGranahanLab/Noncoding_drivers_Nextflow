@@ -183,6 +183,9 @@ workflow POSTPROCESSING {
                                                                               row.gr_id, 
                                                                               row.software)
                                                            }.unique()
+
+    // DO NOT FORGET TO TURN checkIfExists TO true
+    
     analysis_inv = analysis_inv.map { it ->
                                          return tuple(it[0], it[1], it[2],
                                                       file(params.outdir + '/results/' +
