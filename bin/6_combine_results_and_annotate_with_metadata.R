@@ -510,6 +510,39 @@ combineRawPvalues <- function(resDTwide) {
   result
 }
 
+# [FUNCTIONS] Misc ------------------------------------------------------------
+#' mergeBasedOnAtLeastOneKey
+#' @description Performs merge of two data tables based on at least one 
+#'              overlapping key column
+#' @param baseDT base data table. All rows and columns on this data table will
+#'        be preserved
+#' @param toAddDT data table from which columns will be added to baseDT. 
+#' @param keyCols names of key columns
+#' @return data table baseDT with added columns from toAddDT matched based on
+#'         at least one column from keyCols
+mergeBasedOnAtLeastOneKey <- function(baseDT, toAddDT, keyCols) {
+  result <- merge(baseDT, toAddDT, by = keyCols)
+  notKeys <- setdiff(colnames(toAddDT), keyCols)
+  for (oneKeyCol in keyCols) {
+    notMatched <- merge(baseDT, cbind(result[, keyCols, with = F], matched = T), 
+                        by = keyCols, all.x = T)
+    notMatched <- notMatched[is.na(matched)]
+    notMatched[, matched := NULL]
+    result <- rbind(result, merge(notMatched, 
+                                  toAddDT[, c(oneKeyCol, notKeys), with = F], 
+                                  by = oneKeyCol))
+  }
+  # add lines for which match wasn't found at all
+  notMatched <- merge(baseDT, cbind(result[, keyCols, with = F], matched = T), 
+                      by = keyCols, all.x = T)
+  notMatched <- notMatched[is.na(matched)]
+  notMatched[, matched := NULL]
+  result <- rbind(result, notMatched, fill = T)
+  # return back the original order
+  result <- merge(baseDT, result, 
+                  by = intersect(colnames(baseDT), colnames(result)))
+  result
+}
 
 # Test inputs -----------------------------------------------------------------
 # -c --cancer_subtype, -g --gr_id
