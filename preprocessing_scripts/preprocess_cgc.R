@@ -16,51 +16,82 @@
 # COMPANY:  UCL, Cancer Institute, London, the UK
 # VERSION:  1
 # CREATED:  08.11.2023
-# REVISION: 08.11.2023
+# REVISION: 13.11.2023
 
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 
 options(scipen = 999)
 
+# Parse input arguments -------------------------------------------------------
+# create parser object
+parser <- ArgumentParser(prog = 'preprocess_cgc.R')
+
+inputHelp <- paste('Path to a file with known cancer genes from CGC.',
+                   'Navigate to https://cancer.sanger.ac.uk/cosmic/download,',
+                   'login and download file from "Cancer Gene Census"',
+                   'section. Unzip it and find Cosmic_CancerGeneCensus_vXX_GRChXX.tsv',
+                   'file. Genome version does not matter. Tested on version',
+                   '98. Essential columns: GENE_SYMBOL, SOMATIC,',
+                   'ROLE_IN_CANCER, SYNONYMS, TUMOUR_TYPES_SOMATIC')
+parser$add_argument("-i", "--input", required = T, type = 'character', 
+                    help = inputHelp)
+
+ensemblHelp <- paste('Whether or not ensembl gene IDs should be used in',
+                     'gene_id column. If set to FALSE, then gene_id will be',
+                     'equal to gene_name')
+parser$add_argument("-e", "--use_ensembl", required = F, type = 'character', 
+                    help = ensemblHelp, default = T)
+
+outputHelp <- 'Path to output file'
+parser$add_argument("-o", "--output", required = T, type = 'character', 
+                    help = inputHelp)
+
+args <- parser$parse_args()
+args$use_ensembl <- as.logical(use_ensembl)
+timeStart <- Sys.time()
+message('[', Sys.time(), '] Start time of run')
+
 # Test arguments --------------------------------------------------------------
-args <- list(input = 'data/assets_raw/COSMIC_GeneCensus_all_22102020.csv',
-             output = 'data/assets/cgc_knownCancerGenes.csv')
+# args <- list(input = 'data/assets_raw/Cosmic_CancerGeneCensus_v98_GRCh37.tsv',
+#              output = 'data/assets/cgc_knownCancerGenes.csv',
+#              use_ensembl = F)
 
 # Read CGC & extract ensembl gene id ------------------------------------------
 CGC <- fread(args$input, header = T, stringsAsFactors = F, 
-             select = c('Gene Symbol', 'Hallmark', 'Role in Cancer',
-                        'Synonyms', 'Tumour Types(Somatic)'), 
-             col.names = c('gene_name', 'is_hallmark', 'known_cancer_biotype',
+             select = c('GENE_SYMBOL', 'SOMATIC', 'ROLE_IN_CANCER', 'SYNONYMS',
+                        'TUMOUR_TYPES_SOMATIC'), 
+             col.names = c('gene_name', 'somatic', 'known_cancer_biotype',
                            'gene_id', 'known_in_tumor_subtype'))
 
+# select only somatic genes
+CGC <- CGC[somatic == 'y']
+CGC[, somatic := NULL]
+
 # extract ensembl gene id
-CGC[, gene_id := gsub('.*ENS', 'ENS', gene_id)]
-CGC[, gene_id := gsub('[.].*', '', gene_id)]
+if (args$use_ensembl) {
+  CGC[, gene_id := gsub('.*ENS', 'ENS', gene_id)]
+  CGC[, gene_id := gsub('[.].*', '', gene_id)]
+} else {
+  CGC[, gene_id := gene_name]
+}
 CGC <- CGC[!duplicated(CGC)]
-
-# in RefSeq GTF we unfortunately do not have ensembl gene ids
-# CGC[, gene_id := gene_name]
-
 CGCnoID <- CGC[is.na(gene_id) | gene_id == '']
-message('[', Sys.time(), '] Could not find gene_id for ', nrow(CGCnoID), ' ',
-        'CGC genes: ', paste0(CGCnoID$gene_name, collapse = ', '), '. Please ',
-        'consider manual annotation.')
-
+if (nrow(CGCnoID) != 0) {
+  message('[', Sys.time(), '] Could not find gene_id for ', nrow(CGCnoID), ' ',
+          'CGC genes: ', paste0(CGCnoID$gene_name, collapse = ', '), '. ',
+          'Please consider manual annotation.')
+}
 CGC[, is_known_cancer := T]
-if (!is.null(args$known_db_to_use)) {
-  genes_in_db <- sapply(known_cancer$db_name, 
-                        function(x) any(unlist(strsplit(x, ', ')) %in% 
-                                          args$known_db_to_use))
-  known_cancer <- known_cancer[genes_in_db]
-} 
-
-CGC[, is_hallmark := ifelse(is_hallmark == 'Yes', T, F)]
 
 # Write to file ---------------------------------------------------------------
 CGC[, db_name := 'CGC']
-setcolorder(CGC, c('gene_id', 'gene_name', 'is_known_cancer', 'is_hallmark',
-                   'known_in_tumor_subtype', 'known_cancer_biotype',
-                   'db_name'))
+setcolorder(CGC, c('db_name', 'gene_id', 'gene_name', 'is_known_cancer',
+                   'known_in_tumor_subtype', 'known_cancer_biotype'))
 write.table(CGC, args$output, append = F, quote = F, sep = '\t', row.names = F,
             col.names = T)
+
+message("End time of run: ", Sys.time())
+message('Total execution time: ', 
+        difftime(Sys.time(), timeStart, units = 'mins'), ' mins.')
+message('Finished!')
