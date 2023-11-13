@@ -35,11 +35,9 @@ GR_CODES <- c("promoter", "5primeUTR", "CDS", "ss", "3primeUTR",
               "miRNA", "misc_RNA", "rRNA", "snoRNA", "snRNA")
 
 #' @export
-SOFTWARE_GR_CODES <- list('activedriverwgs' = NULL, 'dndscv' = c('CDS'),
+SOFTWARE_GR_CODES <- list('digdriver' = NULL, 'dndscv' = c('CDS'), 
                           'mutpanning' = c('CDS'), 'chasmplus' = c('CDS'), 
-                          'driverpower' = NULL, 'nbr' = NULL, 
-                          'oncodrivefml' = NULL, 'oncodriveclustl' = NULL,
-                          'digdriver' = NULL)
+                          'nbr' = NULL, 'oncodrivefml' = NULL)
 #' @export
 acceptedChrNames <- c(c(1:24, 'X', 'Y'), paste0('chr', c(1:24, 'X', 'Y')))
 
