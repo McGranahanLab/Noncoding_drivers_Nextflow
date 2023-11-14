@@ -94,8 +94,7 @@ CGC[, known_in_tumor_subtype := gsub(', ', ',', known_in_tumor_subtype)]
 CGC[, known_cancer_biotype := gsub(', ', ',', known_cancer_biotype)]
 
 # Write to file ---------------------------------------------------------------
-CGC[, db_name := 'CGC']
-setcolorder(CGC, c('db_name', 'gene_id', 'gene_name', 'is_known_cancer',
+setcolorder(CGC, c('gene_id', 'gene_name', 'is_known_cancer',
                    'known_in_tumor_subtype', 'known_cancer_biotype'))
 write.table(CGC, args$output, append = F, quote = F, sep = '\t', row.names = F,
             col.names = T)
