@@ -51,6 +51,12 @@ args$use_ensembl <- as.logical(args$use_ensembl)
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 
+if (!dir.exists(dirname(args$ouput))) {
+  message('[', Sys.time(), '] Directory does not exist: ', dirname(args$ouput),
+          '. Will create it.')
+  dir.create(dirname(args$ouput), recursive = T)
+}
+
 # Test inputs -----------------------------------------------------------------
 args <- list(input = '../data/assets_raw/12864_2020_6583_MOESM2_ESM.xlsx',
              use_ensembl = T,
