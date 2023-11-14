@@ -41,20 +41,20 @@ ensemblHelp <- paste('Whether or not ensembl gene IDs should be used in',
                      'gene_id column. If set to FALSE, then gene_id will be',
                      'equal to gene_name')
 parser$add_argument("-e", "--use_ensembl", required = F, type = 'character', 
-                    help = ensemblHelp, default = T)
+                    help = ensemblHelp, default = T, choices = c('T', 'F'))
 
 outputHelp <- 'Path to output file'
 parser$add_argument("-o", "--output", required = T, type = 'character', 
                     help = inputHelp)
 
 args <- parser$parse_args()
-args$use_ensembl <- as.logical(use_ensembl)
+args$use_ensembl <- as.logical(args$use_ensembl)
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 
 # Test arguments --------------------------------------------------------------
-# args <- list(input = 'data/assets_raw/Cosmic_CancerGeneCensus_v98_GRCh37.tsv',
-#              output = 'data/assets/cgc_knownCancerGenes.csv',
+# args <- list(input = '../data/assets_raw/Cosmic_CancerGeneCensus_v98_GRCh37.tsv',
+#              output = '../data/assets/cgc_knownCancerGenes.csv',
 #              use_ensembl = F)
 
 # Read CGC & extract ensembl gene id ------------------------------------------
@@ -83,6 +83,9 @@ if (nrow(CGCnoID) != 0) {
           'Please consider manual annotation.')
 }
 CGC[, is_known_cancer := T]
+
+CGC[, known_in_tumor_subtype := gsub(', ', ',', known_in_tumor_subtype)]
+CGC[, known_cancer_biotype := gsub(', ', ',', known_cancer_biotype)]
 
 # Write to file ---------------------------------------------------------------
 CGC[, db_name := 'CGC']
