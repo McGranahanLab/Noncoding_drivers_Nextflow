@@ -3,7 +3,7 @@
 # FILE: 3c_write_regions_for_dndscv.R -----------------------------------------
 #
 # DESCRIPTION: Formats BED12 file containing genomic regions for one tumor 
-#              subtype to NBR input format.
+#              subtype to dNdScv input format.
 #
 # USAGE: Rscript --vanilla 3c_write_regions_for_dndscv.R \
 #                --gtf [path to GTF file(s)] \
@@ -342,7 +342,7 @@ args$target_genome_version <- args$target_genome_version[args$target_genome_vers
 printArgs(args)
 
 # Test inputs -----------------------------------------------------------------
-# args <- list(gtf = list('../data/genomic_regions/standard_gtf/Homo_sapiens_assembly19.gencode.KRAS.gtf'),
+# args <- list(gtf = list('../data/genomic_regions/standard_gtf/Homo_sapiens_assembly19.gencode.gtf'),
 #              gtf_genomes = list('hg19'),
 #              target_genome_path = '../data/assets/reference_genome/Homo_sapiens_assembly19.fasta',
 #              target_genome_version = 'hg19', chain = NULL, 

@@ -1006,29 +1006,25 @@ message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
 # Test arguments --------------------------------------------------------------
-# args <- list('variants' = '../inputMutations-LUAD-hg19.maf',
-#              'genomic_regions' = '../inputGR-LUAD-hg19.bed',
-#              'cancer_subtype' = 'LUSC', 'target_genome_version' = 'hg19',
-#              'target_genome_chr_len' = '../data/assets/reference_genome/Homo_sapiens_assembly19.chrom.sizes.bed',
-#              'gene_name_synonyms' = '../data/assets/gene_names_synonyms/hgnc_complete_set_2022-07-01_proc.csv',
-#              'varanno_conversion_table' = '../data/assets/variantAnnotation_to_annovar_conversion.txt',
-#              'bin_len' = 5*(10^4), 'calc_synonymous' = T,
-#              'cdsAcceptedClass' = list("Frame_Shift_Del", "Frame_Shift_Ins",
-#                                        "In_Frame_Del", "In_Frame_Ins", 
-#                                        "Missense_Mutation", 
-#                                        "Nonsense_Mutation", "Silent", 
-#                                        "Translation_Start_Site", 
-#                                        "Nonstop_Mutation", 
-#                                        "De_novo_Start_InFrame", 
-#                                        "De_novo_Start_OutOfFrame", 
-#                                        "Unknown"),
-#              'ncAcceptedClass' = list("3'UTR", "3'Flank", "5'UTR", 
-#                                       "5'Flank", "IGR", "Intron", "RNA", 
-#                                       "Targeted_Region", "Splice_Site", 
-#                                       'Unknown'), 
-#              'synAcceptedClass' = 'Silent',
-#              'annotation_failed_code' = 'Unknown',
-#              'output' = '.')
+# args <- list(variants = '../TEST/inputs/inputMutations-LUAD-hg19.maf',
+#              genomic_regions = '../TEST/inputs/inputGR-LUAD-hg19.bed',
+#              cancer_subtype = 'LUAD', 'target_genome_version' = 'hg19',
+#              target_genome_chr_len = '../data/assets/reference_genome/Homo_sapiens_assembly19.chrom.sizes.bed',
+#              gene_name_synonyms = '../data/assets/hgnc_complete_set_processed.csv',
+#              varanno_conversion_table = '../data/assets/variantAnnotation_to_annovar_conversion.txt',
+#              bin_len = 5*(10^4), calc_synonymous = T,
+#              cdsAcceptedClass = list("Frame_Shift_Del", "Frame_Shift_Ins",
+#                                      "In_Frame_Del", "In_Frame_Ins", 
+#                                      "Missense_Mutation", "Nonsense_Mutation",
+#                                      "Silent", "Translation_Start_Site",
+#                                      "Nonstop_Mutation", 
+#                                      "De_novo_Start_InFrame", 
+#                                      "De_novo_Start_OutOfFrame", "Unknown"),
+#              ncAcceptedClass = list("3'UTR", "3'Flank", "5'UTR", "5'Flank", 
+#                                     "IGR", "Intron", "RNA", "Targeted_Region",
+#                                     "Splice_Site", 'Unknown'), 
+#              synAcceptedClass = 'Silent', annotation_failed_code = 'Unknown',
+#              output = '.')
 
 # READ in mutation, genome region and chr lengths files -----------------------
 message('[', Sys.time(), '] Started reading input mutation file')
