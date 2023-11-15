@@ -1,13 +1,7 @@
 #!/usr/bin/env Rscript
-# FILE: select_tumors_from_TCGA.R ---------------------------------------------
+# FILE: create_FPKM_table_TCGA.R ----------------------------------------------
 #
-# DESCRIPTION: A script to select tumors with requested data types (i.e. 
-#              Allele-specific Copy Number Segment, Masked Somatic Mutation,
-#              Gene Expression Quantification) from TCGA. Selection is based
-#              on pre-downloaded sample sheet and manifest. After selection is
-#              performed, manifest file can be used to perform an automatic 
-#              download from TCGA (https://portal.gdc.cancer.gov/) via GDC
-#              data transfer tool https://gdc.cancer.gov/access-data/gdc-data-transfer-tool
+# DESCRIPTION:
 #
 # USAGE: 
 # OPTIONS:
@@ -18,8 +12,8 @@
 # AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk
 # COMPANY:  UCL, London, the UK
 # VERSION:  1
-# CREATED:  10.12.2020
-# REVISION: 19.11.2023
+# CREATED:  15.11.2023
+# REVISION: 15.11.2023
 
 # LIBRARIES -------------------------------------------------------------------
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
@@ -46,22 +40,9 @@ printArgs <- function(argsList) {
   }
 }
 
-#' splitRow
-#' @description Splits one row of a data frame into several if at least one
-#' column contains multiple values.
-#' @author Maria Litovchenko
-#' @param inVector input vector, a row in a data frame/table
-#' @param sep string to use as separator
-#' @return data.table
-splitRow <- function(inVector, sep = ', ') {
-  result <- lapply(inVector, function(x) unlist(strsplit(x, sep)))
-  result <- as.data.table(do.call(cbind, result))
-  result
-}
-
 # Parse input arguments -------------------------------------------------------
 # create parser object
-parser <- ArgumentParser(prog = 'select_tumors_from_TCGA.R')
+parser <- ArgumentParser(prog = 'create_FPKM_table_TCGA.R')
 
 sampleSheetHelp <- paste('Path to TCGA sample sheet file')
 parser$add_argument("-s", "--sample_sheet", required = T, 
@@ -75,29 +56,9 @@ projectHelp <- paste('Projects IDs to select, i.e. TCGA-LUAD, TCGA-LUSC')
 parser$add_argument("-p", "--project_id", required = F, default = NULL,
                     type = 'character', help = projectHelp, nargs = '*')
 
-sampleTypeHelp <- paste('Sample types to select, i.e. "Primary Tumor". Use ',
-                        'double quotes if nessecary.')
-parser$add_argument("-t", "--sample_type", required = F, default = NULL,
-                    type = 'character', help = sampleTypeHelp, nargs = '*')
-
-dataTypeHelp <- paste('Data types to select, i.e. "Allele-specific Copy Number Segment"',
-                      '"Masked Somatic Mutation". Use double quotes if',
-                      'nessecary.')
-parser$add_argument("-d", "--data_type", required = T, nargs = '*',
-                    type = 'character', help = dataTypeHelp)
-
-nSamplesHelp <- paste('Number of samples (tumors) to select')
-parser$add_argument("-n", "--n_samples", required = T, default = 100,
-                    type = 'character', help = nSamplesHelp)
-
-outSampleHelp <- paste('Path to output resulting sample sheet')
-parser$add_argument("-os", "--output_sample_sheet", required = T, 
-                    type = 'character', help = outSampleHelp)
-
-outManifestHelp <- paste('Path to output resulting manifest file')
-parser$add_argument("-om", "--output_manifest", required = T, 
-                    type = 'character', help = outManifestHelp)
-
+outputHelp <- paste('Path to output resulting table')
+parser$add_argument("-o", "--output", required = T, 
+                    type = 'character', help = outputHelp)
 args <- parser$parse_args()
 
 timeStart <- Sys.time()
