@@ -9,10 +9,10 @@
 #              download from TCGA (https://portal.gdc.cancer.gov/) via GDC
 #              data transfer tool https://gdc.cancer.gov/access-data/gdc-data-transfer-tool
 #
-# USAGE: 
+# USAGE: Run Rscript --vanilla select_tumors_from_TCGA.R -h to see all options
 # OPTIONS:
 # EXAMPLE: 
-# REQUIREMENTS: 
+# REQUIREMENTS: argparse, data.table
 # BUGS: --
 # NOTES:  ---
 # AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk
@@ -86,7 +86,8 @@ dataTypeHelp <- paste('Data types to select, i.e. "Allele-specific Copy Number S
 parser$add_argument("-d", "--data_type", required = T, nargs = '*',
                     type = 'character', help = dataTypeHelp)
 
-nSamplesHelp <- paste('Number of samples (tumors) to select')
+nSamplesHelp <- paste('Number of samples (tumors) to select from each',
+                      'Projects IDs')
 parser$add_argument("-n", "--n_samples", required = T, default = NULL,
                     type = 'character', help = nSamplesHelp)
 
@@ -105,8 +106,8 @@ message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
 # Test inputs -----------------------------------------------------------------
-# args <- list(sample_sheet = '/Users/maria/Downloads/gdc_sample_sheet.2023-11-15.tsv',
-#              manifest = '/Users/maria/Downloads/gdc_manifest_20231115_125954.txt',
+# args <- list(sample_sheet = 'gdc_sample_sheet.2023-11-15.tsv',
+#              manifest = 'gdc_manifest_20231115_125954.txt',
 #              project_id = list('TCGA-LUAD', 'TCGA-LUSC'),
 #              sample_type = list("Primary Tumor"), 
 #              data_type = list("Allele-specific Copy Number Segment",
@@ -137,16 +138,20 @@ manifest <- fread(args$manifest, header = T, stringsAsFactors = F)
 manifest <- manifest[id %in% sample_sheet$`File ID`]
 setkey(sample_sheet, 'File ID')
 manifest <- cbind(manifest, 
-                  sample_sheet[manifest$id][, c('Case ID', 'Data Category'),
-                                            with = F])
+                  sample_sheet[manifest$id][, c('Case ID', 'Data Category', 
+                                                'Project ID'), with = F])
 manifest <- manifest[order(-size)]
 
 # Select n_samples cases (tumors) which have the biggest sizes ----------------
 if (!is.null(args$n_samples)) {
-  selected_cases <- unique(manifest$`Case ID`)[1:args$n_samples]
+  manifest <- split(manifest, by = 'Project ID')
+  selected_cases <- lapply(manifest, 
+                           function(x) unique(x$`Case ID`)[1:args$n_samples])
+  selected_cases <- unlist(selected_cases)
+  manifest <- do.call(rbind(manifest))
+  manifest <- manifest[`Case ID` %in% selected_cases]
 }
 
-manifest <- manifest[`Case ID` %in% selected_cases]
 manifest <- split(manifest, manifest$`Data Category`)
 manifest <- lapply(manifest, 
                    function(x) x[order(-size)][,.SD[1], by = `Case ID`])
