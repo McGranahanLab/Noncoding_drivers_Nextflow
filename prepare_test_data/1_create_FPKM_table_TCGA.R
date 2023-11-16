@@ -1,12 +1,14 @@
 #!/usr/bin/env Rscript
 # FILE: create_FPKM_table_TCGA.R ----------------------------------------------
 #
-# DESCRIPTION:
+# DESCRIPTION: Creates two FPKM tables. First one with columns gene_id, 
+# gene_name and one column per sample from TCGA data. Second one with columns
+# gene_id, gene_name and one column per tumor subtype.
 #
-# USAGE: 
+# USAGE: Run Rscript --vanilla create_FPKM_table_TCGA.R -h to see all options
 # OPTIONS:
 # EXAMPLE: 
-# REQUIREMENTS: 
+# REQUIREMENTS: argparse, data.table
 # BUGS: --
 # NOTES:  ---
 # AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk
@@ -44,82 +46,138 @@ printArgs <- function(argsList) {
 # create parser object
 parser <- ArgumentParser(prog = 'create_FPKM_table_TCGA.R')
 
-sampleSheetHelp <- paste('Path to TCGA sample sheet file')
+sampleSheetHelp <- 'Path to TCGA sample sheet file'
 parser$add_argument("-s", "--sample_sheet", required = T, 
                     type = 'character', help = sampleSheetHelp)
 
-manifestHelp <- paste('Path to TCGA manifest file')
-parser$add_argument("-m", "--manifest", required = T, 
-                    type = 'character', help = manifestHelp)
+folderHelp <- paste('Path to folder where TCGA data were downloaded using',
+                    'GDC Data Transfer Tool')
+parser$add_argument("-f", "--folder", required = T, 
+                    type = 'character', help = folderHelp)
 
-projectHelp <- paste('Projects IDs to select, i.e. TCGA-LUAD, TCGA-LUSC')
-parser$add_argument("-p", "--project_id", required = F, default = NULL,
-                    type = 'character', help = projectHelp, nargs = '*')
+subtypeHelp <- paste('Column name --sample_sheet table which contains tumor',
+                     'subtype information. Default: "Project ID"')
+parser$add_argument("-t", "--tumor_subtype_column", required = T, 
+                    default = "Project ID", type = 'character', 
+                    help = subtypeHelp)
 
-outputHelp <- paste('Path to output resulting table')
-parser$add_argument("-o", "--output", required = T, 
-                    type = 'character', help = outputHelp)
+aggrHelp <- paste('Boolean, indicating, whether or not an aggregate',
+                  'across all tumor subtypes should be computed.')
+parser$add_argument("-a", "--do_aggregate", required = F, default = 'F',
+                    choices = c('T', 'F'), type = 'character', help = aggrHelp)
+
+aggrNameHelp <- paste('Aggregated tumor subtype name, in case --do_aggregate',
+                      'was requested.')
+parser$add_argument("-an", "--aggregate_name", required = F, default = NULL,
+                    type = 'character', help = aggrNameHelp)
+
+outSampleHelp <- paste('Path to output table which will contain FPKM, one',
+                       'column per sample')
+parser$add_argument("-os", "--output_per_sample", required = T, 
+                    type = 'character', help = outSampleHelp)
+
+outSampleHelp <- paste('Path to output table which will contain FPKM, one',
+                       'column per tumor subtype')
+parser$add_argument("-ot", "--output_per_tumor_subtype", required = T, 
+                    type = 'character', help = outSampleHelp)
+
 args <- parser$parse_args()
+
+args$do_aggregate <- as.logical(args$do_aggregate)
+if (args$do_aggregate) {
+  if (is.null(args$aggregate_name)) {
+    stop('[', Sys.time(), '] --do_aggregate is set to T, but ',
+         '--aggregate_name is not given.')
+  } 
+  if (args$aggregate_name == '') {
+    stop('[', Sys.time(), '] --do_aggregate is set to T, but ',
+         '--aggregate_name is an empty string.')
+  }
+}
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
 # Test inputs -----------------------------------------------------------------
-# args <- list(sample_sheet = '/Users/maria/Downloads/gdc_sample_sheet.2023-11-15.tsv',
-#              manifest = '/Users/maria/Downloads/gdc_manifest_20231115_125954.txt',
-#              project_id = list('TCGA-LUAD', 'TCGA-LUSC'),
-#              sample_type = list("Primary Tumor"), 
-#              data_type = list("Allele-specific Copy Number Segment",
-#                               "Masked Somatic Mutation",
-#                               "Gene Expression Quantification"),
-#              n_samples = 100,
-#              output_sample_sheet = 'gdc_sample_sheet_test_cancer_drivers_pipeline.tsv',
-#              output_manifest = 'gdc_manifest_test_cancer_drivers_pipeline.txt')
+# args <- list(sample_sheet = 'gdc_sample_sheet_test_cancer_drivers_pipeline.tsv',
+#              folder = 'test_dataset/', 
+#              data_type = "Gene Expression Quantification",
+#              tumor_subtype_column = 'Project ID',
+#              do_aggregate = T, aggregate_name = 'PANLUNG',
+#              output_per_sample = '../data/assets_raw/TCGA_FPKM_per_sample.csv',
+#              output_per_tumor_subtype = '../data/assets_raw/TCGA_FPKM_per_tumor_subtype.csv')
 
-# Read in & filter sample sheet -----------------------------------------------
+# Read sample_sheet  ----------------------------------------------------------
 sample_sheet <- fread(args$sample_sheet, header = T, stringsAsFactors = F)
-if (!is.null(args$project_id)) {
-  sample_sheet <- sample_sheet[`Project ID` %in% args$project_id]
+sample_sheet <- sample_sheet[`Data Type` == args$data_type]
+setnames(sample_sheet, args$tumor_subtype_column, 'tumor_subtype')
+message('[', Sys.time(), '] Read ', args$sample_sheet)
+# create paths to corresponding files
+sample_sheet[, filePath := paste0(args$folder, '/', `File ID`, '/', 
+                                  `File Name`)]
+# check that files exist
+fileFound <- sapply(sample_sheet$filePath, file.exists)
+if (!any(fileFound)) {
+  stop('[', Sys.time(), '] File(s) not found: ', 
+       paste0(sample_sheet$filePath[!fileFound], collapse = ', '))
 }
-sample_sheet <- do.call(rbind, apply(sample_sheet, 1, splitRow, ', '))
-if (!is.null(args$sample_type)) {
-  sample_sheet <- sample_sheet[`Sample Type` %in% args$sample_type]
+
+# Read the expression tables --------------------------------------------------
+message('[', Sys.time(), '] Started reading expression tables')
+colsToKeep <- c('gene_id', 'gene_name', 'fpkm_unstranded')
+exprTab <- lapply(unique(sample_sheet$tumor_subtype),
+                  function(x)  apply(sample_sheet[tumor_subtype == x], 1, 
+                                     function(y) fread(y['filePath'],
+                                                       header = T,
+                                                       stringsAsFactors = F, 
+                                                       select = colsToKeep, 
+                                                       col.names = c('gene_id',
+                                                                     'gene_name',
+                                                                     y['Sample ID']))))
+exprTab <- lapply(exprTab, 
+                  function(x) Reduce(function(...) merge(..., all = T, 
+                                                         by = c('gene_id', 
+                                                                'gene_name')), 
+                                     x))
+names(exprTab) <- unique(sample_sheet$tumor_subtype)
+message('[', Sys.time(), '] Finished reading expression tables')
+
+# Compute median expression per tumor subtype ---------------------------------
+exprTab <- lapply(exprTab, 
+                  function(x) setcolorder(x, c('gene_id', 'gene_name')))
+medianExprTab <- lapply(exprTab, 
+                        function(x) cbind(x[, 1:2], apply(x[, -2:-1], 1, 
+                                                          median, na.rm = T)))
+medianExprTab <- Reduce(function(...) merge(..., all = T, 
+                                            by = c('gene_id', 'gene_name')), 
+                        medianExprTab)
+setnames(medianExprTab, setdiff(colnames(medianExprTab),
+                                c('gene_id', 'gene_name')), names(exprTab))
+message('[', Sys.time(), '] Computed median expression per tumor subtype')
+
+# Perform aggregation, if requested -------------------------------------------
+exprTab <- Reduce(function(...) merge(..., all = T, 
+                                      by = c('gene_id', 'gene_name')), exprTab)
+if (args$do_aggregate) {
+  aggMedianExprTab <- cbind(exprTab[, 1:2], 
+                            apply(exprTab[, -2:-1], 1, median, na.rm = T))
+  setnames(aggMedianExprTab, setdiff(colnames(aggMedianExprTab),
+                                     c('gene_id', 'gene_name')), 
+           args$aggregate_name)
+  medianExprTab <- merge(medianExprTab, aggMedianExprTab, all = T,
+                         by = c('gene_id', 'gene_name'))
+  message('[', Sys.time(), '] Computed aggregated across tumor subtypes ', 
+          'median expression')
 }
-sample_sheet <- sample_sheet[`Data Type` %in% args$data_type]
-
-# Select cases (tumors) for which all data_type are present -------------------
-n_files <- sample_sheet[,.(length(unique(`Data Type`))), by = `Case ID`]
-n_files <- n_files[V1 == length(args$data_type)]
-sample_sheet <- sample_sheet[`Case ID` %in% n_files$`Case ID`]
-
-# Read in manifest ------------------------------------------------------------
-manifest <- fread(args$manifest, header = T, stringsAsFactors = F)
-manifest <- manifest[id %in% sample_sheet$`File ID`]
-setkey(sample_sheet, 'File ID')
-manifest <- cbind(manifest, sample_sheet[manifest$id][, c('Case ID',
-                                                          'Data Category'),
-                                                      with = F])
-manifest <- manifest[order(-size)]
-
-# Select n_samples cases (tumors) which have the biggest sizes ----------------
-selected_cases <- unique(manifest$`Case ID`)[1:args$n_samples]
-
-manifest <- manifest[`Case ID` %in% selected_cases]
-manifest <- split(manifest, manifest$`Data Category`)
-manifest <- lapply(manifest, 
-                   function(x) x[order(-size)][,.SD[1], by = `Case ID`])
-manifest <- do.call(rbind, manifest)
-
-sample_sheet <- sample_sheet[`File ID` %in% manifest$id]
 
 # Output to file --------------------------------------------------------------
-write.table(sample_sheet, args$output_sample_sheet, append = F, quote = F,
-            sep = '\t', col.names = T, row.names = F)
-manifest[, `Case ID` := NULL]
-manifest[, `Data Category` := NULL]
-write.table(manifest, args$output_manifest, append = F, quote = F,
-            sep = '\t', col.names = T, row.names = F)
+write.table(exprTab, args$output_per_sample, append = F, quote = F, sep = '\t', 
+            col.names = T, row.names = F)
+message('[', Sys.time(), '] Wrote to ', args$output_per_sample)
+write.table(medianExprTab, args$output_per_tumor_subtype, append = F, 
+            quote = F, sep = '\t', col.names = T, row.names = F)
+message('[', Sys.time(), '] Wrote to ', args$output_per_tumor_subtype)
 
 message("End time of run: ", Sys.time())
 message('Total execution time: ',  
