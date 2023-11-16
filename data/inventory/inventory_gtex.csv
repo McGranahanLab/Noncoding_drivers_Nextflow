@@ -1,4 +1,4 @@
-tumor_subtype,gtex_tumor_subtype
-LUAD,Lung
-LUSC,Lung
-PANLUNG,Lung
+tumor_subtype,expr_tumor_subtype,expr_db
+LUAD,Lung,GTEx
+LUSC,Lung,GTEx
+PANLUNG,Lung,GTEx
