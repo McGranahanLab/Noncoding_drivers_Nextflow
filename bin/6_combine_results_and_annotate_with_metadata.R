@@ -13,7 +13,7 @@
 # COMPANY:  UCL, London, the UK
 # VERSION:  1
 # CREATED:  10.12.2020
-# REVISION: 19.11.2023
+# REVISION: 16.11.2023
 
 # Source custom functions -----------------------------------------------------
 #' get_script_dir
@@ -62,7 +62,7 @@ read_DIGdriver_results <- function(filePath) {
          'PVAL_SNV_BURDEN, PVAL_INDEL_BURDEN, PVAL_MUT_BURDEN') 
   }
   result <- result[, intersect(colnames(result), colsToRead)[1:2], with = F]
-  setnames(result, colsToRead, c('binID', 'raw_p'), skip_absent = T)
+  setnames(result, colnames(result), c('binID', 'raw_p'), skip_absent = T)
   result <- cbind(result, parseBED12regName(result$binID))
   result <- result[, !colnames(result) %in% c('binID', 'name', 
                                               'target_genome_version'),
@@ -206,6 +206,16 @@ readSoftwareResults <- function(softName, acceptedSoftware, filePath, infoStr){
                              absentCols))
   }
   result <- setcolorder(result, finalCols)
+  
+  if (nrow(unique(result)) != nrow(result)) {
+    duplicatedDT <- unique(result[duplicated(result)])
+    message('[', Sys.time(), '] Found duplicated entries for in ', filePath, 
+            ' for ', length(duplicatedDT$gene_name), ' genes: ',
+            paste0(duplicatedDT$gene_name, collapse = ', '), 
+            '. Will removed them.')
+    result <- result[!duplicated(result)]
+  }
+  
   result
 }
 
@@ -398,7 +408,7 @@ empiricalBrownsMethod_V <- function(covar_matrix, p_values_list,
 meltToWide <- function(resDT) {
   frml <- paste(paste(setdiff(colnames(resDT), c('software', 'raw_p')),
                       collapse = '+'), "~ software")
-  result <- dcast(resDT, as.formula(frml), value.var = 'raw_p')
+  result <- dcast(resDT, as.formula(frml), value.var = 'raw_p', )
   result <- as.data.table(result)
   setnames(result, sort(unique(resDT$software)),
            paste0(sort(unique(resDT$software)), '.raw_p'))
@@ -510,6 +520,54 @@ combineRawPvalues <- function(resDTwide) {
   result
 }
 
+# [FUNCTIONS] Annotations with expression -------------------------------------
+#' annotateWithExpression
+#' @description Annotates table containing genes with expression status.
+#' @author Maria Litovchenko
+#' @param dt data table with essential columns gene_id, gene_name and 
+#' tumor_subtype. Data should be only for 1 tumor subtype.
+#' @param expression_InvPath path to the file with expression inventory. The
+#' file must contain columns tumor_subtype, expr_db and min_expr.
+#' @param expression_filePath path to processed table with expression data for
+#' one expression data base. Columns gene_id, gene_name and a column 
+#' containing expression data for the tumor_subtype (from dt) should be
+#' present.
+#' @return data table dt with added column expr_in_{expr_db} indicating state
+#' of expression (T or F).
+annotateWithExpression <- function(dt, expression_InvPath, 
+                                   expression_filePath) {
+  dt_tumorSubtype <- unique(dt$tumor_subtype)
+  if (length(dt_tumorSubtype) > 1) {
+    stop('[', Sys.time(), '] > 1 unique values of tumor_subtype column in ',
+         'table to be annotated.')
+  }
+  
+  inventory_expression <- fread(expression_InvPath, header = T, 
+                                stringsAsFactors = F)
+  message('[', Sys.time(), '] Started annotation with ', 
+          unique(inventory_expression$expr_db))
+  if (!dt_tumorSubtype %in% inventory_expression$tumor_subtype) {
+    message('[', Sys.time(), '] No expression data is available for ',
+            paste0(dt_tumorSubtype, collapse = ', '), ', skipping.')
+  }
+  min_expr <- inventory_expression[tumor_subtype == dt_tumorSubtype]$min_expr
+  min_expr <- as.numeric(min_expr)
+  
+  message('[', Sys.time(), '] Started reading expression table ',
+          expression_filePath)
+  exprDT <- fread(expression_filePath, header = T, stringsAsFactors = F,
+                  select = c('gene_id', 'gene_name', dt_tumorSubtype))
+  message('[', Sys.time(), '] Finished reading expression table ',
+          expression_filePath)
+  
+  result <- mergeBasedOnAtLeastOneKey(dt, exprDT, 
+                                      keyCols = c('gene_id', 'gene_name'))
+  setnames(result, dt_tumorSubtype, 'expr_in')
+  result[, expr_in := ifelse(expr_in > min_expr, T, F)]
+  setnames(result, 'expr_in', 
+           paste0('expr_in_', unique(inventory_expression$expr_db)))
+  result
+}
 # [FUNCTIONS] Misc ------------------------------------------------------------
 #' mergeBasedOnAtLeastOneKey
 #' @description Performs merge of two data tables based on at least one 
@@ -545,34 +603,30 @@ mergeBasedOnAtLeastOneKey <- function(baseDT, toAddDT, keyCols) {
 }
 
 # Test inputs -----------------------------------------------------------------
-# -c --cancer_subtype, -g --gr_id
 args <- list(cancer_subtype = 'LUAD', gr_id = 'CDS',
-             software = list('dndscv', 'oncodrivefml'),
-             run_results = list('../TEST/results/dndscv/dndscv-results-LUSC-CDS-hg19.csv', 
-                                '../TEST/results/oncodrivefml/oncodrivefml-results-LUAD-CDS-hg19.csv'),
-             mut_rate = '../TEST/results/mut_rates/mutRate-LUAD--mutMapToGR.csv',
-             gene_name_synonyms = '../data/assets/gene_names_synonyms/hgnc_complete_set_2022-07-01_proc.csv',
-             rawP_cap = 10^(-8),
+             software = list('digdriver', 'dndscv', 'mutpanning', 'nbr',
+                             'oncodrivefml'),
+             run_results = list('../TEST/results/digdriver/digdriverResults-LUAD-CDS-hg19.csv', 
+                                '../TEST/results/dndscv/dndscvResults-LUAD-CDS-hg19.csv', 
+                                '../TEST/results/mutpanning/mutpanningResults-LUAD-CDS-hg19.csv', 
+                                '../TEST/results/nbr/nbrResults-LUAD-CDS-hg19.csv', 
+                                '../TEST/results/oncodrivefml/oncodrivefmlResults-LUAD-CDS-hg19.csv'),
+             mut_rate = '../TEST/results/mut_rates/meanMutRatePerGR-LUAD--hg19.csv',
+             gene_name_synonyms = '../data/assets/hgnc_complete_set_processed.csv',
              known_cancer_genes = '../data/assets/cgc_knownCancerGenes.csv',
-             known_db_to_use = list('CGC'),
-             olfactory_genes = '../data/assets/olfactory_barnes_2020.csv')
+             olfactory_genes = '../data/assets/olfactory_barnes_2020.csv',
+             rawP_cap = 10^(-8),
+             expression_inventories = list('../data/inventory/inventory_expression_gtex.csv',
+                                           '../data/inventory/inventory_expression_tcga.csv'),
+             expression = list('../data/assets/GTEx_expression.csv',
+                               '../data/assets/TCGA_expression.csv'),
+             output = '../TEST/results/tables/combined_p_values/combinedP_LUAD-CDS_hg19.csv')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
 names(args[['run_results']]) <- unlist(args$software)
-
-# Process input --results_files -----------------------------------------------
-# args$results_files <- args$results_files[args$results_files != 'null']
-# if (length(args$results_files) == 0) {
-#   stop('[', Sys.time(), '] No results files are given for ', 
-#        args$cancer_subtype, ' on ',  args$gr_id)
-# }
-# softwareNames <- unlist(args$results_files[seq(1, length(args$results_files),
-#                                                2)])
-# names(args$results_files) <- rep(softwareNames, each = 2)
-# args$results_files <- args$results_files[seq(2, length(args$results_files), 2)]
 
 # [READ] in raw results of software runs --------------------------------------
 message('[', Sys.time(), '] Started reading results of de-novo driver ',
@@ -600,27 +654,61 @@ if (!is.null(args$gene_name_synonyms)) {
 }
 
 # Unify gene_id and gene_name across various software -------------------------
-# create gene_id to gene_name map from bed12
-GENE_ID_TO_NAME <- unique(mutRate[,.(gene_name, gene_id)])
-rawPs <- fillInGeneIDs(rawPs, GENE_ID_TO_NAME, GENE_NAME_SYNS)
+# create gene_id to gene_name map from bed12 and from rawPs
+GENE_ID_TO_NAME <- rawPs[,.(gene_id, gene_name)]
+GENE_ID_TO_NAME <- GENE_ID_TO_NAME[complete.cases(GENE_ID_TO_NAME)]
+GENE_ID_TO_NAME <- rbind(GENE_ID_TO_NAME, mutRate[,.(gene_name, gene_id)])
+GENE_ID_TO_NAME <- unique(GENE_ID_TO_NAME) 
+rawPs <- fillInGeneIDs(DT = rawPs, id_To_Name_Map = GENE_ID_TO_NAME, 
+                       name_syns = GENE_NAME_SYNS)
 rawPs <- fillInGeneName(rawPs, GENE_ID_TO_NAME)
 
 rm(GENE_ID_TO_NAME, GENE_NAME_SYNS)
 gc()
 
 nbefore <- nrow(rawPs)
-rawPs <- rawPs[!is.na(gene_id)]
-nafter <- nrow(rawPs)
-message('[', Sys.time(), '] Removed ', nbefore - nafter, ' entries out of ',
-        nbefore, '(', 100*round((nbefore - nafter)/nbefore, 4), '%) ',
-        'from the raw results table due to the absence of gene_id')
+nafter <- nrow(rawPs[!is.na(gene_id)])
+if (nafter != nbefore) {
+  nRemovedGenes <- length(unique(rawPs[is.na(gene_id)]$gene_name))
+  nRemovedGenesBySoft <- rawPs[is.na(gene_id)][,.(length(unique(gene_name))), 
+                                               by = software]
+  setnames(nRemovedGenesBySoft, 'V1', 'N genes')
+  message('[', Sys.time(), '] Removed ', nbefore - nafter, ' entries out of ',
+          nbefore, ' (', 100 * round((nbefore - nafter) / nbefore, 4), '%) ',
+          'corresponding to ', nRemovedGenes, ' (',
+          100 * round(nRemovedGenes / length(unique(rawPs$gene_name)), 4),
+          '%) genes from the raw results table due to the absence of gene_id.',
+          ' This can happen due to removal of genes from the set of genomic ',
+          'regions of interest due to overlap with blacklisted regions. Yet, ',
+          'MutPanning regions are not controlled by the pipeline, and ',
+          'therefore those regions could be retained:')
+  message(paste0(capture.output(knitr::kable(nRemovedGenesBySoft, 
+                                             format = "markdown")), 
+                 collapse = '\n'))
+  rawPs <- rawPs[!is.na(gene_id)]
+}
 
 nbefore <- nrow(rawPs)
-rawPs <- rawPs[!is.na(gene_name)]
-nafter <- nrow(rawPs)
-message('[', Sys.time(), '] Removed ', nbefore - nafter, ' entries out of ',
-        nbefore, '(', 100*round((nbefore - nafter)/nbefore, 4), '%) ',
-        'from the raw results table due to the absence of gene_name')
+nafter <- nrow(rawPs[!is.na(gene_name)])
+if (nafter != nbefore) {
+  nRemovedGenes <- length(unique(rawPs[is.na(gene_name)]$gene_id))
+  nRemovedGenesBySoft <- rawPs[is.na(gene_name)][,.(length(unique(gene_id))), 
+                                                 by = software]
+  setnames(nRemovedGenesBySoft, 'V1', 'N genes')
+  message('[', Sys.time(), '] Removed ', nbefore - nafter, ' entries out of ',
+          nbefore, ' (', 100 * round((nbefore - nafter) / nbefore, 4), '%) ',
+          'corresponding to ', nRemovedGenes, ' (',
+          100 * round(nRemovedGenes / length(unique(rawPs$gene_id)), 4),
+          '%) genes from the raw results table due to the absence of ',
+          'gene_name. This can happen due to removal of genes from the set of ',
+          'genomic regions of interest due to overlap with blacklisted ',
+          'regions. Yet, MutPanning regions are not controlled by the ',
+          'pipeline, and therefore those regions could be retained:')
+  message(paste0(capture.output(knitr::kable(nRemovedGenesBySoft, 
+                                             format = "markdown")), 
+                 collapse = '\n'))
+  rawPs <- rawPs[!is.na(gene_name)]
+}
 
 # Cap raw p-values ------------------------------------------------------------
 # As stated in PCAWG paper methods: raw P values smaller than 10-16 were 
@@ -650,65 +738,72 @@ if (length(unique(rawPs[!is.na(raw_p)]$software)) == 1) {
 }
 
 # [READ & ANNOTATE] with known cancer genes -----------------------------------
-message('[', Sys.time(), '] Started reading known cancer genes table')
-known_cancer <- fread(args$known_cancer_genes, header = T, 
-                      stringsAsFactors = F)
-message('[', Sys.time(), '] Finished reading known cancer genes table')
-
-baseDT <- copy(combinedPs)
-toAddDT <- copy(known_cancer)
-keyCols <- c('gene_id', 'gene_name')
-
-                
-o <- merge(combinedPs, known_cancer, by = c('gene_id', 'gene_name'))[,.(gene_id, gene_name)]
-a <- merge(combinedPs[!gene_name %in% o$gene_name & !gene_id %in% o$gene_id],
-           known_cancer, by = 'gene_id')
-b <- merge(combinedPs[!gene_name %in% c(o$gene_name, a$gene_name) & 
-                        !gene_id %in% c(o$gene_id, a$gene_id)],
-           known_cancer, by = 'gene_name')
-
-
-# add column in_db indicating in which data bases gene was already listed
-combinedPs <- merge(combinedPs, known_cancer, by = c('gene_id', 'gene_name'),
-                    all.x = T)
-setnames(combinedPs, 'db_name', 'in_db')
+if (!is.null(args$known_cancer_genes)) {
+  message('[', Sys.time(), '] Started reading known cancer genes table')
+  known_cancer <- fread(args$known_cancer_genes, header = T, 
+                        stringsAsFactors = F)
+  known_cancer <- known_cancer[!duplicated(known_cancer[,.(gene_id,
+                                                           gene_name)])]
+  message('[', Sys.time(), '] Finished reading known cancer genes table')
+  message('[', Sys.time(), '] Started annotation with known cancer genes ',
+          'table')
+  combinedPs <- mergeBasedOnAtLeastOneKey(combinedPs, known_cancer, 
+                                          keyCols = c('gene_id', 'gene_name'))
+  combinedPs[is.na(is_known_cancer)]$is_known_cancer <- F
+  message('[', Sys.time(), '] Finished annotation with known cancer genes ',
+          'table')
+} else {
+  message('[', Sys.time(), '] Known cancer genes table is not given. Will ',
+          'set value of column is_known_cancer to F.')
+  combinedPs[, is_known_cancer := F]
+}
 
 # [ANNOTATE] with olfactory gene status ---------------------------------------
 if (!is.null(args$olfactory_genes)) {
   message('[', Sys.time(), '] Started reading olfactory genes table')
   olfactory <- fread(args$olfactory_genes, header = T, sep = '\t', 
                      stringsAsFactors = F, select = c('gene_id', 'gene_name'))
+  olfactory <- olfactory[!duplicated(olfactory[,.(gene_id, gene_name)])]
+  olfactory[, is_olfactory := T]
   message('[', Sys.time(), '] Finished reading olfactory genes table')
-  # choose, which column to use for merging
-  nOvrlName <- sum(olfactory$gene_name %in% combinedPs$gene_name)
-  nOvrlId <- sum(olfactory$gene_id %in% combinedPs$gene_id)
-  mergeKey <- ifelse(nOvrlId >= nOvrlName, 'gene_id', 'gene_name')
-  olfactory <- unlist(olfactory[, c(mergeKey), with = F])
-  combinedPs[, isOlfact := unlist(combinedPs[, mergeKey, 
-                                             with = F]) %in% olfactory]
+  combinedPs <- mergeBasedOnAtLeastOneKey(combinedPs, olfactory, 
+                                          keyCols = c('gene_id', 'gene_name'))
+  combinedPs[is.na(is_olfactory)]$is_olfactory <- F
 }
 
 # [ANNOTATE] with length & quantile of length, N mutations, etc ---------------
 combinedPs <- merge(combinedPs, mutRate[, setdiff(colnames(mutRate), 
-                                        c('gr_name', 'gene_name')), with = F],
-                    allow.cartesian = T, all.x = T,
-                    by = c('tumor_subtype', 'gr_id', 'gene_id'))
+                                                  c('gr_name', 'gene_name')), 
+                                        with = F], allow.cartesian = T,
+                    all.x = T, by = c('gr_id', 'gene_id'))
 
-mismatched <- combinedPs[is.na(participant_tumor_subtype) & raw_p < 0.05]
-mismatched <- unique(mismatched[,.(tumor_subtype, gr_id, gene_name, 
-                                   software)])
+mismatched <- combinedPs[is.na(nMuts)]
+mismatched <- mismatched[apply(mismatched[, grep('.raw_p$', 
+                                                 colnames(mismatched)), 
+                                          with = F], 1, 
+                               function(x) any(x[!is.na(x)] < 0.05))]
+mismatched <- mismatched[, c('tumor_subtype', 'gr_id', 'gene_id', 'gene_name',
+                             grep('raw_p$', colnames(mismatched), value = T)), 
+                         with = F]
+mismatched <- melt(mismatched, id.vars = c('tumor_subtype', 'gr_id',
+                                           'gene_id', 'gene_name'))
+setnames(mismatched, 'variable', 'software')
+mismatched <- mismatched[!is.na(value)]
+mismatched[, software := gsub('.raw_p$', '', software)]
+mismatched <- unique(mismatched[,.(tumor_subtype, gr_id, gene_name, software)])
+
 message('[', Sys.time(), '] Found ', nrow(mismatched), '(',
         round(100 * nrow(mismatched) / 
-                nrow(unique(combinedPs[,.(tumor_subtype, gr_id, gene_name, 
-                                          software)])), 4), '%) ', 
-        'tumor subtype-gene - genomic region - software combinations where ',
-        'raw p value is significant, but no mutations were assigned to ',
-        'that region. This can be cause by slight misalignment of ',
-        'annotations between softwares and genomic ranges. dNdScv and ',
-        'DIGdriver are prone to that due to RefCDS creation and inability ',
-        'to remove positions affected by low mappability, etc. MutPanning ',
-        'is prone to that due do genome annotation being fixed inside ',
-        'the software. Overview of distribution across software: ',
+                nrow(unique(rawPs[,.(tumor_subtype, gr_id, gene_name, 
+                                     software)])), 4), '%) ', 
+        'genomic region - software combinations where raw p value is ',
+        'significant, but no mutations were assigned to that region. This ',
+        'can be cause by slight misalignment of annotations between ',
+        'softwares and genomic ranges. dNdScv and DIGdriver are prone to ',
+        'that due to RefCDS creation and inability to remove positions ',
+        'partically affected by low mappability, etc. MutPanning is prone to ',
+        'that due do genome annotation being fixed inside the software. ',
+        'Overview of distribution across software: ',
         paste0(capture.output(knitr::kable(mismatched[,.N, by = software], 
                                            format = "markdown")), 
                collapse = '\n'), 
@@ -719,58 +814,19 @@ message('[', Sys.time(), '] Found ', nrow(mismatched), '(',
                collapse = '\n'))
 rm(mutRate)
 gc()
+message('[', Sys.time(), '] Annotated with mutation rate statistics')
 
-# [ANNOTATE] with GTEx expression status (True/False/NA) ----------------------
-if (!is.null(args$gtex)) {
-  message('[', Sys.time(), '] Started reading GTEx expression table')
-  gtex <- fread(args$gtex, header = T, stringsAsFactors = F)
-  message('[', Sys.time(), '] Finished reading GTEx expression table')
-  
-  if (tumorSubtype %in% colnames(gtex)) {
-    message('[', Sys.time(), '] Found GTEx expression data for ', 
-            tumorSubtype, ', annotating.')
-    expressedInGTEx <- unlist(gtex[, tumorSubtype, with = F])
-    expressedInGTEx <- gtex[expressedInGTEx != 0][,.(gene_name, gene_id)]
-    combinedPs[, exprInGTEx := F]
-    combinedPs[!gene_name %in% gtex$gene_name &  
-                 !gene_id %in% gtex$gene_id]$exprInGTEx <- NA
-    combinedPs[gene_name %in% expressedInGTEx$gene_name]$exprInGTEx <- T
-    combinedPs[gene_id %in% expressedInGTEx$gene_id]$exprInGTEx <- T
-  } else {
-    message('[', Sys.time(), '] Did not find GTEx expression data for ', 
-            tumorSubtype)
-    combinedPs[, exprInGTEx := as.logical(NA)]
+# [ANNOTATE] with expression status (True/False/NA) ---------------------------
+if (!is.null(args$expression)) {
+  for (eIdx in 1:length(args$expression)) {
+    combinedPs <- annotateWithExpression(combinedPs, 
+                                         args$expression_inventories[[eIdx]],
+                                         args$expression[[eIdx]])
   }
-}
-
-# [ANNOTATE] with TCGA expression status (True/False/NA) ----------------------
-if (!is.null(args$tcga)) {
-  message('[', Sys.time(), '] Started reading TCGA expression table')
-  tcga <- fread(args$tcga, header = T, stringsAsFactors = F)
-  message('[', Sys.time(), '] Started reading TCGA expression table')
-  
-  if (tumorSubtype %in% colnames(tcga)) {
-    message('[', Sys.time(), '] Found TCGA expression data for ', 
-            tumorSubtype, ', annotating.')
-    expressedInTCGA <- unlist(tcga[, tumorSubtype, with = F])
-    expressedInTCGA <- tcga[expressedInTCGA != 0][,.(gene_name, gene_id)]
-    combinedPs[, exprInTCGA := F]
-    combinedPs[[tumorSubtype]][!gene_name %in% tcga$gene_name & 
-                                 !gene_id %in% tcga$gene_id]$exprInTCGA <- NA
-    combinedPs[[tumorSubtype]][gene_name %in% 
-                                 expressedInTCGA$gene_name]$exprInTCGA <- T
-    combinedPs[[tumorSubtype]][gene_id %in% 
-                                 expressedInTCGA$gene_id]$exprInTCGA <- T
-  } else {
-    message('[', Sys.time(), '] Did not find GTEx expression data for ', 
-            tumorSubtype)
-    combinedPs[[tumorSubtype]][, exprInTCGA := as.logical(NA)]
-  }
-  rawPs <- do.call(rbind, rawPs)
 }
 
 # [SAVE] Raw results of software run as table ---------------------------------
-write.table(rawPs, args$output, append = F, quote = F,  sep = '\t', 
+write.table(combinedPs, args$output, append = F, quote = F,  sep = '\t', 
             row.names = F, col.names = T)
 message('[', Sys.time(), '] Wrote raw drivers table to ', args$output)
 
