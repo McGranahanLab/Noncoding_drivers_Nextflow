@@ -1,0 +1,4 @@
+tier,indivRaw_cutoff,nIndivRawSoft_sign,indivFDR_cutoff,nIndivFDRsoft_sign,restrictToKnownCancer,mergedFDR_cutoff
+1,0.1,2,0.01,2,F,0.01
+2,0.1,2,1,0,T,0.05
+3,0.1,2,1,0,F,0.01

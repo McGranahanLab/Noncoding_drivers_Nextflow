@@ -1,0 +1,4 @@
+tumor_subtype,expr_tumor_subtype,expr_db,min_expr
+LUAD,Lung,GTEx,0
+LUSC,Lung,GTEx,0
+PANLUNG,Lung,GTEx,0

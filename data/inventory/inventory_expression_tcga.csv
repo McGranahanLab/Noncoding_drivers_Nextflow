@@ -1,0 +1,4 @@
+tumor_subtype,expr_tumor_subtype,expr_db,min_expr
+LUAD,TCGA-LUAD,TCGA,0
+LUSC,TCGA-LUSC,TCGA,0
+PANLUNG,PANLUNG,TCGA,0
