@@ -83,12 +83,12 @@ parser$add_argument("-t", "--sample_type", required = F, default = NULL,
 dataTypeHelp <- paste('Data types to select, i.e. "Allele-specific Copy Number Segment"',
                       '"Masked Somatic Mutation". Use double quotes if',
                       'nessecary.')
-parser$add_argument("-d", "--data_type", required = T, nargs = '*',
+parser$add_argument("-d", "--data_type", required = F, nargs = '*',
                     type = 'character', help = dataTypeHelp)
 
 nSamplesHelp <- paste('Number of samples (tumors) to select from each',
                       'Projects IDs')
-parser$add_argument("-n", "--n_samples", required = T, default = NULL,
+parser$add_argument("-n", "--n_samples", required = F, default = NULL,
                     type = 'character', help = nSamplesHelp)
 
 outSampleHelp <- paste('Path to output resulting sample sheet')
@@ -119,14 +119,28 @@ printArgs(args)
 
 # Read in & filter sample sheet -----------------------------------------------
 sample_sheet <- fread(args$sample_sheet, header = T, stringsAsFactors = F)
+message('[', Sys.time(), '] Read ', args$sample_sheet, '.')
 if (!is.null(args$project_id)) {
   sample_sheet <- sample_sheet[`Project ID` %in% args$project_id]
+  message('[', Sys.time(), '] Selected following Project ID: ', 
+          paste0(args$project_id, collapse = ', '), '.')
 }
 sample_sheet <- do.call(rbind, apply(sample_sheet, 1, splitRow, ', '))
 if (!is.null(args$sample_type)) {
   sample_sheet <- sample_sheet[`Sample Type` %in% args$sample_type]
+  message('[', Sys.time(), '] Selected following Sample Type: ', 
+          paste0(args$sample_type, collapse = ', '), '.')
 }
-sample_sheet <- sample_sheet[`Data Type` %in% args$data_type]
+if (!is.null(args$data_type)) {
+  sample_sheet <- sample_sheet[`Data Type` %in% args$data_type]
+  message('[', Sys.time(), '] Selected following Data Type: ', 
+          paste0(args$data_type, collapse = ', '), '.')
+} else {
+  args$data_type <- unique(sample_sheet$`Data Type`)
+  message('[', Sys.time(), '] Samples which have a file for each of the ',
+          'following Data Type(s): ', paste0(args$data_type, collapse = ', '),
+          ' will be kept.')
+}
 
 # Select cases (tumors) for which all data_type are present -------------------
 n_files <- sample_sheet[,.(length(unique(`Data Type`))), by = `Case ID`]
@@ -135,6 +149,7 @@ sample_sheet <- sample_sheet[`Case ID` %in% n_files$`Case ID`]
 
 # Read in manifest ------------------------------------------------------------
 manifest <- fread(args$manifest, header = T, stringsAsFactors = F)
+message('[', Sys.time(), '] Read ', args$manifest, '.')
 manifest <- manifest[id %in% sample_sheet$`File ID`]
 setkey(sample_sheet, 'File ID')
 manifest <- cbind(manifest, 
@@ -150,6 +165,9 @@ if (!is.null(args$n_samples)) {
   selected_cases <- unlist(selected_cases)
   manifest <- do.call(rbind(manifest))
   manifest <- manifest[`Case ID` %in% selected_cases]
+  message('[', Sys.time(), '] Selected ', args$n_samples, ' Case ID(s) ',
+          'for each of the Project ID(s). Selection was based on file size (',
+          'the bigger the better).')
 }
 
 manifest <- split(manifest, manifest$`Data Category`)
