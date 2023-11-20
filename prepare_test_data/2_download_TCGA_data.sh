@@ -19,8 +19,8 @@ Rscript --vanilla 0_select_tumors_from_TCGA.R \
         --sample_sheet gdc_sample_sheet.2023-11-15.tsv \
         --manifest gdc_manifest_20231115_125954.txt \
         --sample_type "Primary Tumor" \
+        --project_id 'TCGA-LUAD' 'TCGA-LUSC' \
         --data_type "Allele-specific Copy Number Segment" "Masked Somatic Mutation" "Gene Expression Quantification" \
-        --n_samples 100 \
         --output_sample_sheet $SAMPLE_SHEET \
         --output_manifest $MANIFEST
 
@@ -30,7 +30,7 @@ unzip gdc-client_v1.6.1_Ubuntu_x64.zip
 rm gdc-client_v1.6.1_Ubuntu_x64.zip
 
 # download the data for selected samples
-mkdir $TEST_DATA_FOLDER
+mkdir -p $TEST_DATA_FOLDER
 ./gdc-client download -m $MANIFEST -d $TEST_DATA_FOLDER
 
 # produce FPKM tables: one containing expression data for every sample and one 

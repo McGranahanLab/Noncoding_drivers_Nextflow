@@ -61,6 +61,12 @@ parser$add_argument("-t", "--tumor_subtype_column", required = T,
                     default = "Project ID", type = 'character', 
                     help = subtypeHelp)
 
+dataTypeHelp <- paste('Data types to select, i.e. "Allele-specific Copy Number Segment"',
+                      '"Masked Somatic Mutation". Use double quotes if',
+                      'nessecary. Only one argument is allowed.')
+parser$add_argument("-d", "--data_type", required = F, 
+                    type = 'character', help = dataTypeHelp)
+
 aggrHelp <- paste('Boolean, indicating, whether or not an aggregate',
                   'across all tumor subtypes should be computed.')
 parser$add_argument("-a", "--do_aggregate", required = F, default = 'F',

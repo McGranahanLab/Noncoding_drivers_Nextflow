@@ -72,7 +72,7 @@ parser <- ArgumentParser(prog = 'preprocess_expression.R')
 exprInvHelp <- paste('Inventory table matching tumor subtypes used in the',
                      'de-novo driver discovery and tumor subtypes in',
                      'expression table. Essential columns: tumor_subtype, ',
-                     'expr_tumor_subtype, expr_db')
+                     'expr_tumor_subtype, expr_db, min_expr')
 parser$add_argument('-i', '--inventory_expression', required = T, 
                     type = 'character', help = exprInvHelp)
 
@@ -117,27 +117,27 @@ if (!dir.exists(dirname(args$ouput))) {
 }
 
 # Test input arguments --------------------------------------------------------
-# args <- list('inventory_expression' = '../data/inventory/inventory_gtex.csv',
+# args <- list('inventory_expression' = '../data/inventory/inventory_expression_gtex.csv',
 #              'expression' = '../data/assets_raw/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_median_tpm.gct',
 #              'genomic_regions' = list('../TEST/inputs/inputGR-LUAD-hg19.bed',
 #                                       '../TEST/inputs/inputGR-LUSC-hg19.bed'),
 #              'use_ensembl' = T, 
 #              'output' = '../data/assets/GTEx_expression.csv')
-args <- list('inventory_expression' = '../data/inventory/inventory_tcga.csv',
-             'expression' = '../data/assets_raw/TCGA_FPKM_per_tumor_subtype.csv',
-             'genomic_regions' = list('../TEST/inputs/inputGR-LUAD-hg19.bed',
-                                      '../TEST/inputs/inputGR-LUSC-hg19.bed'),
-             'use_ensembl' = T, 
-             'output' = '../data/assets/TCGA_expression.csv')
+# args <- list('inventory_expression' = '../data/inventory/inventory_expression_tcga.csv',
+#              'expression' = '../data/assets_raw/TCGA_FPKM_per_tumor_subtype.csv',
+#              'genomic_regions' = list('../TEST/inputs/inputGR-LUAD-hg19.bed',
+#                                       '../TEST/inputs/inputGR-LUSC-hg19.bed'),
+#              'use_ensembl' = T, 
+#              'output' = '../data/assets/TCGA_expression.csv')
 
 # Read & check expression inventory -------------------------------------------
 inventory_expr <- fread(args$inventory_expression, header = T,  
                         stringsAsFactors = F,
                         select = c('tumor_subtype', 'expr_tumor_subtype', 
-                                   'expr_db'))
-if (ncol(inventory_expr) != 3) {
+                                   'expr_db', 'min_expr'))
+if (ncol(inventory_expr) != 4) {
   stop('[', Sys.time(), '] ', args$inventory_expr, ' does not have all 3 ',
-       'columns: tumor_subtype, expr_tumor_subtype, expr_db.')
+       'columns: tumor_subtype, expr_tumor_subtype, expr_db and min_expr.')
 }
 if (length(unique(inventory_expr$tumor_subtype)) != nrow(inventory_expr)) {
   stop('[', Sys.time(), '] ', args$inventory_expression, ' has duplicated ',

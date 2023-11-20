@@ -143,7 +143,7 @@ suppressWarnings(suppressPackageStartupMessages(library(plyr)))
 args <- list(combined_p_values_tables = list('../TEST/results/tables/combined_p_values/combinedP_LUAD-CDS_hg19.csv',
                                              '../TEST/results/tables/combined_p_values/combinedP_LUAD-5primeUTR_hg19.csv'),
              inventory_tier = '../data/inventory/inventory_tier_definition.csv',
-             output = '../TEST/results/tables/rawDrivers_LUAD-CDS_hg19.csv')
+             output = '../TEST/results/tables/rawDrivers_LUAD--_hg19.csv')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
@@ -190,19 +190,12 @@ for (pCombMet in pValCombMethods) {
   message('[', Sys.time(), '] Assigned tier based on ', pCombMet)
 }
 
+# [SAVE] tiered results as table ----------------------------------------------
+write.table(combinedPsAdj, args$output, append = F, quote = F,  sep = '\t', 
+            row.names = F, col.names = T)
+message('[', Sys.time(), '] Wrote raw drivers table to ', args$output)
 
-
-
-# re-arrange columns a bit for simplicity
-combinedPsRawCols <- sort(grep('raw_p$', colnames(combinedPs), value = T))
-combinedPsCombCols <- sort(grep('comb_p$', colnames(combinedPs), value = T))
-combinedPsBhCols <- sort(grep('bh_p$', colnames(combinedPs), value = T))
-setcolorder(combinedPs, c(setdiff(colnames(combinedPs), 
-                                  c(combinedPsRawCols, combinedPsCombCols,
-                                    combinedPsBhCols)),
-                          combinedPsRawCols, combinedPsCombCols, 
-                          combinedPsBhCols))
-rm(combinedPsCombCols, combinedPsRawCols, combinedPsBhCols)
-
-
-
+message("End time of run: ", Sys.time())
+message('Total execution time: ', 
+        difftime(Sys.time(), timeStart, units = 'mins'), ' mins.')
+message('Finished!')

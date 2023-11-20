@@ -582,7 +582,8 @@ mergeBasedOnAtLeastOneKey <- function(baseDT, toAddDT, keyCols) {
   result <- merge(baseDT, toAddDT, by = keyCols)
   notKeys <- setdiff(colnames(toAddDT), keyCols)
   for (oneKeyCol in keyCols) {
-    notMatched <- merge(baseDT, cbind(result[, keyCols, with = F], matched = T), 
+    notMatched <- merge(baseDT, unique(cbind(result[, keyCols, with = F],
+                                             matched = T)), 
                         by = keyCols, all.x = T)
     notMatched <- notMatched[is.na(matched)]
     notMatched[, matched := NULL]
@@ -591,7 +592,8 @@ mergeBasedOnAtLeastOneKey <- function(baseDT, toAddDT, keyCols) {
                                   by = oneKeyCol))
   }
   # add lines for which match wasn't found at all
-  notMatched <- merge(baseDT, cbind(result[, keyCols, with = F], matched = T), 
+  notMatched <- merge(baseDT, unique(cbind(result[, keyCols, with = F], 
+                                           matched = T)), 
                       by = keyCols, all.x = T)
   notMatched <- notMatched[is.na(matched)]
   notMatched[, matched := NULL]
@@ -603,14 +605,14 @@ mergeBasedOnAtLeastOneKey <- function(baseDT, toAddDT, keyCols) {
 }
 
 # Test inputs -----------------------------------------------------------------
-args <- list(cancer_subtype = 'LUAD', gr_id = 'CDS',
+args <- list(cancer_subtype = 'LUAD', gr_id = '5primeUTR',
              software = list('digdriver', 'dndscv', 'mutpanning', 'nbr',
                              'oncodrivefml'),
-             run_results = list('../TEST/results/digdriver/digdriverResults-LUAD-CDS-hg19.csv', 
-                                '../TEST/results/dndscv/dndscvResults-LUAD-CDS-hg19.csv', 
-                                '../TEST/results/mutpanning/mutpanningResults-LUAD-CDS-hg19.csv', 
-                                '../TEST/results/nbr/nbrResults-LUAD-CDS-hg19.csv', 
-                                '../TEST/results/oncodrivefml/oncodrivefmlResults-LUAD-CDS-hg19.csv'),
+             run_results = list('../TEST/results/digdriver/digdriverResults-LUAD-5primeUTR-hg19.csv', 
+                                '../TEST/results/dndscv/dndscvResults-LUAD-5primeUTR-hg19.csv', 
+                                '../TEST/results/mutpanning/mutpanningResults-LUAD-5primeUTR-hg19.csv', 
+                                '../TEST/results/nbr/nbrResults-LUAD-5primeUTR-hg19.csv', 
+                                '../TEST/results/oncodrivefml/oncodrivefmlResults-LUAD-5primeUTR-hg19.csv'),
              mut_rate = '../TEST/results/mut_rates/meanMutRatePerGR-LUAD--hg19.csv',
              gene_name_synonyms = '../data/assets/hgnc_complete_set_processed.csv',
              known_cancer_genes = '../data/assets/cgc_knownCancerGenes.csv',
@@ -620,7 +622,7 @@ args <- list(cancer_subtype = 'LUAD', gr_id = 'CDS',
                                            '../data/inventory/inventory_expression_tcga.csv'),
              expression = list('../data/assets/GTEx_expression.csv',
                                '../data/assets/TCGA_expression.csv'),
-             output = '../TEST/results/tables/combined_p_values/combinedP_LUAD-CDS_hg19.csv')
+             output = '../TEST/results/tables/combined_p_values/combinedP_LUAD-5primeUTR_hg19.csv')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
@@ -825,7 +827,7 @@ if (!is.null(args$expression)) {
   }
 }
 
-# [SAVE] Raw results of software run as table ---------------------------------
+# [SAVE] Raw results as table -------------------------------------------------
 write.table(combinedPs, args$output, append = F, quote = F,  sep = '\t', 
             row.names = F, col.names = T)
 message('[', Sys.time(), '] Wrote raw drivers table to ', args$output)

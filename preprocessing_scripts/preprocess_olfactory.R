@@ -58,9 +58,9 @@ if (!dir.exists(dirname(args$ouput))) {
 }
 
 # Test inputs -----------------------------------------------------------------
-args <- list(input = '../data/assets_raw/12864_2020_6583_MOESM2_ESM.xlsx',
-             use_ensembl = T,
-             output = '../data/assets/olfactory_barnes_2020.csv')
+# args <- list(input = '../data/assets_raw/12864_2020_6583_MOESM2_ESM.xlsx',
+#              use_ensembl = T,
+#              output = '../data/assets/olfactory_barnes_2020.csv')
 
 # Read in table ---------------------------------------------------------------
 result <- as.data.table(read_excel(args$input))
