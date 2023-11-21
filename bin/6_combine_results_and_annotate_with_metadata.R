@@ -604,31 +604,107 @@ mergeBasedOnAtLeastOneKey <- function(baseDT, toAddDT, keyCols) {
   result
 }
 
-# Test inputs -----------------------------------------------------------------
-args <- list(cancer_subtype = 'LUAD', gr_id = '5primeUTR',
-             software = list('digdriver', 'dndscv', 'mutpanning', 'nbr',
-                             'oncodrivefml'),
-             run_results = list('../TEST/results/digdriver/digdriverResults-LUAD-5primeUTR-hg19.csv', 
-                                '../TEST/results/dndscv/dndscvResults-LUAD-5primeUTR-hg19.csv', 
-                                '../TEST/results/mutpanning/mutpanningResults-LUAD-5primeUTR-hg19.csv', 
-                                '../TEST/results/nbr/nbrResults-LUAD-5primeUTR-hg19.csv', 
-                                '../TEST/results/oncodrivefml/oncodrivefmlResults-LUAD-5primeUTR-hg19.csv'),
-             mut_rate = '../TEST/results/mut_rates/meanMutRatePerGR-LUAD--hg19.csv',
-             gene_name_synonyms = '../data/assets/hgnc_complete_set_processed.csv',
-             known_cancer_genes = '../data/assets/cgc_knownCancerGenes.csv',
-             olfactory_genes = '../data/assets/olfactory_barnes_2020.csv',
-             rawP_cap = 10^(-8),
-             expression_inventories = list('../data/inventory/inventory_expression_gtex.csv',
-                                           '../data/inventory/inventory_expression_tcga.csv'),
-             expression = list('../data/assets/GTEx_expression.csv',
-                               '../data/assets/TCGA_expression.csv'),
-             output = '../TEST/results/tables/combined_p_values/combinedP_LUAD-5primeUTR_hg19.csv')
+# Parse input arguments -------------------------------------------------------
+# create parser object
+parser <- ArgumentParser(prog = 'combine_p_values_and_annotate_with_metadata.R')
+
+subtypeHelp <- paste('A cancer subtype to select from patientsInv table. Only',
+                     'mutations from patients with that cancer type will be',
+                     'selected. In case an analysis of several cancer types',
+                     'needed to be performed please run this script ',
+                     'separetedly for each cancer type.')
+parser$add_argument("-c", "--cancer_subtype", required = T, type = 'character',
+                    default = NULL, help = subtypeHelp)
+
+parser$add_argument("-g", "--gr_id", required = T, type = 'character',
+                    default = NULL, help = 'IDs of a genomic region')
+
+softHelp <- paste('A list of software names run on current cancer subtype',
+                  'genomic region pair.')
+parser$add_argument("-s", "--software", required = T, type = 'character',
+                    nargs = '+', default = NULL, help = softHelp)
+
+resHelp <- paste('A list of file paths to results of software runs on current',
+                 'cancer subtype genomic region pair. The order of paths',
+                 'should match the order of software names in --software',
+                 'argument')
+parser$add_argument("-d", "--run_results", required = T, type = 'character',
+                    nargs = '+', default = NULL, help = resHelp)
+
+mutRhelp <- paste('A path to file containing mutations rates for the',
+                  'selected --cancer_subtype. Usually this file is created',
+                  'by 4_calculate_mutation_rates.R script and has a prefix',
+                  'meanMutRatePerGR-')
+parser$add_argument("-r", "--mut_rate", required = T, type = 'character',
+                    default = NULL, help = mutRhelp)
+
+synTabHelp <- paste('Path to table containing information about gene names',
+                    '(symbols) and their synonyms. Required columns: idx and',
+                    'gene_name.')
+parser$add_argument("-m", "--gene_name_synonyms", required = F, default = NULL,
+                    type = 'character', help = synTabHelp)
+
+knownHelp <- paste('Path to table containing information about known cancer',
+                   'associated genes. Must have columns gene_id and gene_name')
+parser$add_argument("-k", '--known_cancer_genes', required = F, default = NULL,
+                    type = 'character', help = knownHelp)
+
+olfactHelp <- paste('Path to table containing information about known',
+                    'olfactory genes. Must have columns gene_id and gene_name')
+parser$add_argument("-of", '--olfactory_genes', required = F, default = NULL,
+                    type = 'character', help = olfactHelp)
+
+capHelp <- paste('Cap on raw p-values: minimum p-value values below which',
+                 'would be set to that value. I.e. if rawP_cap is 1e-8, all',
+                 'p values below 1e-8 (i.e.  1e-16,  1e-15, 0) will be set',
+                 'to 1e-8.')
+parser$add_argument("-t", '--rawP_cap', required = T, default = NULL,
+                    type = 'character', help = capHelp)
+
+expIhelp <- paste('A list of paths to inventories outlining expression data',
+                  'to be used in driver annotation. Must have columns',
+                  'expr_db, tumor_subtype and min_expr.')
+parser$add_argument('-ei', '--expression_inventories', required = F, 
+                    nargs = '+', default = NULL, type = 'character',
+                    help = expIhelp)
+
+expHelp <- paste('A list of file paths to expression tables. The order of',
+                 'paths should match the order of inventories in',
+                 '--expression_inventories argument')
+parser$add_argument('-e', '--expression', required = F, default = NULL,
+                    nargs = '+', type = 'character', help = expHelp)
+
+parser$add_argument("-o", "--output", required = T, type = 'character',
+                    help = "Path to the output file")
+
+args <- parser$parse_args()
+# check_input_arguments_postproc(args, outputType = 'file')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
+names(args[['run_results']]) <- unlist(args$software)
+args$rawP_cap <- as.numeric(args$rawP_cap)
 printArgs(args)
 
-names(args[['run_results']]) <- unlist(args$software)
+# Test inputs -----------------------------------------------------------------
+# args <- list(cancer_subtype = 'LUAD', gr_id = '5primeUTR',
+#              software = list('digdriver', 'dndscv', 'mutpanning', 'nbr',
+#                              'oncodrivefml'),
+#              run_results = list('../TEST/results/digdriver/digdriverResults-LUAD-5primeUTR-hg19.csv', 
+#                                 '../TEST/results/dndscv/dndscvResults-LUAD-5primeUTR-hg19.csv', 
+#                                 '../TEST/results/mutpanning/mutpanningResults-LUAD-5primeUTR-hg19.csv', 
+#                                 '../TEST/results/nbr/nbrResults-LUAD-5primeUTR-hg19.csv', 
+#                                 '../TEST/results/oncodrivefml/oncodrivefmlResults-LUAD-5primeUTR-hg19.csv'),
+#              mut_rate = '../TEST/results/mut_rates/meanMutRatePerGR-LUAD--hg19.csv',
+#              gene_name_synonyms = '../data/assets/hgnc_complete_set_processed.csv',
+#              known_cancer_genes = '../data/assets/cgc_knownCancerGenes.csv',
+#              olfactory_genes = '../data/assets/olfactory_barnes_2020.csv',
+#             rawP_cap = 10^(-8),
+#              expression_inventories = list('../data/inventory/inventory_expression_gtex.csv',
+#                                            '../data/inventory/inventory_expression_tcga.csv'),
+#              expression = list('../data/assets/GTEx_expression.csv',
+#                                '../data/assets/TCGA_expression.csv'),
+#              output = '../TEST/results/tables/combined_p_values/combinedP_LUAD-5primeUTR_hg19.csv')
 
 # [READ] in raw results of software runs --------------------------------------
 message('[', Sys.time(), '] Started reading results of de-novo driver ',
@@ -794,26 +870,29 @@ mismatched <- mismatched[!is.na(value)]
 mismatched[, software := gsub('.raw_p$', '', software)]
 mismatched <- unique(mismatched[,.(tumor_subtype, gr_id, gene_name, software)])
 
-message('[', Sys.time(), '] Found ', nrow(mismatched), '(',
-        round(100 * nrow(mismatched) / 
-                nrow(unique(rawPs[,.(tumor_subtype, gr_id, gene_name, 
-                                     software)])), 4), '%) ', 
-        'genomic region - software combinations where raw p value is ',
-        'significant, but no mutations were assigned to that region. This ',
-        'can be cause by slight misalignment of annotations between ',
-        'softwares and genomic ranges. dNdScv and DIGdriver are prone to ',
-        'that due to RefCDS creation and inability to remove positions ',
-        'partically affected by low mappability, etc. MutPanning is prone to ',
-        'that due do genome annotation being fixed inside the software. ',
-        'Overview of distribution across software: ',
-        paste0(capture.output(knitr::kable(mismatched[,.N, by = software], 
-                                           format = "markdown")), 
-               collapse = '\n'), 
-        '\n\nOverview of distribution across genomic regions: ',
-        paste0(capture.output(knitr::kable(mismatched[,.N, 
-                                                      by = gr_id][order(-N)], 
-                                           format = "markdown")), 
-               collapse = '\n'))
+if (nrow(mismatched) > 0) {
+  message('[', Sys.time(), '] Found ', nrow(mismatched), '(',
+          round(100 * nrow(mismatched) / 
+                  nrow(unique(rawPs[,.(tumor_subtype, gr_id, gene_name, 
+                                       software)])), 4), '%) ', 
+          'genomic region - software combinations where raw p value is ',
+          'significant, but no mutations were assigned to that region. This ',
+          'can be cause by slight misalignment of annotations between ',
+          'softwares and genomic ranges. dNdScv and DIGdriver are prone to ',
+          'that due to RefCDS creation and inability to remove positions ',
+          'partically affected by low mappability, etc. MutPanning is prone ',
+          'to that due do genome annotation being fixed inside the software. ',
+          'Overview of distribution across software: ',
+          paste0(capture.output(knitr::kable(mismatched[,.N, by = software], 
+                                             format = "markdown")), 
+                 collapse = '\n'), 
+          '\n\nOverview of distribution across genomic regions: ',
+          paste0(capture.output(knitr::kable(mismatched[,.N, 
+                                                        by = gr_id][order(-N)], 
+                                             format = "markdown")), 
+                 collapse = '\n'))
+}
+
 rm(mutRate)
 gc()
 message('[', Sys.time(), '] Annotated with mutation rate statistics')
