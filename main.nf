@@ -26,6 +26,7 @@ include { RUN_DNDSCV } from './subworkflows/call_driver_genes.nf'
 include { RUN_MUTPANNING } from './subworkflows/call_driver_genes.nf'
 include { RUN_NBR } from './subworkflows/call_driver_genes.nf'
 include { RUN_ONCODRIVEFML } from './subworkflows/call_driver_genes.nf'
+include { COMBINE_P_VALS_AND_ANNOTATE } from './modules/postprocessing.nf'
 
 /* ----------------------------------------------------------------------------
 * Custom functions
@@ -42,6 +43,18 @@ def channel_from_params_path (staticPath) {
                         .ifEmpty { exit 1, "[ERROR]: " + staticPath + "file not found"}
     } 
     return result
+}
+
+def create_result_file_tuple (inventoryRow, outputDir, genomeVersion) {
+    resultsPath = file(outputDir + '/results/' + inventoryRow.software + '/' +
+                       inventoryRow.software + 'Results-' + 
+                       inventoryRow.tumor_subtype + '-' + inventoryRow.gr_id +
+                       '-' + genomeVersion + '.csv', checkIfExists: false)
+    mutRatePath = file(outputDir + '/results/mut_rates/meanMutRatePerGR-' + 
+                       inventoryRow.tumor_subtype + '--' + genomeVersion + 
+                       '.csv', checkIfExists: false)
+    return tuple(inventoryRow.tumor_subtype, inventoryRow.gr_id, mutRatePath,
+                 inventoryRow.software, resultsPath)
 }
 
 /* ----------------------------------------------------------------------------
@@ -93,10 +106,10 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
     nbr_driver_regs = channel_from_params_path(params.nbr_driver_regs_file)
     oncodrivefml_config = channel_from_params_path(params.oncodrivefml_config)
     essential_files = software.combine(digdriver_elements)
-                               .combine(nbr_neutral_bins)
-                               .combine(nbr_neutral_trinucfreq)
-                               .combine(nbr_driver_regs)
-                               .combine(oncodrivefml_config)
+                              .combine(nbr_neutral_bins)
+                              .combine(nbr_neutral_trinucfreq)
+                              .combine(nbr_driver_regs)
+                              .combine(oncodrivefml_config)
     // perform the checks
     digdriver_files_pass = check_digdriver_files(essential_files)
     nbr_files_pass = check_nbr_files(essential_files)
@@ -127,11 +140,11 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
     */
     gene_name_synonyms = channel_from_params_path(params.gene_name_synonyms)
     varanno_conversion_table = channel_from_params_path(params.varanno_conversion_table)
-    mut_rates = CALCULATE_MUTATION_RATES (PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.bed
-                                          .combine(PREPARE_INPUT_MUTATION_FILES.out.maf, by: [0])
-                                          .combine(target_genome_chr_len)
-                                          .combine(gene_name_synonyms)
-                                          .combine(varanno_conversion_table))
+    CALCULATE_MUTATION_RATES (PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.bed
+                                  .combine(PREPARE_INPUT_MUTATION_FILES.out.maf, by: [0])
+                                  .combine(target_genome_chr_len)
+                                  .combine(gene_name_synonyms)
+                                  .combine(varanno_conversion_table))
 
     /* 
         Step 5a: run CHASMplus
@@ -175,28 +188,50 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
  }
 
 workflow POSTPROCESSING {
+    /*
+        Step 1: check inventory which defines tiers, inventories with 
+                expression data and check rawP cap
+    */
+
+    /*
+        Step 2: load analyis inventory & check that all software run & produced
+                 result files
+    */
     analysis_inv = Channel.fromPath(params.analysis_inventory,
                                     checkIfExists: true)
                           .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" }
-    analysis_inv = analysis_inv.splitCsv(header: true).map { row -> 
-                                                                 return tuple(row.tumor_subtype, 
-                                                                              row.gr_id, 
-                                                                              row.software)
-                                                           }.unique()
 
-    // DO NOT FORGET TO TURN checkIfExists TO true
-    
-    analysis_inv = analysis_inv.map { it ->
-                                         return tuple(it[0], it[1], it[2],
-                                                      file(params.outdir + '/results/' +
-                                                           it[2] + '-results-' +
-                                                           it[0] + '-' + it[1] + '-' +
-                                                           params.target_genome_version +
-                                                           '.csv', checkIfExists: false))
+    // DO NOT FORGET TO TURN checkIfExists TO true IN FUNCTION create_path_to_result_file
+
+    analysis_inv = analysis_inv.splitCsv(header: true)
+                               .map { row -> 
+                                          return create_result_file_tuple(row,
+                                                                          params.outdir,
+                                                                          params.target_genome_version)
                                     }
-                                .groupTuple(by: [0, 1], remainder: true)
+                                .unique()
+                                .groupTuple(by: [0, 1, 2], remainder: true)
 
-    analysis_inv.view()
+    /*
+        Step 3: load data used for driver annotation (i.e. known cancer gene
+                status, olfactory genes, expression, etc)
+    */
+    gene_name_synonyms = channel_from_params_path(params.gene_name_synonyms)
+    known_cancer_genes = channel_from_params_path(params.known_cancer_genes)
+    olfactory_genes    = channel_from_params_path(params.olfactory_genes)
+    gtex_inventory     = channel_from_params_path(params.gtex_inventory) 
+    gtex_expression    = channel_from_params_path(params.gtex_expression)
+    tcga_inventory     = channel_from_params_path(params.tcga_inventory) 
+    tcga_expression    = channel_from_params_path(params.tcga_expression)
+
+    COMBINE_P_VALS_AND_ANNOTATE (analysis_inv.combine(Channel.from(params.rawP_cap))
+                                             .combine(gene_name_synonyms)
+                                             .combine(known_cancer_genes)
+                                             .combine(olfactory_genes)
+                                             .combine(gtex_inventory)
+                                             .combine(gtex_expression)
+                                             .combine(tcga_inventory)
+                                             .combine(tcga_expression))
 }
 
 
