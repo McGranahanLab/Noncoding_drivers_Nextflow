@@ -44,6 +44,8 @@ RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
     && Rscript -e "devtools::install_version('R.utils', version = '2.12.2', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('seqinr', version = '4.2-30', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('strex', version = '1.6.0', repos = 'http://cran.us.r-project.org')" \
+    && Rscript -e "devtools::install_version('tidyverse', version = '1.3.2', repos = 'http://cran.us.r-project.org')" \
+    && Rscript -e "devtools::install_version('readxl', version = '1.4.1', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "BiocManager::install(version = '3.17', ask = F)" \
     && Rscript -e "BiocManager::install(c('biomaRt'), version = '3.17')" \
     && Rscript -e "BiocManager::install(c('GenomicFeatures', 'GenomicRanges'), version = '3.17')" \
