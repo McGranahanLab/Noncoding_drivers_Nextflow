@@ -19,7 +19,7 @@ process COMBINE_P_VALS_AND_ANNOTATE {
     def olfactory = olfactory_genes.name != '.NO_FILE' ? "--olfactory_genes $olfactory_genes" : ''
     """
     # a unique ID to use in all further commands
-    RUN_CODE=${tumor_subtype}'-'${gr_id}'-'${params.target_genome_version}
+    RUN_CODE=$tumor_subtype'-'$gr_id'-'$params.target_genome_version
     MSG_FILE="combineAndAnno-"\$RUN_CODE'.out'
     ERR_FILE="combineAndAnno-"\$RUN_CODE'.err'
     OUT_FILE="combinedP-"\$RUN_CODE'.csv'

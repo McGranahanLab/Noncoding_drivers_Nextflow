@@ -529,7 +529,7 @@ subtypeHelp <- paste('A cancer subtype to select from patientsInv table. Only',
                      'needed to be performed please run this script ',
                      'separetedly for each cancer type.')
 parser$add_argument("-c", "--cancer_subtype", required = T, type = 'character',
-                    default = NULL, help = subtypeHelp)
+                    help = subtypeHelp)
 
 blackListHelp <- paste('Path to patientsInv table containing details of the',
                        'black&white lists to use. Minimal columns:',
@@ -569,9 +569,8 @@ parser$add_argument("-v", "--max_n_vars", required = F, default = 90000,
 targetGenomePathHelp <- paste('Path to the fasta file, genome version of',
                               'which should be same as ',
                               '--target_genome_version.')
-parser$add_argument("-f", "--target_genome_path", required = T,
-                    default = '', type = 'character',
-                    help = targetGenomePathHelp)
+parser$add_argument("-f", "--target_genome_path", required = T, 
+                    type = 'character', help = targetGenomePathHelp)
 
 targetGenomeHelp <- paste("Genome version, i.e. hg19, to which input variants",
                           "files for software should be brought.",
@@ -585,7 +584,7 @@ targetGenomeChrHelp <- paste('Path to the tab-separated file containing ',
                              'Must have 3 columns: chr, start(1) and length ',
                              'of the chromosome. No header.')
 parser$add_argument("-cl", "--target_genome_chr_len", required = F,
-                    default = '', type = 'character', 
+                    default = NULL, type = 'character', 
                     help = targetGenomeChrHelp)
 
 chainHelp <- paste('Path to chain file in case genome version of mutations is',

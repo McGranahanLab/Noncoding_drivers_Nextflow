@@ -636,14 +636,9 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
 #' @param inventoryPath black&white lists inventory analysis path
 #' @param targetGenomeVersion character, genome version, in which final files
 #' should be.
-#' @return data table with black&white lists inventory or NULL in case file was
-#' empty
+#' @return data table with black&white lists inventory 
 checkBlacklistInventory <- function(inventoryPath, targetGenomeVersion, 
                                     cores = 1) {
-  if (file.size(inventoryPath) == 0) {
-    return(NULL)
-  }
-  
   # 1) read and check that all needed columns are present
   essenCols <- c('list_name', 'file_path', 'file_genome', 'file_type', 
                  'score_column', 'min_value', 'max_value')
@@ -737,10 +732,6 @@ checkCHASMplusInventory <- function(inventoryPath, analysis_tumor_subtypes,
     stop('[', Sys.time(), '] CHASMplus analysis is requested, but CHASMplus ',
          'annotator inventory is not given.')
   }
-  if (file.size(inventoryPath) == 0) {
-    stop('[', Sys.time(), '] CHASMplus analysis is requested, but CHASMplus ',
-         'annotator inventory file is empty. File path: ', inventoryPath)
-  }
   
   # 1) all needed columns are present
   essenCols <- c('tumor_subtype', 'chasm_annotator')
@@ -810,10 +801,6 @@ checkDIGdriverInventory <- function(inventoryPath, analysis_tumor_subtypes,
   if (is.null(inventoryPath)) {
     stop('[', Sys.time(), '] DIGdriver analysis is requested, but DIGdriver ',
          'model inventory file is not given.')
-  }
-  if (file.size(inventoryPath) == 0) {
-    stop('[', Sys.time(), '] DIGdriver analysis is requested, but DIGdriver ',
-         'model inventory file is empty. File path: ', inventoryPath)
   }
   
   # 1) all needed columns are present
@@ -909,13 +896,7 @@ print(paste0('[', Sys.time(), '] Patients inventory is OK'))
 if (!is.null(args$inventory_blacklisted)) {
   bwInv <- checkBlacklistInventory(args$inventory_blacklisted, 
                                    targetGenomeVersion = args$target_genome_version)
-  if (is.null(bwInv)) {
-    args$inventory_blacklisted <- NULL
-    print(paste0('[', Sys.time(), '] Black & white lists inventory file was ',
-                 'empty. Proceeding without it.'))
-  } else {
-    print(paste0('[', Sys.time(), '] Black & white lists inventory is OK'))
-  }
+  print(paste0('[', Sys.time(), '] Black & white lists inventory is OK'))
 }
 
 analysisInv <- checkAnalysisInventory(args$inventory_analysis,

@@ -81,6 +81,7 @@ check_input_arguments_preproc <- function(argsList, outputType = NULL) {
   check_file_existence_msg(argsList$target_genome_chr_len)
   check_file_existence_msg(argsList$gene_name_synonyms)
   check_file_existence_msg(argsList$varanno_conversion_table)
+  check_min_int_msg(argsList$bin_len, 'bin_len', 1)
   
   check_file_existence_msg(argsList$maf)
   check_file_existence_msg(argsList$bed)

@@ -11,21 +11,22 @@ process CALCULATE_MUTATION_RATES {
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
+    def gene_name_synonyms = gene_name_synonyms.name != '.NO_FILE' ? "--gene_name_synonyms $gene_name_synonyms" : ''
+    def target_genome_chr_len = target_genome_chr_len.name != '.NO_FILE' ? "--target_genome_chr_len $target_genome_chr_len" : ''
+    def varanno_conversion_table = varanno_conversion_table.name != '.NO_FILE' ? "--varanno_conversion_table $varanno_conversion_table" : ''
     """
-    4_calculate_mutation_rates.R --cancer_subtype ${tumor_subtype} \
-                                 --variants ${maf_path} \
-                                 --genomic_regions ${bed_path} \
-                                 --gene_name_synonyms ${gene_name_synonyms} \
-                                 --bin_len ${params.bin_len} \
-                                 --target_genome_version ${params.target_genome_version} \
-                                 --target_genome_chr_len ${target_genome_chr_len} \
-                                 --calc_synonymous ${params.calc_synonymous} \
-                                 --cdsAcceptedClass ${params.cdsAcceptedClass} \
-                                 --synAcceptedClass ${params.synAcceptedClass} \
-                                 --ncAcceptedClass ${params.ncAcceptedClass} \
-                                 --varanno_conversion_table ${varanno_conversion_table} \
-                                 --annotation_failed_code ${params.annotation_failed_code} \
-                                 --output '.' \
+    4_calculate_mutation_rates.R --cancer_subtype $tumor_subtype \
+                                 --variants $maf_path \
+                                 --genomic_regions $bed_path \
+                                 --bin_len $params.bin_len \
+                                 --target_genome_version $params.target_genome_version \
+                                 --calc_synonymous $params.calc_synonymous \
+                                 --cdsAcceptedClass $params.cdsAcceptedClass \
+                                 --synAcceptedClass $params.synAcceptedClass \
+                                 --ncAcceptedClass $params.ncAcceptedClass \
+                                 --annotation_failed_code $params.annotation_failed_code \
+                                 --output '.' $gene_name_synonyms $target_genome_chr_len \
+                                 $varanno_conversion_table \
                                  1>mut_rates_${tumor_subtype}.out \
                                  2>mut_rates_${tumor_subtype}.err
     """

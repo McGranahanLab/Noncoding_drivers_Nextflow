@@ -10,13 +10,15 @@ process check_inventories {
     stdout emit: inventories_pass
 
     script:
+    def inventory_blacklisted = blacklist_inventory_path.name != '.NO_FILE' ? "--inventory_blacklisted $blacklist_inventory_path" : ''
+    def inventory_digdriver = digdriverModels_inventory_path.name != '.NO_FILE' ? "--inventory_digdriver $digdriverModels_inventory_path" : ''
+    def inventory_chasmplus = chasmplusAnno_inventory_path.name != '.NO_FILE' ? "--inventory_chasmplus $chasmplusAnno_inventory_path" : ''
     """
-    1_check_inventories.R --inventory_patients ${patients_inventory_path} \
-                          --inventory_analysis ${analysis_inventory_path} \
-                          --target_genome_version ${params.target_genome_version} \
-                          --inventory_blacklisted ${blacklist_inventory_path} \
-                          --inventory_digdriver ${digdriverModels_inventory_path} \
-                          --inventory_chasmplus ${chasmplusAnno_inventory_path}
+    1_check_inventories.R --inventory_patients $patients_inventory_path \
+                          --inventory_analysis $analysis_inventory_path \
+                          --target_genome_version $params.target_genome_version \
+                          $inventory_blacklisted $inventory_digdriver \
+                          $inventory_chasmplus
     """
 }
 
@@ -29,14 +31,14 @@ process check_fasta_is_uscs {
 
     script:
     """
-    grep '>' ${fasta_file} > chrs.txt
+    grep '>' $fasta_file > chrs.txt
     nChr=`wc -l chrs.txt | sed 's/ chrs.txt//g'`
     nChrUCSC=`grep '>chr' chrs.txt | wc -l`
     if [[ \$nChr -eq \$nChrUCSC ]]
     then
         echo 'FASTA is UCSC'
     else
-        echo ${fasta_file} is not in UCSC format
+        echo $fasta_file is not in UCSC format
         exit 1
     fi
     """
@@ -56,9 +58,9 @@ process check_digdriver_files {
 
     script:
     """
-    if [ ! -f ${digdriverElements} ]
+    if [ ! -f $digdriverElements ]
     then
-        echo DIGDRIVER was requested, but ${digdriverElements} does not exist
+        echo DIGDRIVER was requested, but $digdriverElements does not exist
         exit 1
     fi
     echo "DIGDRIVER files are OK"
@@ -79,19 +81,19 @@ process check_nbr_files {
 
     script:
     """
-    if [ ! -f ${nbrNeutralBins} ]
+    if [ ! -f $nbrNeutralBins ]
     then
-        echo NBR was requested, but ${nbrNeutralBins} does not exist
+        echo NBR was requested, but $nbrNeutralBins does not exist
         exit 1
     fi
-    if [ ! -f ${nbrNeutralTrinucfreq} ]
+    if [ ! -f $nbrNeutralTrinucfreq ]
     then
-        echo NBR was requested, but ${nbrNeutralTrinucfreq} does not exist
+        echo NBR was requested, but $nbrNeutralTrinucfreq does not exist
         exit 1
     fi
-    if [ ! -f ${nbrDriverRegs} ]
+    if [ ! -f $nbrDriverRegs ]
     then
-        echo NBR was requested, but ${nbrDriverRegs} does not exist
+        echo NBR was requested, but $nbrDriverRegs does not exist
         exit 1
     fi
 
@@ -113,9 +115,9 @@ process check_oncodrivefml_files {
 
     script:
     """
-    if [ ! -f ${oncodrivefmlConfig} ]
+    if [ ! -f $oncodrivefmlConfig ]
     then
-        echo OncodriveFML was requested, but ${oncodrivefmlConfig} does not exist
+        echo OncodriveFML was requested, but $oncodrivefmlConfig does not exist
         exit 1
     fi
     echo "OncodriveFML files are OK"

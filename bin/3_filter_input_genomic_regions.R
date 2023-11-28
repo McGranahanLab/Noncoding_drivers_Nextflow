@@ -1473,16 +1473,15 @@ parser$add_argument("-b", "--inventory_blacklisted", required = F,
 targetGenomePathHelp <- paste('Path to the fasta file, genome version of',
                               'which should be same as ',
                               '--target_genome_version.')
-parser$add_argument("-f", "--target_genome_path", required = T,
-                    default = '', type = 'character',
-                    help = targetGenomePathHelp)
+parser$add_argument("-f", "--target_genome_path", required = T, 
+                    type = 'character', help = targetGenomePathHelp)
 
 targetGenomeChrHelp <- paste('Path to the tab-separated file containing ', 
                              'chromosomal lengths of the target genome. ',
                              'Must have 3 columns: chr, start(1) and length ',
                              'of the chromosome. No header.')
 parser$add_argument("-cl", "--target_genome_chr_len", required = F,
-                    default = '', type = 'character', 
+                    default = NULL, type = 'character', 
                     help = targetGenomeChrHelp)
 
 targetGenomeHelp <- paste("Genome version, i.e. hg19, to which input variants",

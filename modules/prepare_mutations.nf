@@ -12,23 +12,25 @@ process FILTER_INPUT_MUTATIONS {
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
+    def inventory_blacklisted = blacklist_inventory_path.name != '.NO_FILE' ? "--inventory_blacklisted $blacklist_inventory_path" : ''
+    def target_genome_chr_len = target_genome_chr_len.name != '.NO_FILE' ? "--target_genome_chr_len $target_genome_chr_len" : ''
+    def chain = chain.name != '.NO_FILE' ? "--chain $chain" : ''
     """ 
-    OUT_FILE='inputMutations-'${tumor_subtype}'-'${params.target_genome_version}'.maf'
-    2_filter_input_mutations.R --inventory_patients ${patients_inventory_path} \
-                               --inventory_analysis ${analysis_inventory_path} \
-                               --inventory_blacklisted ${blacklist_inventory_path} \
-                               --cancer_subtype ${tumor_subtype} \
-                               --min_depth ${params.min_depth} \
-                               --min_tumor_vac ${params.min_tumor_vac} \
-                               --min_tumor_vaf ${params.min_tumor_vaf} \
-                               --max_germline_vaf ${params.max_germline_vaf} \
-                               --max_germline_vac ${params.max_germline_vac} \
-                               --max_n_vars ${params.max_n_vars} \
-                               --target_genome_version ${params.target_genome_version} \
-                               --target_genome_path ${target_genome_fasta} \
-                               --target_genome_chr_len ${target_genome_chr_len} \
-                               --chain ${chain} --output \$OUT_FILE  \
-                               --cores ${task.cpus} \
+    OUT_FILE='inputMutations-'$tumor_subtype'-'$params.target_genome_version'.maf'
+    2_filter_input_mutations.R --inventory_patients $patients_inventory_path \
+                               --inventory_analysis $analysis_inventory_path \
+                               --cancer_subtype $tumor_subtype \
+                               --min_depth $params.min_depth \
+                               --min_tumor_vac $params.min_tumor_vac \
+                               --min_tumor_vaf $params.min_tumor_vaf \
+                               --max_germline_vaf $params.max_germline_vaf \
+                               --max_germline_vac $params.max_germline_vac \
+                               --max_n_vars $params.max_n_vars \
+                               --target_genome_version $params.target_genome_version \
+                               --target_genome_path $target_genome_fasta \
+                               --output \$OUT_FILE  --cores ${task.cpus} \
+                               $inventory_blacklisted $target_genome_chr_len \
+                               $chain \
                                1>filter_mutations_${tumor_subtype}.out \
                                2>filter_mutations_${tumor_subtype}.err
     
@@ -49,9 +51,9 @@ process WRITE_MUTATIONS_FOR_CHASMPLUS {
 
     script:
     """
-    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
-    2a_write_mutations_for_chasmplus.R --maf ${maf} \
-                                       --cancer_subtype ${tumor_subtype} \
+    OUT_FILE='inputMutations-'$tumor_subtype'-'$software'-'$params.target_genome_version'.csv'
+    2a_write_mutations_for_chasmplus.R --maf $maf \
+                                       --cancer_subtype $tumor_subtype \
                                        --output \$OUT_FILE
     """
 }
@@ -137,9 +139,9 @@ process WRITE_MUTATIONS_FOR_NBR {
 
     script:
     """
-    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
-    2e_write_mutations_for_nbr.R --maf ${maf} \
-                                 --cancer_subtype ${tumor_subtype} \
+    OUT_FILE='inputMutations-'$tumor_subtype'-'$software'-'$params.target_genome_version'.csv'
+    2e_write_mutations_for_nbr.R --maf $maf \
+                                 --cancer_subtype $tumor_subtype \
                                  --output \$OUT_FILE
     """
 }
@@ -158,9 +160,9 @@ process WRITE_MUTATIONS_FOR_ONCODRIVEFML {
 
     script:
     """
-    OUT_FILE='inputMutations-'${tumor_subtype}'-'$software'-'${params.target_genome_version}'.csv'
-    2f_write_mutations_for_oncodrivefml.R --maf ${maf} \
-                                          --cancer_subtype ${tumor_subtype} \
+    OUT_FILE='inputMutations-'$tumor_subtype'-'$software'-'$params.target_genome_version'.csv'
+    2f_write_mutations_for_oncodrivefml.R --maf $maf \
+                                          --cancer_subtype $tumor_subtype \
                                           --output \$OUT_FILE
     """
 }

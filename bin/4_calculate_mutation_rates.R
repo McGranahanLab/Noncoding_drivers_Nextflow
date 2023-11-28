@@ -908,7 +908,7 @@ parser$add_argument("-b", "--bin_len", required = F, default = NULL,
 subtypeHelp <- paste('Cancer subtype for which mutation rates are computed.',
                      'If given, a column tumor_subtype will be added to',
                      'all the output.')
-parser$add_argument("-t", "--cancer_subtype", required = T, default = NULL,
+parser$add_argument("-t", "--cancer_subtype", required = T, 
                     type = 'character', help = subtypeHelp)
 
 synHelp <- paste('Boolean, indicating whether mutation rate based on',
@@ -922,7 +922,7 @@ targetGenomeChrHelp <- paste('Path to the tab-separated file containing',
                              'Must have 3 columns: chr, start(1) and length',
                              'of the chromosome. No header.')
 parser$add_argument("-l", "--target_genome_chr_len", required = F,
-                    default = '', type = 'character', 
+                    default = NULL, type = 'character', 
                     help = targetGenomeChrHelp)
 
 cdsClassHelp <- paste('Variant_Classification-s from MAF format which are',
@@ -948,10 +948,10 @@ synClassHelp <- paste('Variant_Classification-s from MAF format which are',
                       'acceptable as markers of synonymous variants.',
                       'Suggested values: Silent')
 parser$add_argument("-sc", "--synAcceptedClass", required = F, nargs = '+',
-                    type = 'character', help = synClassHelp, default = NULL)
+                    default = NULL, type = 'character', help = synClassHelp)
 
 targetVersionHelp <- paste('Target genome version')
-parser$add_argument("-gv", "--target_genome_version", required = T, nargs = 1, 
+parser$add_argument("-gv", "--target_genome_version", required = T,
                     type = 'character', help = targetVersionHelp)
 
 conversionTabHelp <- paste('Path to table with columns:',
@@ -963,12 +963,13 @@ conversionTabHelp <- paste('Path to table with columns:',
                            'case of annovar). var_type should be one of SNP,',
                            'DEL, INS, MNP.')
 parser$add_argument("-a", "--varanno_conversion_table", required = F,
-                    nargs = 1, type = 'character', help = conversionTabHelp)
+                    default = NULL, type = 'character', 
+                    help = conversionTabHelp)
 
 notAnnotatedVarCodeHelp <- paste('String which should be used if',
                                  'variantAnnotation package fails to',
                                  're-annotate a variant, i.e. Unknown.')
-parser$add_argument("-f", "--annotation_failed_code", required = T, nargs = 1,
+parser$add_argument("-f", "--annotation_failed_code", required = T,
                     type = 'character', help = notAnnotatedVarCodeHelp)
 
 outputHelp <- paste("Path to folder to store result files. Files which will ",
@@ -980,16 +981,7 @@ parser$add_argument("-p", "--output", required = T, type = 'character',
 args <- parser$parse_args()
 
 args$ncAcceptedClass <- gsub('prime', "'", args$ncAcceptedClass)
-if (args$target_genome_chr_len == '') {
-  args$target_genome_chr_len <- NULL
-}
-if (args$gene_name_synonyms == '') {
-  args$gene_name_synonyms <- NULL
-}
-if (args$varanno_conversion_table == '') {
-  args$varanno_conversion_table <- NULL
-}
-if (is.null(args$target_genome_chr_len) & args$bin_len > 1) {
+if (is.null(args$target_genome_chr_len) & !is.null(args$bin_len)) {
   stop('[', Sys.time(), '] Filtering by local mutation rate is requested (',
        '--bin_len =', args$bin_len, '), but --target_genome_chr_len is not ',
        'given.')
@@ -1045,7 +1037,7 @@ message('[', Sys.time(), '] Started reading input genomic ranges file')
 # GR = regions of interest
 GR <- readBED12(args$genomic_regions)
 
-if (args$bin_len > 1) {
+if (!is.null(args$bin_len)) {
   message('[', Sys.time(), '] Started reading chromosomal length file')
   chrLensDT <- fread(args$target_genome_chr_len, header = F, 
                      stringsAsFactors = F)
@@ -1143,7 +1135,7 @@ rm(grMutStats)
 gc()
 
 # Calculate local (bin-wise) mut.rates ----------------------------------------
-if (args$bin_len > 1) {
+if (!is.null(args$bin_len)) {
   # Bin genome on tiles
   message('[', Sys.time(), '] Started binning genome on bins sized ', 
           args$bin_len, 'bp.')
@@ -1178,7 +1170,7 @@ rm(allVars)
 gc()
 
 # Matched local mut.rates(tiled genome) to custom regions ---------------------
-if (args$bin_len > 1) {
+if (!is.null(args$bin_len)) {
   GR <- matchLocalMutRateToRegions(GR, genomeTilesGR, 
                                    mutRateTiles[,.(gr_name, meanMutRate)])
   message('[', Sys.time(), '] Because local mutation rates are available, ',
