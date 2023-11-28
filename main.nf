@@ -232,6 +232,13 @@ workflow POSTPROCESSING {
                                              .combine(gtex_expression)
                                              .combine(tcga_inventory)
                                              .combine(tcga_expression))
+
+
+    /*                                        args <- list(combined_p_values_tables = list('../TEST/results/tables/combined_p_values/combinedP_LUAD-CDS_hg19.csv',
+                                             '../TEST/results/tables/combined_p_values/combinedP_LUAD-5primeUTR_hg19.csv'),
+             inventory_tier = '../data/inventory/inventory_tier_definition.csv',
+             output = '../TEST/results/tables/rawDrivers_LUAD--_hg19.csv') */
+
 }
 
 
