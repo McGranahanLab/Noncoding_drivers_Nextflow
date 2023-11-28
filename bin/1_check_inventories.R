@@ -541,7 +541,7 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
   
   # 17) If union_percentage/intersect_percentage column are given, check that 
   #     it is NA for rows with gr_code equals to CDS, and values in it in range
-  #     of 0 to 100 for the other rows 
+  #     of 0 to 1 for the other rows 
   if (!'union_percentage' %in% colnames(result)) {
     result[, union_percentage := NA]
   } else {
@@ -552,9 +552,9 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
            'structure (codons).')
     }
     if (min(result$union_percentage, na.rm = T) <= 0 | 
-        max(result$union_percentage, na.rm = T) > 100) {
+        max(result$union_percentage, na.rm = T) > 1) {
       stop('[', Sys.time(), '] Values in column union_percentage should ',
-           'range from > 0 to <= 100')
+           'range from > 0 to <= 1')
     }
     n_uniq_union_perc <- result[,.(length(unique(union_percentage))), 
                                 by = gr_id]
@@ -574,7 +574,7 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
            'internal structure (codons).')
     }
     if (min(result$intersect_percentage, na.rm = T) <= 0 | 
-        max(result$intersect_percentage, na.rm = T) > 100) {
+        max(result$intersect_percentage, na.rm = T) > 1) {
       stop('[', Sys.time(), '] Values in column intersect_percentage should ',
            'range from > 0 to <= 100')
     }
