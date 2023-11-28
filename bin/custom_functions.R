@@ -131,7 +131,8 @@ readAnalysisInventory <- function(inventoryPath, cores = 1) {
                  'gr_upstr', 'gr_downstr', 'gr_genome', 'gr_excl_id',
                  'gr_excl_code', 'gr_excl_file', 'gr_excl_upstr',
                  'gr_excl_downstr', 'gr_excl_genome', 'blacklisted_codes',
-                 'union_percentage', 'intersect_percentage')
+                 'union_percentage', 'intersect_percentage',
+                 'restrict_to')
   result <- fread(inventoryPath, sep = ',', header = T, stringsAsFactors = F,
                   select = essenCols, nThread = cores)
   

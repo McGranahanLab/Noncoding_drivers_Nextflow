@@ -255,6 +255,10 @@ checkParticipantInventory <- function(inventoryPath, cores = 1) {
 #' 17) If union_percentage/intersect_percentage column are given, check that 
 #'     it is NA for rows with gr_code equals to CDS, and values in it in range
 #'     of 0 to 100 for the other rows 
+#  18) if column restrict_to is present in the inventory check that its values
+#      are either empty or known. 
+#  19) if column restrict_to is present in the inventory check that there is 
+#      only one value per every tumor_subtype
 #' @author Maria Litovchenko 
 #' @param inventoryPath analysis inventory path
 #' @param acceptedRegCodes character vector: accepted region codes in case gtf
@@ -586,6 +590,32 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
            'gr_id. This is not allowed.')
     }
   }
+  
+  # 18) if column restrict_to is present in the inventory check that its values
+  # are either empty or known. 
+  if (!'restrict_to' %in% colnames(result)) {
+    result[, restrict_to := NA]
+  } else {
+    if (!all(unique(result$restrict_to) %in% c('', NA, 'known'))) {
+      stop('[', Sys.time(), '] Found forbidden values in column restrict_to: ',
+           paste0(setdiff(unique(result$restrict_to), c('', NA, 'known')),
+                  collapse = ', '), 
+           ', allowed values are: ', 
+           paste0(c('', NA, 'known'), collapse = ', '), '.')
+    }
+  }
+  # 19) if column restrict_to is present in the inventory check that there is 
+  # only one value per every tumor_subtype
+  if (!'restrict_to' %in% colnames(result)) {
+    n_restrict_to <- result[,.(length(unique(restrict_to))), 
+                            by = tumor_subtype]
+    if (any(n_restrict_to$V1) > 1) {
+      stop('[', Sys.time(), '] Found > 1 unique values in column restrict_to ',
+           'for following tumor subtypes: ',
+           paste0(n_restrict_to[V1 > 1]$tumor_subtype, collapse = ', '), '.')
+    }
+  }
+  
   result
 }
 
