@@ -65,15 +65,15 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
         Step 1a: check that inventories have all the needed columns and values
                  are acceptable
     */
-    patients_inv = Channel.fromPath(params.patients_inventory, 
-                                    checkIfExists: true)
-                          .ifEmpty { exit 1, "[ERROR]: patients inventory file not found" }
-    analysis_inv = Channel.fromPath(params.analysis_inventory,
-                                    checkIfExists: true)
-                          .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" }
-    blacklist_inv = channel_from_params_path(params.blacklist_inventory)
-    digdriver_inv = channel_from_params_path(params.digdriver_models_inventory)
-    chasmplus_inv = channel_from_params_path(params.chasmplus_annotators_inventory)
+    patients_inv     = Channel.fromPath(params.patients_inventory, 
+                                        checkIfExists: true)
+                              .ifEmpty { exit 1, "[ERROR]: patients inventory file not found" }
+    analysis_inv     = Channel.fromPath(params.analysis_inventory,
+                                        checkIfExists: true)
+                              .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" }
+    blacklist_inv    = channel_from_params_path(params.blacklist_inventory)
+    digdriver_inv    = channel_from_params_path(params.digdriver_models_inventory)
+    chasmplus_inv    = channel_from_params_path(params.chasmplus_annotators_inventory)
     // perform the checks
     inventories_pass = check_inventories(patients_inv, analysis_inv, 
                                          blacklist_inv, digdriver_inv, 
@@ -83,33 +83,33 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
     /*
         Step 1b: check that given reference genome is in UCSC format
     */
-    target_genome_fasta = Channel.fromPath(params.target_genome_path,
-                                           checkIfExists: true)
-                                 .ifEmpty { exit 1, 
-                                            "[ERROR]: target genome fasta file not found" }
+    target_genome_fasta   = Channel.fromPath(params.target_genome_path,
+                                             checkIfExists: true)
+                                   .ifEmpty { exit 1, 
+                                              "[ERROR]: target genome fasta file not found" }
     target_genome_chr_len = Channel.fromPath(params.target_genome_chr_len,
-                                           checkIfExists: true)
+                                             checkIfExists: true)
                                    .ifEmpty { exit 1, 
                                             "[ERROR]: chromosomal lengths of target genome file not found" }
-    chain = channel_from_params_path(params.chain)
+    chain                 = channel_from_params_path(params.chain)
     // perform the check for reference genome format (only UCSC)
-    target_genome_pass = check_fasta_is_uscs(target_genome_fasta)
+    target_genome_pass    = check_fasta_is_uscs(target_genome_fasta)
 
     /*
         Step 1c: check that essential files for various softwares are present
     */
-    software = analysis_inv.splitCsv(header: true).map{row -> row.software}
-                           .unique()
-    digdriver_elements = channel_from_params_path(params.digdriver_elements)
-    nbr_neutral_bins = channel_from_params_path(params.nbr_regions_neutralbins_file)
+    software               = analysis_inv.splitCsv(header: true).map{row -> row.software}
+                                         .unique()
+    digdriver_elements     = channel_from_params_path(params.digdriver_elements)
+    nbr_neutral_bins       = channel_from_params_path(params.nbr_regions_neutralbins_file)
     nbr_neutral_trinucfreq = channel_from_params_path(params.nbr_trinucfreq_neutralbins_file)
-    nbr_driver_regs = channel_from_params_path(params.nbr_driver_regs_file)
-    oncodrivefml_config = channel_from_params_path(params.oncodrivefml_config)
-    essential_files = software.combine(digdriver_elements)
-                              .combine(nbr_neutral_bins)
-                              .combine(nbr_neutral_trinucfreq)
-                              .combine(nbr_driver_regs)
-                              .combine(oncodrivefml_config)
+    nbr_driver_regs        = channel_from_params_path(params.nbr_driver_regs_file)
+    oncodrivefml_config    = channel_from_params_path(params.oncodrivefml_config)
+    essential_files        = software.combine(digdriver_elements)
+                                     .combine(nbr_neutral_bins)
+                                     .combine(nbr_neutral_trinucfreq)
+                                     .combine(nbr_driver_regs)
+                                     .combine(oncodrivefml_config)
     // perform the checks
     digdriver_files_pass = check_digdriver_files(essential_files)
     nbr_files_pass = check_nbr_files(essential_files)

@@ -2,7 +2,7 @@
 
 CODE_DIR='/Users/maria/Desktop/BitBucket/Noncoding_drivers_Nextflow/'
 TMP_DIR=`pwd`'/tmp_dir'
-MD5_FILE=$TMP_DIR'/md5sums.txt'
+MD5_FILE=$TMP_DIR'/md5sums_originals.txt'
 dockerfile='transfer_code_to_gel.dockerfile'
 TAG='transfer_code'
 
