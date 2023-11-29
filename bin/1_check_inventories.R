@@ -493,7 +493,7 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
   # 14) check that gr_id is defined by the same files and upstream/downsteam 
   #     combinations across tumor_subtypes and softwares genome version
   grIdUniq <- lapply(split(result[, !colnames(result) %in% 
-                                    c('restrictedTest', 'union_percentage',
+                                    c('restrict_to', 'union_percentage',
                                       'intersect_percentage'),
                                   with = F], by = 'gr_id', drop = T),
                      split, by = c('tumor_subtype', 'software'), drop = T)

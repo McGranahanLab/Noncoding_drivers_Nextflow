@@ -52,13 +52,14 @@ suppressWarnings(suppressPackageStartupMessages(library(dndscv)))
 suppressWarnings(suppressPackageStartupMessages(library(dplyr)))
 suppressWarnings(suppressPackageStartupMessages(library(GenomicFeatures)))
 suppressWarnings(suppressPackageStartupMessages(library(GenomicRanges)))
+suppressWarnings(suppressPackageStartupMessages(library(plyr)))
 suppressWarnings(suppressPackageStartupMessages(library(plyranges)))
 suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
 suppressWarnings(suppressPackageStartupMessages(library(strex)))
 suppressWarnings(suppressPackageStartupMessages(library(utils)))
 options(scipen = 999)
 
-# FUNCTIONS: conversion to txdb -----------------------------------------------
+# Functions : conversion to txdb ----------------------------------------------
 #' extractGeneToIDmap
 #' @description Extracts a data table with columns gene_name, gene_id, 
 #' gene_biotype, transcript_id, transcript_biotype (if available) from GRanges
@@ -233,7 +234,7 @@ bedToGR <- function(bedPath, chrStyle, acceptedChrCodes = NULL, doLiftOver = F,
   result
 }
 
-# FUNCTIONS: region extraction from txdb --------------------------------------
+# Functions : region extraction from txdb -------------------------------------
 #' addRegsCount
 #' @description Adds an index within a gene for every region (exon) of a gene,
 #' as well as adds column showing total exon count.
@@ -630,7 +631,7 @@ extractRegionsByCode_gr <- function(rCode, grObj, upstr = 0, downstr = 0,
   result
 }
 
-# FUNCTIONS: removing regions to exclude  -------------------------------------
+# Functions : removing regions to exclude  ------------------------------------
 #' reduceGRkeepMcols 
 #' @description Performs reduce & disjoin of list of genomic regions on by gene
 #' bases, keeping mcols information
@@ -881,48 +882,141 @@ filterBWregions <- function(bwGRs, bwScoreCol = NA, bwScoreMin = NA,
   result
 }
 
-# FUNCTIONS : identification & processing of overlapping regions --------------
+# Functions : keeping mcols in GRanges after reduce was performed -------------
+#' reduce_col_to_one_row
+#' @description Reduces data from one column to a single value taking into 
+#' account column's data type
+#' @author Maria Litovchenko
+#' @param columnV vector, all data from the column
+#' @param character_sep character, separator to use in case of character data
+#' in the column
+#' @return data frame with a single column named reduce
+reduce_col_to_one_row  <- function(columnV, character_sep = ',') {
+  result <- switch (class(columnV),
+                    'character' = paste0(sort(unique(columnV)), 
+                                         collapse = character_sep),
+                    'numeric' = mean(columnV),
+                    'integer' = median(columnV),
+                    'logical' = sum(columnV))
+  if (is.null(result)) {
+    stop('[', Sys.time(), '] Error in reduce_mcols: unsupported data type ',
+         class(columnV))
+  }
+  result <- data.frame('reduced' = result)
+  result
+}
+
+#' create_reduced_column_name
+#' @description Creates a new column name for the reduced column (from mcols)
+#' in accordance with the original column data type.
+#' @author Maria Litovchenko
+#' @param columnVclass class of the data in column, one of character, numeric,
+#' integer, logical
+#' @param columnName chracter, column name
+#' @return character
+create_reduced_column_name <- function(columnVclass, columnName) {
+  result <- paste0(columnName, 
+                   switch (columnVclass, 'character' = '_uniq',
+                           'numeric' = '_mean', 'integer' = '_median',
+                           'logical' = '_nTrue'))
+  result
+}
+
+#' reduce_mcols
+#' @author Maria Litovchenko
+#' @description Merges mcols of GenomicRanges object by row taking into account
+#' column class
+#' @param df data frame
+#' @param keep.original.names boolean, indicating if original column names 
+#' should be kept. Otherwise column names will be replaced by column name + 
+#' '_uniq' in case of character column, '_mean' in case of numeric column, 
+#' '_median' in case of 'integer' column, and '_nTrue' in case of 'logical' 
+#' column
+#' @param character_sep character, separator to use in case of character data
+#' in the column
+#' @return data.frame
+reduce_mcols <- function(df, character_sep = ',', keep.original.names = T) {
+  df <- as.data.frame(df)
+  result <- do.call(cbind, lapply(df, reduce_col_to_one_row, character_sep))
+  if (!keep.original.names) {
+    colnames(result) <- sapply(1:ncol(df), 
+                               function(x) create_reduced_column_name(class(df[, x]),
+                                                                      colnames(df)[x]))
+  } else {
+    colnames(result) <- colnames(df)
+  }
+  rownames(result) <- NULL
+  result
+}
+
+# Functions : clustering genomic regions based on location --------------------
+#' get_regions_in_intersection
+#' @description Computes regions in intersection for each pair of (previously 
+#' known to intersect) genomic regions
+#' @author Maria Litovchenko
+#' @param ovrlDT result of function findOverlaps converted to data table with
+#' column names targetIdx and backgroundIdx
+#' @param target_GR GenomicRanges which were input to findOverlaps function
+#' @param bg_GR GenomicRanges which were input to findOverlaps function
+#' @return data.table with columns chr, start, end, len, targetIdx, 
+#' backgroundIdx, intersectionWidth
+get_regions_in_intersection <- function(target_GR, bg_GR, ovrlDT) {
+  # convert target regions which are overlapping with bg regions to data table
+  targetsInOvrl <- cbind(as.data.table(target_GR[ovrlDT$targetIdx]), ovrlDT)
+  targetsInOvrl <- targetsInOvrl[,.(seqnames, start, end,  
+                                    targetIdx, backgroundIdx)]
+  # do the same for background regions
+  bgInOvrl <- cbind(as.data.table(bg_GR[ovrlDT$backgroundIdx]), ovrlDT)
+  bgInOvrl <- bgInOvrl[,.(seqnames, start, end,
+                          targetIdx, backgroundIdx)]
+  ovrlPairs <- rbind(targetsInOvrl, bgInOvrl)
+  rm(targetsInOvrl, bgInOvrl)
+  # compute region in overlap for each pair of target - bg regions from ovrlDT
+  result <- ovrlPairs[, (list(chr = unique(seqnames), start = max(start), 
+                              end = min(end))), 
+                      by = .(targetIdx, backgroundIdx)]
+  result[, intersectionWidth := end - start]
+  result
+}
+
 #' calcPercOverlap
 #' @description Calculates percentage of bases of a region from targetGR 
-#'              overlapping with any region in backgroundGR. In case targetGR
-#'              and backgroundGR are the same, overlap of a region to itself
-#'              will not be counted.
+#' overlapping with any region in backgroundGR. In case targetGR and 
+#' backgroundGR are the same, overlap of a region to itself will not be counted
 #' @author Maria Litovchenko
 #' @param targetGR GRanges object, target regions.
 #' @param backgroundGR GRanges object, background regions.
 #' @param ignore.strand boolean, whatever strand should be ignored
 #' @param select when select is "all" (the default), then all target to 
-#'               background pairs will be returned. max_target - for target  
-#'               genomic regions pair with the maximum percentage of 
-#'               intersection with background is reported, min_target - same,
-#'               but minimum. max_background and min_background - same, but
-#'               for background.
-#' @return data table with columns targetIdx, bgIdx, intersectionWidth,
-#'         intersectionPercTarget, intersectionPercBg. targetIdx - index in 
-#'         targetGR, bgIdx - index in backgroundGR, intersectionWidth - number
-#'         of basepairs in intersection, intersectionPercTarget - percentage
-#'         of target region which overlaps with the background region, 
-#'         intersectionPercBg - percentage of background region which overlaps
-#'         with the target region. Values in intersectionPerc* range from 0 to
-#'         100.
+#' background pairs will be returned. max_target - for target genomic regions 
+#' pair with the maximum percentage of intersection with background is 
+#' reported, min_target - same, but minimum. max_background and min_background
+#' same, but for background.
+#' @return data table with columns chr, start, end, targetIdx, backgroundIdx, 
+#' intersectionWidth, intersectionPercTarget, intersectionPercBg. targetIdx is
+#' an index in targetGR, backgroundIdx - index in backgroundGR, 
+#' intersectionWidth is a number of basepairs in intersection,
+#' intersectionPercTarget - a proportion (in a range from 0 to 1) of target 
+#' region which overlaps with the background region, intersectionPercBg a 
+#' proportion of background region which overlaps with the target region.
 calcPercOverlap <- function(targetGR, backgroundGR, remove.self = T, 
-                            ignore.strand = F,
-                            select = 'all') {
+                            ignore.strand = F, select = 'all') {
   if (!select %in% c('all', 'max_target', 'min_target', 'max_background', 
                      'min_background')) {
     stop('[', Sys.time(), '] Error in calcPercOverlap: select can only be ',
          'one of all, max_target, min_target, max_background, min_background.')
   }
   
+  if (!identical(targetGR, backgroundGR) & remove.self) {
+    message('[', Sys.time(), '] remove.self was set to True, although ',
+            'targetGR and backgroundGR are not the same. Will set ',
+            'remove.self to F.')
+  }
+  
   # Step 1: find overlapping pairs of regions
   ovrl <- findOverlaps(targetGR, backgroundGR, ignore.strand = ignore.strand)
   ovrl <- as.data.table(ovrl)
   colnames(ovrl) <- c('targetIdx', 'backgroundIdx')
-  
-  if (!identical(targetGR, backgroundGR) & remove.self) {
-    message('[', Sys.time(), '] remove.self was set to True, although ',
-            'targetGR and backgroundGR are not the same. Will ignore it.')
-  }
   
   if (identical(targetGR, backgroundGR) & remove.self) {
     # this line covers the case target and background are actually the 
@@ -936,91 +1030,49 @@ calcPercOverlap <- function(targetGR, backgroundGR, remove.self = T,
     ovrl[, id := NULL]
   }
   
-  # Step 2: for each pair, get region in intersect
-  # ... first, we need to create GRangesList each element of which holds 
-  # overlapping region pair
-  ovrl[, pairIdx := apply(ovrl, 1, paste, collapse = '--')]
-  ovrlPairs_targets <- targetGR[ovrl$targetIdx]
-  mcols(ovrlPairs_targets) <- cbind(mcols(ovrlPairs_targets), 
-                                    pairIdx = ovrl$pairIdx)
-  ovrlPairs_bg <- backgroundGR[ovrl$backgroundIdx]
-  mcols(ovrlPairs_bg) <- cbind(mcols(ovrlPairs_bg), pairIdx = ovrl$pairIdx)
-  ovrlPairs <- c(ovrlPairs_targets, ovrlPairs_bg)
-  rm(ovrlPairs_targets, ovrlPairs_bg)
-  ovrlPairs <- split(ovrlPairs, ovrlPairs$pairIdx)
-  # now, we can get region of intersection. As intersect/pintersect functions
-  # do not operate on lists, we have to be creative with reduce. Reduce will
-  # produce 3 regions. Then sorted, the middle one will contain overlap region.
-  # If there is only 1 region after disjoin - regions overlap fully, if there
-  # are 2 regions - one of the pair is inside the other one and the width of
-  # the smaller one needs to be reported.
-  disjoinedGR <- sort(disjoin(ovrlPairs, ignore.strand = ignore.strand))
-  disjoinedGRwidth <- width(disjoinedGR)
-  disjoinedGRlen <- sapply(disjoinedGRwidth, length)
-  
-  intersectLen <- lapply(disjoinedGRwidth, function(x) x[2])
-  intersectLen[disjoinedGRlen != 3] <- lapply(sort(width(ovrlPairs[disjoinedGRlen != 3])),
-                                              function(x) x[1])
-  intersectLen <- unlist(intersectLen)
-  
-  result <- data.table(targetIdx = sapply(names(intersectLen), 
-                                          function(x) gsub('--.*', '', x)))
-  result[, targetIdx := as.integer(targetIdx)]
-  result[, bgIdx := sapply(names(intersectLen), 
-                           function(x) gsub('.*--', '', x))]
-  result[, bgIdx := as.integer(bgIdx)]
-  result[, intersectionWidth := intersectLen]
+  # Step 2: for each pair, get coordinates of region in intersection
+  result <- get_regions_in_intersection(targetGR, backgroundGR, ovrl)
   # compute percentage of intersection (from target)
-  result[, intersectionPercTarget := sapply(width(ovrlPairs), 
-                                            function(x) x[1])]
-  result[, intersectionPercTarget := 100 * intersectionWidth / 
-           intersectionPercTarget]
-  # compute percentage of intersection (from background)
-  result[, intersectionPercBg := sapply(width(ovrlPairs), function(x) x[2])]
-  result[, intersectionPercBg := 100 * intersectionWidth / 
-           intersectionPercBg]
+  result[, intersectionPercTarget := intersectionWidth / width(targetGR[targetIdx])]
+  result[, intersectionPercBg := intersectionWidth / width(backgroundGR[backgroundIdx])]
   
-  if (select == 'max_target') {
-    result <- result[order(-intersectionPercTarget)][,.SD[1], by = targetIdx]
-  }
-  if (select == 'min_target') {
-    result <- result[order(intersectionPercTarget)][,.SD[1], by = targetIdx]
-  }
-  if (select == 'max_background') {
-    result <- result[order(-intersectionPercBg)][,.SD[1], by = bgIdx]
-  }
-  if (select == 'min_background') {
-    result <- result[order(intersectionPercBg)][,.SD[1], by = bgIdx]
-  }
-  result <- result[order(targetIdx, bgIdx)]
+  # Step 3: perform selection, if requested
+  result = switch (select,
+                   'all' = result,
+                   'max_target' = result[order(-intersectionPercTarget)][,.SD[1],by = targetIdx],
+                   'min_target' = result[order(intersectionPercTarget)][,.SD[1], by = targetIdx],
+                   'max_background' = result[order(-intersectionPercBg)][,.SD[1], by = backgroundIdx], 
+                   'min_background' = result[order(intersectionPercBg)][,.SD[1], by = backgroundIdx])
+  
   result
 }
 
 #' calcPercOverlap_byGeneID 
-#' @description 
-#' @author 
+#' @description Calculates percentage of bases of a regions (multiple!) 
+#' assigned to a gene which overlap with the other regions (multiple!) assigned
+#' to different gene. 
 #' @author Maria Litovchenko
-#' @param targetGR GRanges object, target regions.
-#' @param backgroundGR GRanges object, background regions.
+#' @param targetGR GRanges object, target regions. Columns gene_id and 
+#' gene_name must be present in mcols.
+#' @param backgroundGR GRanges object, background regions. Columns gene_id and 
+#' gene_name must be present in mcols.
 #' @param ignore.strand boolean, whatever strand should be ignored
 #' @param select when select is "all" (the default), then all target to 
-#'               background pairs will be returned. max_target - for target  
-#'               genomic regions pair with the maximum percentage of 
-#'               intersection with background is reported, min_target - same,
-#'               but minimum. max_background and min_background - same, but
-#'               for background.
+#' background pairs will be returned. max_target - for target genomic regions
+#' pair with the maximum percentage of intersection with background is 
+#' reported, min_target - same, but minimum. max_background and min_background
+#' - same, but for background.
 #' @return data table with columns target_gene_id, target_gene_name, 
-#'         bg_gene_id, bg_gene_name, intersectionWidth, target_len, bg_len, 
-#'         intersectionPercTarget, intersectionPercBg. target_gene_id - gene id
-#'         of a target gene, target_gene_name - gene name of a target gene. 
-#'         bg_gene_id, bg_gene_name - same, but for background genes. 
-#'         target_len - sum of lengths of of all regions for taget gene. bg_len
-#'         the same, but for all regions for background gene. intersectionWidth 
-#'         - number of basepairs in intersection, intersectionPercTarget - 
-#'         percentage of target region which overlaps with the background 
-#'         region, intersectionPercBg - percentage of background region which 
-#'         overlaps with the target region. Values in intersectionPerc* range 
-#'         from 0 to 100.
+#' bg_gene_id, bg_gene_name, intersectionWidth, target_len, bg_len, 
+#' intersectionPercTarget, intersectionPercBg. target_gene_id - gene id of a 
+#' target gene, target_gene_name - gene name of a target gene. bg_gene_id, 
+#' bg_gene_name - same, but for background genes. target_len - sum of lengths 
+#' of of all regions for taget gene. bg_len the same, but for all regions for 
+#' background gene. intersectionWidth - number of basepairs in intersection, 
+#' intersectionPercTarget - percentage of target region which overlaps with the
+#' background region, intersectionPercBg - percentage of background region 
+#' which overlaps with the target region. Values in intersectionPerc* range 
+#' from 0 to 1.
 calcPercOverlap_byGeneID <- function(targetGR, backgroundGR, ignore.strand = F, 
                                      remove.self = T, select = 'all') {
   # Step 1: find overlaps between individual regions
@@ -1030,7 +1082,7 @@ calcPercOverlap_byGeneID <- function(targetGR, backgroundGR, ignore.strand = F,
   # Step 2: since per gene we can have several individual regions, we will have
   # to recompute percentage of overlapping bases for background and target 
   # taking into account all regions which belong to a gene
-  result <- result[,.(targetIdx, bgIdx, intersectionWidth)]
+  result <- result[,.(targetIdx, backgroundIdx, intersectionWidth)]
   # add target gene name and id
   result <- cbind(result, as.data.table(mcols(targetGR)[result$targetIdx, 
                                                         c('gene_id', 
@@ -1038,7 +1090,7 @@ calcPercOverlap_byGeneID <- function(targetGR, backgroundGR, ignore.strand = F,
   setnames(result, c('gene_id', 'gene_name'), 
            c('target_gene_id', 'target_gene_name'))
   # same for background
-  result <- cbind(result, as.data.table(mcols(backgroundGR)[result$bgIdx, 
+  result <- cbind(result, as.data.table(mcols(backgroundGR)[result$backgroundIdx, 
                                                             c('gene_id',
                                                               'gene_name')]))
   setnames(result, c('gene_id', 'gene_name'), c('bg_gene_id', 'bg_gene_name'))
@@ -1050,49 +1102,37 @@ calcPercOverlap_byGeneID <- function(targetGR, backgroundGR, ignore.strand = F,
                           bg_gene_id, bg_gene_name)]
   result <- unique(result)
   # compute total length of target regions per gene & add it
-  regsTotalLen <- data.table(gene_id = targetGR$gene_id, 
-                             gene_name = targetGR$gene_name, 
+  regsTotalLen <- data.table(target_gene_id = targetGR$gene_id, 
+                             target_gene_name = targetGR$gene_name, 
                              target_len = width(targetGR))
   regsTotalLen <- unique(regsTotalLen[, target_len := sum(target_len), 
-                                      by = .(gene_id, gene_name)])
-  setnames(regsTotalLen, c('gene_id', 'gene_name'), 
-           c('target_gene_id', 'target_gene_name'))
-  result <- merge(result, regsTotalLen,  all.x = T,
+                                      by = .(target_gene_id, 
+                                             target_gene_name)])
+  result <- merge(result, regsTotalLen, all.x = T,
                   by = c('target_gene_id', 'target_gene_name'))
   # same for background
-  regsTotalLen <- data.table(gene_id = backgroundGR$gene_id, 
-                             gene_name = backgroundGR$gene_name,
+  regsTotalLen <- data.table(bg_gene_id = backgroundGR$gene_id, 
+                             bg_gene_name = backgroundGR$gene_name,
                              bg_len = width(backgroundGR))
   regsTotalLen <- unique(regsTotalLen[, bg_len := sum(bg_len), 
-                                      by = .(gene_id, gene_name)])
-  setnames(regsTotalLen, c('gene_id', 'gene_name'), 
-           c('bg_gene_id', 'bg_gene_name'))
+                                      by = .(bg_gene_id, bg_gene_name)])
   result <- merge(result, regsTotalLen,  all.x = T,
                   by = c('bg_gene_id', 'bg_gene_name'))
   
-  result[, intersectionPercTarget := 100 * intersectionWidth / target_len]
-  result[, intersectionPercBg := 100 * intersectionWidth / bg_len]
+  result[, intersectionPercTarget := intersectionWidth / target_len]
+  result[, intersectionPercBg := intersectionWidth / bg_len] 
   
-  if (select == 'max_target') {
-    result <- result[order(-intersectionPercTarget)][,.SD[1],
-                                                     by = .(target_gene_id, 
-                                                            target_gene_name)]
-  }
-  if (select == 'min_target') {
-    result <- result[order(intersectionPercTarget)][,.SD[1],
-                                                    by = .(target_gene_id, 
-                                                           target_gene_name)]
-  }
-  if (select == 'max_background') {
-    result <- result[order(-intersectionPercBg)][,.SD[1],
-                                                 by = .(bg_gene_id, 
-                                                        bg_gene_name)]
-  }
-  if (select == 'min_background') {
-    result <- result[order(intersectionPercBg)][,.SD[1],
-                                                by = .(bg_gene_id, 
-                                                       bg_gene_name)]
-  }
+  result <- switch (select,
+                    'all' = result,
+                    'max_target' = result[order(-intersectionPercTarget)][,.SD[1],
+                                                                          by = .(target_gene_id, target_gene_name)],
+                    'min_target' = result[order(intersectionPercTarget)][,.SD[1],
+                                                                         by = .(target_gene_id, target_gene_name)],
+                    'max_background' = result[order(-intersectionPercBg)][,.SD[1],
+                                                                          by = .(bg_gene_id, bg_gene_name)],
+                    'min_background' = result[order(intersectionPercBg)][,.SD[1], 
+                                                                         by = .(bg_gene_id, bg_gene_name)])
+  
   setcolorder(result, c('target_gene_id', 'target_gene_name', 'bg_gene_id', 
                         'bg_gene_name', 'intersectionWidth', 'target_len', 
                         'bg_len', 'intersectionPercTarget',
@@ -1101,54 +1141,33 @@ calcPercOverlap_byGeneID <- function(targetGR, backgroundGR, ignore.strand = F,
 }
 
 #' cluster_genes_by_location
-#' @description Clusters genes by physical overlap based on matrix of 
-#'              intersection percentages.
+#' @description Clusters genes by physical (coordinates) overlap based on
+#'  matrix of intersection percentages.
 #' @author Maria Litovchenko
 #' @param gene_intersect_perc_matr data frame with genes as row names and 
-#'        column names values in cells = intersection percentages. Values 
-#'        should range from 0 to 100.
+#' column names values in cells = intersection percentages. Values should range
+#' from 0 to 1.
 #' @param threshold_cut cutoff on distance between genes
 #' @return data table with columns gene_id, group_id, n_genes, min_ovrl_perc -
-#'         where group_id is group id, n_genes - number of genes in a group,
-#'         min_ovrl_perc - minimal overlap (in %, from 0 to 100) between genes
-#'         in a group.
+#' where group_id is group id, n_genes - number of genes in a group, 
+#' min_ovrl_perc - minimal overlap (in %, from 0 to 1) between genes in a group
 cluster_genes_by_location <- function(gene_intersect_perc_matr, threshold_cut) {
   # convert intersecion percentage into distance
-  gene_dist <- abs(gene_intersect_perc_matr - 100)
-  # if NA is percentage of intersection, will set 100 to it
-  gene_dist[is.na(gene_dist)] <- 100
+  gene_dist <- abs(gene_intersect_perc_matr - 1)
+  # if NA is percentage of intersection, will set 1 to it
+  gene_dist[is.na(gene_dist)] <- 1
   
-  # group genes based on that distance. As cutoff use the min of thresholds
+  # group genes based on that distance
   gene_tree <- hclust(as.dist(as.matrix(gene_dist)))
   result <- cutree(gene_tree, h = threshold_cut)
   result <- data.table(gene_id = names(result), group_id = result)
   result <- result[, n_genes := .N, by = group_id]
-  result <- result[n_genes > 1]
   result <- result[order(group_id, gene_id)]
   
   result
 }
 
-#' merge_mcols
-#' @description Merges meta information of genomic ranges based on group_id.
-#' @author Maria Litovchenko
-#' @param inGR input genomic ranges with any columns + group_id. Merge of mcols
-#'        will be performed by group_id.
-#' @return data table with the same columns + group_id.
-merge_mcols <- function(inGR) {
-  result <- as.data.table(mcols(inGR))
-  result <- split(result, by = 'group_id')
-  result <- lapply(result, 
-                   function(x) apply(x, 2, 
-                                     function(y) paste0(unique(y),
-                                                        collapse = '__and__')))
-  result <- lapply(result, function(x) as.data.table(t(x)))
-  result <- do.call(rbind, result)
-  result[, group_id := as.character(group_id)]
-  setkey(result, 'group_id')
-  result
-}
-
+# Functions : processing of clustered genomic regions -------------------------
 #' repeat_groupid
 #' @description Repeats names of GRanges list number of times corresponding to
 #'              number of ranges in each element of the list.
@@ -1176,43 +1195,54 @@ preserve_strand_info <- function(inGR) {
   result
 }
 
-#' self_intersect_list
+#' intersection_regions_by_genes
 #' @description Returns intersections of all elements in a list, per element.
-#'              (Intersection is also done per element)
+#' (Intersection is also done per element)
 #' @author Maria Litovchenko
-#' @param inGR input GRanges with gene_id, gene_name, rCode, group_id as 
-#'             additional info.
+#' @param inGR input GRanges with gene_id and group_id in mcols
+#' @param group_column name of a column containing information about gene
+#' groupping
 #' @param ignore.strand boolean, whatever or not strand should be ignored
+#' @param character_sep character, separator to use in case of character data
+#' in the column
 #' @return GRanges
-self_intersect_list <- function(inGR, ignore.strand = T) {
+intersection_regions_by_genes <- function(inGR, group_column = 'group_id', 
+                                          ignore.strand = T, 
+                                          character_sep = ',') {
   # we'll find intersection though disjoin + findOverlaps
-  disjoined <- split(inGR, inGR$group_id)
+  disjoined <- split(inGR, mcols(inGR)[, group_column])
   disjoined <- disjoin(disjoined, ignore.strand = ignore.strand)
-  # add group_id to disjoined 
+  # add group_column to disjoined 
   disjoin_groupid <- repeat_groupid(disjoined)
   disjoined <- unlist(disjoined)
-  disjoined$group_id <- disjoin_groupid
+  mcols(disjoined)[, group_column] <- disjoin_groupid
   
   # overlap disjoined with original regions and select ones which overlap all
   # genes
   ovrl <- findOverlaps(disjoined, inGR, ignore.strand = ignore.strand)
   ovrl <- as.data.table(ovrl)
   colnames(ovrl) <- c('disjoinedIdx', 'inputIdx')
-  ovrl[, disjoinedGroup := disjoined[disjoinedIdx]$group_id]
-  ovrl[, originalGroup := inGR[inputIdx]$group_id]
+  ovrl[, disjoinedGroup := mcols(disjoined[disjoinedIdx])[, group_column]]
+  ovrl[, originalGroup := mcols(inGR[inputIdx])[, group_column]]
   ovrl <- ovrl[disjoinedGroup == originalGroup]
   ovrl <- ovrl[,.(disjoinedIdx, inputIdx, originalGroup)]
-  setnames(ovrl, 'originalGroup', 'group_id')
+  setnames(ovrl, 'originalGroup', group_column)
   ovrl[, original_gene_id := inGR[inputIdx]$gene_id]
   ovrl <- merge(ovrl, as.data.table(mcols(inGR))[,.(length(unique(gene_id))),
-                                                 by = group_id],
-                all.x = T, by = 'group_id')
+                                                 by = group_column],
+                all.x = T, by = group_column)
   ovrl[, n_genes := .(length(unique(original_gene_id))), by = disjoinedIdx]
   ovrl <- ovrl[n_genes == V1]
   
   disjoined <- disjoined[unique(ovrl$disjoinedIdx)]
-  disjoined_mcols <- merge_mcols(inGR)
-  mcols(disjoined) <- disjoined_mcols[disjoined$group_id]
+  
+  # process mcols
+  mcols(inGR)[, group_column] <- as.character(mcols(inGR)[, group_column])
+  disjoined_mcols <- lapply(split(mcols(inGR), mcols(inGR)[, group_column]),
+                            reduce_mcols, character_sep)
+  disjoined_mcols <- as.data.table(do.call(rbind, disjoined_mcols))
+  setkeyv(disjoined_mcols, group_column)
+  mcols(disjoined) <- disjoined_mcols[mcols(disjoined)[, group_column]]
   
   disjoined
 }
@@ -1220,19 +1250,24 @@ self_intersect_list <- function(inGR, ignore.strand = T) {
 #' union_regions_by_genes
 #' @description Returns union of all elements in a list, per element.
 #' @author Maria Litovchenko
-#' @param inGR input GRanges with gene_id, gene_name, rCode, group_id as 
-#'             additional info.
+#' @param inGR input GRanges with gene_id and group_id in mcols
+#' @param group_column name of a column containing information about gene
+#' groupping
 #' @param ignore.strand boolean, whatever or not strand should be ignored
+#' @param character_sep character, separator to use in case of character data
+#' in the column
 #' @return GRanges
-union_regions_by_genes <- function(inGR, ignore.strand = T) {
-  result <- inGR[order(inGR$group_id)]
-  
+union_regions_by_genes <- function(inGR, group_column = 'group_id', 
+                                   ignore.strand = T, character_sep = ',') {
   # first of all, merge information in mcols
-  mcols_upd <- merge_mcols(result)
-  setkey(mcols_upd, 'group_id')
+  mcols(inGR)[, group_column] <- as.character(mcols(inGR)[, group_column]) 
+  mcols_upd <- lapply(split(mcols(inGR), mcols(inGR)[, group_column]),
+                      reduce_mcols, character_sep)
+  mcols_upd <- as.data.table(do.call(rbind, mcols_upd))
+  setkeyv(mcols_upd, group_column)
   
   # perform the actual merge of genomic ranges
-  result <- split(result, result$group_id)
+  result <- split(inGR, mcols(inGR)[, group_column])
   # ... 1. if strands are all the same (i.e. all + or -), keep strand
   result_strand <- preserve_strand_info(result)
   names(result_strand) <- as.character(names(result_strand))
@@ -1241,48 +1276,80 @@ union_regions_by_genes <- function(inGR, ignore.strand = T) {
   # add group_id
   reduced_groupid <- repeat_groupid(result)
   result <- unlist(result)
-  result$group_id <- reduced_groupid
+  mcols(result)[, group_column] <- reduced_groupid
   # add strand
-  strand(result) <- result_strand[as.character(result$group_id)]
+  strand(result) <- result_strand[as.character(mcols(result)[, group_column])]
   # add mcols
-  mcols(result) <- mcols_upd[result$group_id]
+  mcols(result) <- mcols_upd[mcols(result)[, group_column]]
   
   result
 }
 
 #' process_overlapping_gregions
 #' @description Merges or intersects overlapping genomic regions of interest,
-#'              i.e. promoters, in PER GENE ID manner.
+#' i.e. promoters, in PER GENE ID manner.
 #' @author Maria Litovchenko
 #' @param inGR GRanges object holding genomic regions of interest
 #' @param ignore.strand boolean, indicates, whatever or not strand should be
-#'        ignored in overlapping & merging & intersecting operations
+#' ignored in overlapping & merging & intersecting operations
 #' @param unionTreshold double, minimal % of overlap between regions 
-#'        corresponding to separate genes in order for the regions to be merged
-#'        (merged = reduced, no bp left behind)
+#' corresponding to separate genes in order for the regions to be merged
+#' (merged = reduced, no bp left behind)
 #' @param intersectTreshold double, minimal % of overlap between regions 
-#'        corresponding to separate genes in order for the regions to be 
-#'        overlapped (base pairs, specific to each gene which do not overlap, 
-#'        are discarded.)
+#' corresponding to separate genes in order for the regions to be overlapped 
+#' (base pairs, specific to each gene which do not overlap, are discarded.)
+#' @param character_sep character, separator to use in case of character data
+#' in the column
 #' @return GRanges object.
 #' @note If unionTreshold < intersectTreshold then genes with similarity
-#'       value (% overlap) in range unionTreshold - intersectTreshold will be
-#'       merged, and genes with similarity value in range >= intersectTreshold
-#'       will be intersected and the other way around.
+#' value (% overlap) in range unionTreshold - intersectTreshold will be
+#' merged, and genes with similarity value in range >= intersectTreshold will
+#' be intersected and the other way around.
+#' @example 
+#' testGR <- data.table(chr = 'chr1', 
+#'                      start = c(1, 150, 250, 350, 470, 310, 420, 515, 600, 
+#'                                648, 705, 740, 790, 700, 732, 775, 800, 820,
+#'                                870, 935, 980, 885, 920, 962, 1000, 1010,
+#'                                2005, 2060, 2080, 2010, 2065, 2080),
+#'                      end = c(100, 200, 300, 400, 510, 340, 450, 560, 650,
+#'                              700, 730, 770, 800, 725, 738, 785, 850, 860,
+#'                              900, 960, 995, 905, 957, 969, 1070, 1080, 2040,
+#'                              2070, 3005, 2035, 2075, 3001),
+#'                      gene_name = c('g1', 'g2', rep('g3', 3), rep('g4', 3),
+#'                                    'g5', 'g6', rep('g7', 3), rep('g8', 3), 
+#'                                    'g9', 'g10', rep('g11', 3), 
+#'                                    rep('g12', 3), 'g13', 'g14', 
+#'                                    rep('g15', 3), rep('g16', 3)),
+#'                      gene_id = c('i1', 'i2',   rep('i3', 3), rep('i4', 3), 
+#'                                  'i5', 'i6', rep('i7', 3), rep('i8', 3), 
+#'                                  'i9', 'i10', rep('i11', 3), rep('i12', 3), 
+#'                                  'i13', 'i14', rep('i15', 3), 
+#'                                  rep('i16', 3)),
+#'                      note = c(rep('not intersecting, 1 region per gene', 2),
+#'                               rep('not intersecting, 3 regions per gene', 6),
+#'                               rep('intersecting too little, 1 region per gene', 2),
+#'                               rep('intersecting too little, 3 regions per gene', 6),
+#'                               rep('intersecting, suitable for merge, 1 region per gene', 2),
+#'                               rep('intersecting, suitable for merge, 3 regions per gene', 6),
+#'                               rep('intersecting, suitable for intersect, 1 region per gene', 2),
+#'                               rep('intersecting, suitable for intersect, 3 regions per gene', 6))) 
+#' testGR <- makeGRangesFromDataFrame(testGR, keep.extra.columns = T)
+#' process_overlapping_gregions(testGR, ignore.strand = T, unionTreshold = 0.5,
+#'                              intersectTreshold = 0.8, character_sep = ',')
 process_overlapping_gregions <- function(inGR, ignore.strand = T, 
                                          unionTreshold = NA, 
-                                         intersectTreshold = NA) {
+                                         intersectTreshold = NA,
+                                         character_sep = ',') {
   if (is.na(unionTreshold) & is.na(intersectTreshold)) {
     message('[', Sys.time(), '] Both unionTreshold and intersectTreshold are ',
             'NULL, return original GRanges.')
-    result <- copy()
     return(inGR)
   }
   if (is.na(unionTreshold)) {
-    unionTreshold <- 100
+    unionTreshold <- 1
   }
   if (is.na(intersectTreshold)) {
-    intersectTreshold <- 100
+    intersectTreshold <- 1
   }
   if (unionTreshold == intersectTreshold) {
     stop('[', Sys.time(), '] Merge and intersect thresholds can not be the ',
@@ -1293,7 +1360,7 @@ process_overlapping_gregions <- function(inGR, ignore.strand = T,
                       'intersect' = intersectTreshold))
   
   # calculate percentage of all bases corresponding to a gene in overlap with
-  # the other gene. If gene pair is not present in the table, it means that
+  # the other genes. If gene pair is not present in the table, it means that
   # they do not overlap.
   perc_ovrl <- calcPercOverlap_byGeneID(inGR, inGR, remove.self = F,
                                         ignore.strand = ignore.strand, 
@@ -1301,21 +1368,27 @@ process_overlapping_gregions <- function(inGR, ignore.strand = T,
   # compute minimum of percentage overlap between "target" and "background" 
   perc_ovrl[, minIntersect := apply(perc_ovrl[,.(intersectionPercTarget,
                                                  intersectionPercBg)], 1, min)]
-  if (max(perc_ovrl[target_gene_id != bg_gene_id]$minIntersect,
-          na.rm = T) < tresholds[1]) {
+  if (nrow(perc_ovrl[target_gene_id != bg_gene_id]) != 0) {
+    if (max(perc_ovrl[target_gene_id != bg_gene_id]$minIntersect,
+            na.rm = T) < tresholds[1]) {
+      return(inGR)
+    }
+  } else {
     return(inGR)
   }
   
-  # use minIntersect as distance between genes and cluster genes based on it
-  gene_dist <- as.data.frame(dcast(perc_ovrl, target_gene_id  ~ bg_gene_id,
-                                   value.var = "minIntersect"))
-  rownames(gene_dist) <- gene_dist$target_gene_id
-  gene_dist$target_gene_id <- NULL
-  gene_groups <- cluster_genes_by_location(gene_dist,
-                                           threshold_cut = tresholds[1])
+  # use minIntersect as 1 - distance between genes and cluster genes based on
+  # it
+  gene_intersect <- dcast(perc_ovrl, target_gene_id  ~ bg_gene_id,
+                          value.var = "minIntersect")
+  gene_intersect <- as.data.frame(gene_intersect)
+  rownames(gene_intersect) <- gene_intersect$target_gene_id
+  gene_intersect$target_gene_id <- NULL
+  gene_groups <- cluster_genes_by_location(gene_intersect,
+                                           threshold_cut = 1 - tresholds[1])
   # add minimal percentage of overlap per gene group
   gene_groups[, min_ovrl_perc := -1]
-  for (groupID in unique(gene_groups$group_id)) {
+  for (groupID in unique(gene_groups[n_genes > 1]$group_id)) {
     group_perc_ovrl <- perc_ovrl[target_gene_id %in% 
                                    gene_groups[group_id == groupID]$gene_id &
                                    bg_gene_id %in% 
@@ -1325,7 +1398,8 @@ process_overlapping_gregions <- function(inGR, ignore.strand = T,
     gene_groups[group_id == groupID]$min_ovrl_perc <- group_perc_ovrl
   }
   # add what an action to perform on that gene group
-  gene_groups[, to_do := names(tresholds)[1]]
+  gene_groups[, to_do := '']
+  gene_groups[min_ovrl_perc >= tresholds[1]]$to_do <- names(tresholds)[1]
   gene_groups[min_ovrl_perc >= tresholds[2]]$to_do <- names(tresholds)[2]
   
   # do union
@@ -1340,7 +1414,8 @@ process_overlapping_gregions <- function(inGR, ignore.strand = T,
                                 gene_groups[,.(gene_id, group_id)], 
                                 by = 'gene_id', all.x = T)[order(idx)]
     gr_to_unite$idx <- NULL
-    united_gr <- union_regions_by_genes(gr_to_unite)
+    united_gr <- union_regions_by_genes(gr_to_unite, 'group_id',
+                                        ignore.strand, character_sep)
   }
   # do reduction 
   intersected_gr <- GRanges()
@@ -1354,17 +1429,19 @@ process_overlapping_gregions <- function(inGR, ignore.strand = T,
                                     gene_groups[,.(gene_id, group_id)], 
                                     by = 'gene_id', all.x = T)[order(idx)]
     gr_to_intersect$idx <- NULL
-    intersected_gr <- self_intersect_list(gr_to_intersect)
+    intersected_gr <- intersection_regions_by_genes(gr_to_intersect, 
+                                                    'group_id', ignore.strand, 
+                                                    character_sep)
   }
   
-  result <- c(inGR[!inGR$gene_id %in% gene_groups$gene_id], intersected_gr, 
-              united_gr)
+  result <- c(inGR[inGR$gene_id %in% gene_groups[to_do == '']$gene_id],
+              intersected_gr, united_gr)
   result$group_id <- NULL
   result <- sort(result)
   result
 }
 
-# FUNCTIONS: informing user ---------------------------------------------------
+# Functions : informing user --------------------------------------------------
 #' summurizeGenomicRegions
 #' @description Puts basic statistics about genomic ranges to data table 
 #' @author Maria Litovchenko
@@ -1392,7 +1469,7 @@ summurizeGenomicRegions <- function(gr, gr_codename = NULL) {
   result[, perc_genome := round(100 * total_len / (3 * 10^9), 2)]
   result
 }
-# FUNCTIONS: writing ---------------------------------------------------------
+# Functions : writing ---------------------------------------------------------
 #' gRangesToBed12
 #' @description Converts GRanges object to bed12-formatted data table
 #' @author Maria Litovchenko
@@ -1764,7 +1841,8 @@ if (length(doUnionIntersect) != 0) {
     cleanTargets[[gr_id_i]] <- process_overlapping_gregions(inGR = cleanTargets[[gr_id_i]], 
                                                             ignore.strand = args$ignore_strand,
                                                             unionTreshold = unique(analysisInv[[gr_id_i]]$union_percentage),
-                                                            intersectTreshold = unique(analysisInv[[gr_id_i]]$intersect_percentage))
+                                                            intersectTreshold = unique(analysisInv[[gr_id_i]]$intersect_percentage),
+                                                            character_sep = '__and__')
     
     message('[', Sys.time(), '] Finished performing union or intersection of ',
             'overlapping regions of different genes on ', gr_id_i)
