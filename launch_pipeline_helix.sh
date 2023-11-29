@@ -3,9 +3,9 @@
 #BSUB -L /bin/bash
 #BSUB -q inter
 #BSUB -P re_gecip_cancer_lung
-#BSUB -e nextflow_YYYY-MM-DD.err
-#BSUB -o nextflow_YYYY-MM-DD.out
-#BSUB -J nextflow
+#BSUB -e noncoding_driver_pipeline_YYYY-MM-DD.err
+#BSUB -o noncoding_driver_pipeline_YYYY-MM-DD.out
+#BSUB -J nextflow_master
 #BSUB -R "rusage[mem=8000] span[hosts=1]"
 #BSUB -M 8000
 #BSUB -n 1

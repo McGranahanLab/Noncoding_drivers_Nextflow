@@ -15,12 +15,11 @@ process FILTER_GENOMIC_REGIONS {
     3_filter_input_genomic_regions.R --inventory_analysis $analysis_inventory_path \
                                      --target_genome_path $target_genome_fasta \
                                      --target_genome_version $params.target_genome_version \
-                                     --chain $chain \
                                      --ignore_strand $params.ignore_strand \
                                      --min_reg_len $params.min_reg_len \
                                      --output '.' --cores ${task.cpus} \
                                      $inventory_blacklisted \
-                                     $target_genome_chr_len $chain\
+                                     $target_genome_chr_len $chain \
                                      1>filter_genomic_regions.out \
                                      2>filter_genomic_regions.err
     """

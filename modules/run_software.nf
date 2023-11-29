@@ -74,7 +74,7 @@ process DIGDRIVER {
     ERR_FILE=$software"-"$tumor_subtype"-"$gr_id'-'$params.target_genome_version'.err'
 
     # a unique ID to use in all further commands
-    RUN_CODE=$tumor_subtype'-'$gr_id'-'$params.target_genome_version}
+    RUN_CODE=$tumor_subtype'-'$gr_id'-'$params.target_genome_version
     OUT_FILE=$software"Results-"\$RUN_CODE'.csv'
 
     # copy model as it will be modified during the run
