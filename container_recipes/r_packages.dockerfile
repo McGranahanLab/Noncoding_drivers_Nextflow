@@ -34,7 +34,6 @@ RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
     && Rscript -e "devtools::install_version('devtools', version = '2.4.5', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('argparse', version = '2.2.2', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('BiocManager', version = '1.30.18', repos = 'http://cran.us.r-project.org')" \
-    && Rscript -e "devtools::install_version('box', version = '1.1.3', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('data.table', version = '1.14.0', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('dplyr', version = '1.1.3', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('plyr', version = '1.8.8', repos = 'http://cran.us.r-project.org')" \
@@ -50,9 +49,10 @@ RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
     && Rscript -e "BiocManager::install(c('biomaRt'), version = '3.17')" \
     && Rscript -e "BiocManager::install(c('GenomicFeatures', 'GenomicRanges'), version = '3.17')" \
     && Rscript -e "BiocManager::install(c('maftools', 'plyranges', 'rtracklayer'), version = '3.17')" \
-    && Rscript -e "BiocManager::install(c('org.Hs.eg.db', 'BSgenome.Hsapiens.UCSC.hg19'), version = '3.17')" \
     && Rscript -e "BiocManager::install(c('TxDb.Hsapiens.UCSC.hg19.knownGene', 'TxDb.Hsapiens.UCSC.hg38.knownGene'), version = '3.17')" \
     && Rscript -e "BiocManager::install(c('VariantAnnotation', 'EmpiricalBrownsMethod'), version = '3.17')"  \
+    && Rscript -e "BiocManager::install(c('org.Hs.eg.db'), version = '3.17')" \
+    && Rscript -e "BiocManager::install(c('BSgenome.Hsapiens.UCSC.hg19'), version = '3.17')" \
     && git clone https://github.com/marialitovchenko/dNdScv_0.1.0_indel.git \
     && Rscript -e "install.packages('dNdScv_0.1.0_indel', repos = NULL, type = 'source')" \
     && Rscript -e "devtools::install_github('NKI-CCB/DISCOVER/R@r_v0.9.4')"
