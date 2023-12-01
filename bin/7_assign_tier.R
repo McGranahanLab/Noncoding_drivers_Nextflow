@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# FILE: 7_assign_tier.R -------------------------------------------------------
+# FILE: assign_tier.R ---------------------------------------------------------
 #
 # DESCRIPTION: A script to assign tiers to raw de-novo detected cancer driver
 # genes. Tiers are assigned based on adjusted for multiple testing combined 
@@ -139,27 +139,66 @@ suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 suppressWarnings(suppressPackageStartupMessages(library(plyr)))
 
-# Test inputs -----------------------------------------------------------------
-args <- list(combined_p_values_tables = list('../TEST/results/tables/combined_p_values/combinedP_LUAD-CDS_hg19.csv',
-                                             '../TEST/results/tables/combined_p_values/combinedP_LUAD-5primeUTR_hg19.csv'),
-             inventory_tier = '../data/inventory/inventory_tier_definition.csv',
-             output = '../TEST/results/tables/rawDrivers_LUAD--_hg19.csv')
+# Parse input arguments -------------------------------------------------------
+# create parser object
+parser <- ArgumentParser(prog = 'assign_tier.R')
+
+combinedPhelp <- paste('Paths to files containing combined (i.e. via Brown',
+                       'method) p-values coming from various software. Each',
+                       'file should contain combined p-values for one tumor',
+                       'subtype and one genomic region.')
+parser$add_argument("-c", "--combined_p_values_tables", required = T, 
+                    type = 'character', nargs = '+', help = combinedPhelp)
+
+inventoryTierHelp <- c('Path to inventory table which defines tiers.')
+parser$add_argument("-it", "--inventory_tier", required = T, 
+                    type = 'character', help = inventoryTierHelp)
+
+methodHelp <- c('Method to use for combining p-values. Note: all available',
+                'methods for combining p-values are already computed in',
+                'combine_p_values_and_annotate_with_metadata.R. Here we will',
+                'just choose primary one to be used for tier assignment')
+parser$add_argument("-m", "--combine_p_value_method", required = T, 
+                    type = 'character', help = methodHelp,
+                    choices = c('brown', 'fisher', 'stouffer', 'harmonic'))
+
+parser$add_argument("-o", "--output", required = T, type = 'character',
+                    help = "Path to the output file")
+
+args <- parser$parse_args()
+# check_input_arguments_postproc(args, outputType = 'file')
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
+# Test inputs -----------------------------------------------------------------
+# args <- list(combined_p_values_tables = list('../TEST/results/tables/combined_p_values/combinedP-LUAD-CDS-hg19.csv',
+#                                              '../TEST/results/tables/combined_p_values/combinedP-LUAD-5primeUTR-hg19.csv',
+#                                              '../TEST/results/tables/combined_p_values/combinedP-LUAD-lincRNA-hg19.csv',
+#                                              '../TEST/results/tables/combined_p_values/combinedP-LUAD-ss-hg19.csv'),
+#              inventory_tier = '../data/inventory/inventory_tier_definition.csv',
+#              combine_p_value_method = 'brown',
+#              output = '../TEST/results/tables/tiered_drivers/tieredDrivers_LUAD--_hg19.csv')
+
 # Read inventory defining tiers -----------------------------------------------
+message('[', Sys.time(), '] Started reading tier definition table')
 tierDefine_inventory <- fread(args$inventory_tier, header = T, 
                               stringsAsFactors = F)
+message('[', Sys.time(), '] Finished reading tier definition table')
 
 # Read tables with combined p values ------------------------------------------
+message('[', Sys.time(), '] Started reading tables with per tumor subtype & ',
+        'genomic region combined p-values')
 combinedPs <- lapply(args$combined_p_values_tables, fread, header = T, 
                      stringsAsFactors = F)
 combinedPs <- do.call(rbind.fill, combinedPs)
 combinedPs <- as.data.table(combinedPs)
-  
+message('[', Sys.time(), '] Finished reading tables with per tumor subtype & ',
+        'genomic region combined p-values')
+
 # Adjust FDR each driver calling method & for combined p-values ---------------
+message('[', Sys.time(), '] Started adjustment for multiple testing')
 # get software names
 software <- gsub(".raw_p", "", grep('[.]raw_p$', colnames(combinedPs),
                                     value = T))
@@ -174,8 +213,10 @@ colnames(combinedPsAdj) <- gsub('.comb_p|.raw_p', '.bh_p',
                                 colnames(combinedPsAdj))
 combinedPsAdj <- cbind(combinedPs, combinedPsAdj) 
 rm(combinedPs)
+message('[', Sys.time(), '] Finished adjustment for multiple testing')
 
 # Assign tier based on all p-value combining methods --------------------------
+message('[', Sys.time(), '] Started tier assignment to drivers')
 pValCombMethods <- gsub('.comb_p', '', grep('.comb_p', pValCols, value = T))
 
 for (pCombMet in pValCombMethods) {
@@ -190,10 +231,14 @@ for (pCombMet in pValCombMethods) {
   message('[', Sys.time(), '] Assigned tier based on ', pCombMet)
 }
 
+setnames(combinedPsAdj, paste0(args$combine_p_value_method, '.tier'), 'tier')
+
+message('[', Sys.time(), '] Finished tier assignment to drivers')
+
 # [SAVE] tiered results as table ----------------------------------------------
 write.table(combinedPsAdj, args$output, append = F, quote = F,  sep = '\t', 
             row.names = F, col.names = T)
-message('[', Sys.time(), '] Wrote raw drivers table to ', args$output)
+message('[', Sys.time(), '] Wrote tiered drivers table to ', args$output)
 
 message("End time of run: ", Sys.time())
 message('Total execution time: ', 
