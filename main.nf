@@ -27,6 +27,7 @@ include { RUN_MUTPANNING } from './subworkflows/call_driver_genes.nf'
 include { RUN_NBR } from './subworkflows/call_driver_genes.nf'
 include { RUN_ONCODRIVEFML } from './subworkflows/call_driver_genes.nf'
 include { COMBINE_P_VALS_AND_ANNOTATE } from './modules/postprocessing.nf'
+include { ASSIGN_TIER } from './modules/postprocessing.nf'
 
 /* ----------------------------------------------------------------------------
 * Custom functions
@@ -203,14 +204,18 @@ workflow POSTPROCESSING {
 
     // DO NOT FORGET TO TURN checkIfExists TO true IN FUNCTION create_path_to_result_file
 
-    analysis_inv = analysis_inv.splitCsv(header: true)
-                               .map { row -> 
-                                          return create_result_file_tuple(row,
-                                                                          params.outdir,
-                                                                          params.target_genome_version)
-                                    }
-                                .unique()
-                                .groupTuple(by: [0, 1, 2], remainder: true)
+    analysis_inv  = analysis_inv.splitCsv(header: true)
+                                .map { row -> 
+                                           return create_result_file_tuple(row,
+                                                                           params.outdir,
+                                                                           params.target_genome_version)
+                                     }
+                                 .unique()
+                                 .groupTuple(by: [0, 1, 2], remainder: true)
+    // path to tier definition table
+    tier_inventory = Channel.fromPath(params.tier_inventory, 
+                                      checkIfExists: true)
+                            .ifEmpty { exit 1, "[ERROR]: tier inventory file not found" }
 
     /*
         Step 3: load data used for driver annotation (i.e. known cancer gene
@@ -224,20 +229,17 @@ workflow POSTPROCESSING {
     tcga_inventory     = channel_from_params_path(params.tcga_inventory) 
     tcga_expression    = channel_from_params_path(params.tcga_expression)
 
-    COMBINE_P_VALS_AND_ANNOTATE (analysis_inv.combine(Channel.from(params.rawP_cap))
-                                             .combine(gene_name_synonyms)
-                                             .combine(known_cancer_genes)
-                                             .combine(olfactory_genes)
-                                             .combine(gtex_inventory)
-                                             .combine(gtex_expression)
-                                             .combine(tcga_inventory)
-                                             .combine(tcga_expression))
-
-
-    /*                                        args <- list(combined_p_values_tables = list('../TEST/results/tables/combined_p_values/combinedP_LUAD-CDS_hg19.csv',
-                                             '../TEST/results/tables/combined_p_values/combinedP_LUAD-5primeUTR_hg19.csv'),
-             inventory_tier = '../data/inventory/inventory_tier_definition.csv',
-             output = '../TEST/results/tables/rawDrivers_LUAD--_hg19.csv') */
+    combined_pvals = COMBINE_P_VALS_AND_ANNOTATE (analysis_inv.combine(Channel.from(params.rawP_cap))
+                                                              .combine(gene_name_synonyms)
+                                                              .combine(known_cancer_genes)
+                                                              .combine(olfactory_genes)
+                                                              .combine(gtex_inventory)
+                                                              .combine(gtex_expression)
+                                                              .combine(tcga_inventory)
+                                                              .combine(tcga_expression)).csv
+    ASSIGN_TIER (combined_pvals.groupTuple(by: [0], remainder: true)
+                  .combine(tier_inventory)
+                  .combine(Channel.of(params.combine_p_method))).csv.view()
 
 }
 
