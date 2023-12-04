@@ -325,6 +325,13 @@ chainHelp <- paste('Path to chain file in case genome version of mutations is',
 parser$add_argument("-l", "--chain", required = F, default = NULL,
                     type = 'character', help = chainHelp)
 
+covarsHelp <- paste('Boolean (T or F) indicating if gene set should be ',
+                    'restricted only to genes which have covariates. ',
+                    'Covariates are derived from dNdScv package.')
+parser$add_argument("-r", "--restrict_to_covariates", required = F, 
+                    type = 'character', default = 'F', choices = c('T', 'F'), 
+                    help = coresHelp)
+
 coresHelp <- 'How many cores the script should use. Default: 1.'
 parser$add_argument("-n", "--cores", required = F, type = 'integer', 
                     default = 1, help = coresHelp)
@@ -334,6 +341,7 @@ parser$add_argument("-o", "--output", required = T, type = 'character',
 
 args <- parser$parse_args()
 check_input_arguments_preproc(args, outputType = 'folder')
+args$restrict_to_covariates <- as.logical(args$restrict_to_covariates)
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
@@ -368,7 +376,8 @@ create_transcript_table(gtfPaths = args$gtf, gtfGenomes = args$gtf_genomes,
                         targetGenome = args$target_genome_version,
                         refGenFastaPath = args$target_genome_path,
                         chainObj = chain, acceptedChrCodes = acceptedChrNames,
-                        targetGenes = targetGeneIDs, remove_not_in_covs = T,
+                        targetGenes = targetGeneIDs, 
+                        remove_not_in_covs = args$restrict_to_covariates,
                         outputPath = transrTabPath)
 
 # Build RefCDS with dNdScv ----------------------------------------------------
