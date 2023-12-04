@@ -28,6 +28,7 @@ include { RUN_NBR } from './subworkflows/call_driver_genes.nf'
 include { RUN_ONCODRIVEFML } from './subworkflows/call_driver_genes.nf'
 include { COMBINE_P_VALS_AND_ANNOTATE } from './modules/postprocessing.nf'
 include { ASSIGN_TIER } from './modules/postprocessing.nf'
+include { FILTER_TIERED_DRIVERS } from './modules/postprocessing.nf'
 
 /* ----------------------------------------------------------------------------
 * Custom functions
@@ -237,10 +238,12 @@ workflow POSTPROCESSING {
                                                               .combine(gtex_expression)
                                                               .combine(tcga_inventory)
                                                               .combine(tcga_expression)).csv
-    ASSIGN_TIER (combined_pvals.groupTuple(by: [0], remainder: true)
-                  .combine(tier_inventory)
-                  .combine(Channel.of(params.combine_p_method))).csv.view()
-
+    tiered_pvals  = ASSIGN_TIER (combined_pvals.groupTuple(by: [0], remainder: true)
+                                               .combine(tier_inventory)
+                                               .combine(Channel.of(params.combine_p_method))).csv
+ 
+    drivers       = FILTER_TIERED_DRIVERS (tiered_pvals.combine(Channel.fromPath(params.analysis_inventory,
+                                                                                 checkIfExists: true)))
 }
 
 
