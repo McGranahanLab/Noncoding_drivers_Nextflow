@@ -109,7 +109,8 @@ readParticipantInventory <- function(inventoryPath, cores = 1) {
   result <- fread(inventoryPath, sep = ',', header = T, stringsAsFactors = F, 
                   select = c('tumor_subtype', 'participant_id', 
                              'participant_tumor_subtype', 'somatic_path', 
-                             'somatic_genome', 'cohort_name'),
+                             'somatic_genome', 'cohort_name',
+                             'cn_segments_path', 'mutmultiplicity_path'),
                   nThread = cores)
   result[, tumor_subtype := as.character(tumor_subtype)]
   result[, participant_tumor_subtype := as.character(participant_tumor_subtype)]

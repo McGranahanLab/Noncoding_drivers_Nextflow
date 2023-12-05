@@ -159,6 +159,10 @@ checkColumnNotNumber <- function(x, x_name = NULL) {
 #'    file naming
 #' 5) mutation files exist 
 #' 6) genome version is the same for all variant files 
+#' 7) if column cn_segments_path is present in the table, check that files
+#'    exist, and inform, if they do not
+#' 8) if column mutmultiplicity_path is present in the table, check that files
+#'    exist, and inform, if they do not
 #' @author Maria Litovchenko
 #' @param inventoryPath path to file with participants inventory
 #' @param cores integer, number of cores to use
@@ -221,6 +225,36 @@ checkParticipantInventory <- function(inventoryPath, cores = 1) {
   if (n_genomes > 1) {
     stop('[', Sys.time(), '] all mutation files should have the same genome ',
          'version.')
+  }
+  
+  # 7) if column cn_segments_path is present in the table, check that files
+  # exist, and inform, if they do not
+  if ('cn_segments_path' %in% colnames(result)) {
+    fileExist <- file.exists(result$cn_segments_path)
+    if (!all(fileExist)) {
+      message('[', Sys.time(), '] Files do not exist: ',
+              paste(result[!fileExist]$cn_segments_path, collapse = ',\n'),
+              '.\nCopy number segment files are not used during de-novo ',
+              'cancer driver calling, but they are used for biotyping as ',
+              'tumour suppressors or oncogenes of the detected drivers. ',
+              'Absence of too many files could result into inability to ',
+              'perform biotyping.')
+    }
+  }
+  
+  # 8) if column mutmultiplicity_path is present in the table, check that files
+  # exist, and inform, if they do not
+  if ('mutmultiplicity_path' %in% colnames(result)) {
+    fileExist <- file.exists(result$mutmultiplicity_path)
+    if (!all(fileExist)) {
+      message('[', Sys.time(), '] Files do not exist: ',
+              paste(result[!fileExist]$mutmultiplicity_path, collapse = ',\n'),
+              '.\nPoint mutation multiplicity files are not used during ',
+              'de-novo cancer driver calling, but they are used for ',
+              'biotyping as tumour suppressors or oncogenes of the ',
+              'detected drivers. Absence of too many files could result into ',
+              'inability to perform biotyping.')
+    }
   }
   
   result

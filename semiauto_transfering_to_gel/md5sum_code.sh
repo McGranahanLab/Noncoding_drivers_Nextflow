@@ -15,4 +15,5 @@ md5sum-lite $BASE_DIR'/'bin/*.R \
             $BASE_DIR'/'nextflow.config \
             $BASE_DIR'/'modules/*.nf \
             $BASE_DIR'/'preprocessing_scripts/*.R \
-            $BASE_DIR'/'subworkflows/*.nf > $OUT_FILE
+            $BASE_DIR'/'subworkflows/*.nf \
+            $BASE_DIR'/'preprocessing_scripts_gel_specific/*.R > $OUT_FILE
