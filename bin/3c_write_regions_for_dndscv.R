@@ -383,7 +383,12 @@ rda <- buildref_faster(cdsfile = transrTabPath, cores = args$cores,
 # Save to file RefCDS without restriction to covariates -----------------------
 outputFile <- paste0(args$output, '/', args$cancer_subtype, '_', refGenStyle,
                      '.Rda')
-save(rda$RefCDS, rda$gr_genes, file = outputFile)
+# save is incapable of saving parts of list
+RefCDS <- rda$RefCDS
+gr_genes <- rda$gr_genes
+save(RefCDS, gr_genes, file = outputFile)
+rm(RefCDS)
+rm(gr_genes)
 
 # change refGenStyle to the opposite (NCBI -> UCSC, UCSC -> NCBI) to save 
 # Rda in both formats. 
@@ -406,14 +411,27 @@ if (refGenStyle == 'UCSC') {
    
   outputFile <- paste0(args$output, '/', args$cancer_subtype, '_NCBI.Rda')
 }
-save(rda$RefCDS, rda$gr_genes, file = outputFile)
+# save is incapable of saving parts of list
+RefCDS <- rda$RefCDS
+gr_genes <- rda$gr_genes
+save(RefCDS, gr_genes, file = outputFile)
+rm(RefCDS)
+rm(gr_genes)
+
+# because in the if statements above refGenStyle was essentially changed
+refGenStyle <- ifelse(refGenStyle == 'NCBI', 'UCSC', 'NCBI')
 
 # Save to file RefCDS with restriction to covariates --------------------------
-RefCDS <- removeGenesNotIndNdScvCovs(RefCDS)
+rda <- removeGenesNotIndNdScvCovs(rda)
 
 outputFile <- paste0(args$output, '/', args$cancer_subtype, '_', refGenStyle,
                      '_removedGenesNotInCovs.Rda')
-save(rda$RefCDS, rda$gr_genes, file = outputFile)
+# save is incapable of saving parts of list
+RefCDS <- rda$RefCDS
+gr_genes <- rda$gr_genes
+save(RefCDS, gr_genes, file = outputFile)
+rm(RefCDS)
+rm(gr_genes)
 
 # change refGenStyle to the opposite (NCBI -> UCSC, UCSC -> NCBI) to save 
 # Rda in both formats. 
@@ -438,7 +456,12 @@ if (refGenStyle == 'UCSC') {
   outputFile <- paste0(args$output, '/', args$cancer_subtype, 
                        '_NCBI_removedGenesNotInCovs.Rda')
 }
-save(rda$RefCDS, rda$gr_genes, file = outputFile)
+# save is incapable of saving parts of list
+RefCDS <- rda$RefCDS
+gr_genes <- rda$gr_genes
+save(RefCDS, gr_genes, file = outputFile)
+rm(RefCDS)
+rm(gr_genes)
 
 message('[', Sys.time(), '] Finished building RefRda object for ',
         'dNdScv/DIGdriver')

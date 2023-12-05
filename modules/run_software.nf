@@ -120,7 +120,8 @@ process DNDSCV {
     input:
     tuple val(tumor_subtype), val(gr_id), val(software), 
           path(rda_ncbi), path(rda_ucsc), 
-          path(rda_ncbi_restrictToCovs), path(rda_ucsc_restrictToCovs)
+          path(rda_ncbi_restrictToCovs), path(rda_ucsc_restrictToCovs),
+          path(mutations)
 
     output:
     path "${software}Results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
