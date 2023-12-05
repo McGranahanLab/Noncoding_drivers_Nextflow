@@ -13,6 +13,10 @@ knitr::opts_chunk$set(echo = T)
 do not forget to add the check that gtf does not contain "--" and that there is either protein_id or ccdsid
 Add GTEx and TCGA inventories too, but only for the postprocessing script
 
+Note on NBR: it will give no results on TCGA due to no overlap of mutations and
+neutral regions. It is truly for WGS only.
+Note on CHASMplus: to run proper model, change containers in config
+
 https://github.com/OpenGenomics/mc3/blob/aff72c9696031c2f2bdedbb549ceb8102e0c0ef0/refdocs_tree.txt#L17
 https://data.broadinstitute.org/snowman/hg19/annotation/
 wget https://data.broadinstitute.org/snowman/hg19/Homo_sapiens_assembly19.fasta
@@ -56,7 +60,12 @@ chmod 0444 digdriver-element_data.h5
 
 cd ../
 
+## CHASMplus
+You have to re-create container with your own models. Otherwise it gets too
+big. Don't forget to replace it in conf file.
+
 ## MISC
+Multiple expression tables are supported
 
 Do not forget to add chmod +x on R file into tutorial
 note on binding for singularity containers

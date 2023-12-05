@@ -1027,8 +1027,7 @@ printArgs(args)
 #              output = '.')
 
 # Read in mutation, genome region and chr lengths files -----------------------
-message('[', Sys.time(), '] Started Reading input mutation file')
-message('[', Sys.time(), '] Started Reading ', args$variants)
+message('[', Sys.time(), '] Started reading ', args$variants)
 colsToKeep <- c('Tumor_Sample_Barcode', 'key', 'Chromosome',
                 'Start_Position', 'End_Position', 'Gene.refGene', 
                 'Variant_Classification', 'Variant_Type', 'mut_len', 
@@ -1036,41 +1035,42 @@ colsToKeep <- c('Tumor_Sample_Barcode', 'key', 'Chromosome',
 updColNames <- c('participant_id', 'key', 'chr', 'start', 'end', 
                  'gene_name_var', 'var_class', 'var_type', 'mut_len',
                  'struct_type', 'participant_tumor_subtype')
-allVars <- fRead(args$variants, header = T, stringsAsFactors = F, 
+allVars <- fread(args$variants, header = T, stringsAsFactors = F, 
                  select = colsToKeep)
 setnames(allVars, colsToKeep, updColNames, skip_absent = T)
-message('[', Sys.time(), '] Finished Reading ', args$variants)
+message('[', Sys.time(), '] Finished reading ', args$variants)
 
-message('[', Sys.time(), '] Started Reading input genomic ranges file')
+message('[', Sys.time(), '] Started reading input genomic ranges file')
 # GR = regions of interest
-GR <- ReadBED12(args$genomic_regions)
+GR <- readBED12(args$genomic_regions)
+message('[', Sys.time(), '] Finished reading input genomic ranges file')
 
 if (!is.null(args$bin_len)) {
-  message('[', Sys.time(), '] Started Reading chromosomal length file')
-  chrLensDT <- fRead(args$target_genome_chr_len, header = F, 
+  message('[', Sys.time(), '] Started reading chromosomal length file')
+  chrLensDT <- fread(args$target_genome_chr_len, header = F, 
                      stringsAsFactors = F)
   chrLensVect <- chrLensDT$V3
   names(chrLensVect) <- chrLensDT$V1
-  message('[', Sys.time(), '] Finished Reading chromosomal length file')
+  message('[', Sys.time(), '] Finished reading chromosomal length file')
   rm(chrLensDT)
 }
 
 # Read in table with gene name synonyms & variant codes conversion ------------
 symbolSynsDT <- NULL
 if (!is.null(args$gene_name_synonyms)) {
-  message('[', Sys.time(), '] Started Reading gene name synonyms table')
-  symbolSynsDT <- fRead(args$gene_name_synonyms, header = T, 
+  message('[', Sys.time(), '] Started reading gene name synonyms table')
+  symbolSynsDT <- fread(args$gene_name_synonyms, header = T, 
                         stringsAsFactors = F, select = c('idx', 'gene_name'))
-  message('[', Sys.time(), '] Finished Reading gene name synonyms table')
+  message('[', Sys.time(), '] Finished reading gene name synonyms table')
 }
 
 codesConvertDT <- NULL
 if (!is.null(args$varanno_conversion_table)) {
-  message('[', Sys.time(), '] Started Reading variant annotation conversion ',
+  message('[', Sys.time(), '] Started reading variant annotation conversion ',
           'table')
-  codesConvertDT <- fRead(args$varanno_conversion_table, header = T, 
+  codesConvertDT <- fread(args$varanno_conversion_table, header = T, 
                           stringsAsFactors = F)
-  message('[', Sys.time(), '] Finished Reading variant annotation conversion ',
+  message('[', Sys.time(), '] Finished reading variant annotation conversion ',
           'table')
 }
 
