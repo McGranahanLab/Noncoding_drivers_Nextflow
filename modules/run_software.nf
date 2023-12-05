@@ -58,7 +58,9 @@ process DIGDRIVER {
 
     input:
     tuple val(tumor_subtype), val(gr_id), val(software), path(regions), 
-          path(ncbi_rda), path(ucsc_rda), path(mutations), path(digdriver_model), 
+          path(rda_ncbi), path(rda_ucsc), 
+          path(rda_ncbi_restrictToCovs), path(rda_ucsc_restrictToCovs), 
+          path(mutations), path(digdriver_model), 
           path(digdriver_elements), path(target_genome_fasta)
 
     output:
@@ -92,7 +94,7 @@ process DIGDRIVER {
     ANNOT_VARIANTS=$mutations'-DIGannotated.csv'
     touch \$ANNOT_VARIANTS
     DigPreprocess.py annotMutationFile --n-procs ${task.cpus} \
-        $mutations $ncbi_rda $target_genome_fasta \$ANNOT_VARIANTS \
+        $mutations $rda_ncbi $target_genome_fasta \$ANNOT_VARIANTS \
         1>\$MSG_FILE 2>\$ERR_FILE
 
     # STEP 2: preprocess the nucleotide contexts of the annotations
@@ -116,8 +118,9 @@ process DNDSCV {
     tag "$tumor_subtype-$gr_id"
 
     input:
-    tuple val(tumor_subtype), val(gr_id), val(software), path(rda_ncbi),
-          path(rda_ucsc), path(mutations)
+    tuple val(tumor_subtype), val(gr_id), val(software), 
+          path(rda_ncbi), path(rda_ucsc), 
+          path(rda_ncbi_restrictToCovs), path(rda_ucsc_restrictToCovs)
 
     output:
     path "${software}Results-${tumor_subtype}-${gr_id}-${params.target_genome_version}.csv", emit: csv
@@ -136,11 +139,11 @@ process DNDSCV {
     MSG_FILE=$software"-"$tumor_subtype"-"$gr_id'-'$params.target_genome_version'.out'
     ERR_FILE=$software"-"$tumor_subtype"-"$gr_id'-'$params.target_genome_version'.err'
 
-    rda=$rda_ncbi
+    rda=$rda_ncbi_restrictToCovs
     mut_format=`head -2 $mutations | tail -n 1 | cut -f2`
     if [[ \$mut_format == chr* ]];
     then
-        rda=$rda_ucsc
+        rda=$rda_ucsc_restrictToCovs
     fi
 
     run_dndscv.R --with_covariates T --genomic_regions \$rda \

@@ -33,7 +33,9 @@ process CREATE_RDA_FOR_DNDSCV_DIGDRIVER {
           path(target_genome_fasta), path(chain)
 
     output:
-    tuple val(tumor_subtype), path("*NCBI.Rda"), path("*UCSC.Rda"), emit: rda
+    tuple val(tumor_subtype), path("*_NCBI.Rda"), path("*_UCSC.Rda"), 
+          path("*_NCBI_removedGenesNotInCovs.Rda"),
+          path("*_UCSC_removedGenesNotInCovs.Rda"), emit: rda
     tuple path('*.out'), path('*.err'), emit: logs
     
     script:

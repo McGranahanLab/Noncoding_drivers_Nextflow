@@ -168,21 +168,28 @@ removeNotTargetGenes <- function(gr, targetGenes) {
 #' removeGenesNotIndNdScvCovs
 #' @description Removes genes for which covariates are not available in dNdScv.
 #' @author Maria Litovchenko
-#' @param gr GRanges object. Must have columns: gene_name
-#' @return filtered GRanges object
-removeGenesNotIndNdScvCovs <- function(gr) {
+#' @param buildRefRes result of function buildref
+#' @return filtered result of function buildref
+removeGenesNotIndNdScvCovs <- function(buildRefRes) {
   data("covariates_hg19", package = "dndscv")
   
-  nbefore <- length(unique(gr$gene_name))
-  result <- gr[gr$gene_name %in% c('CDKN2A', rownames(covs))] 
-  nafter <- length(unique(gr$gene_name))
+  # process gr_genes
+  buildRefRes$gr_genes <- buildRefRes$gr_genes[buildRefRes$gr_genes$names %in% 
+                                                 c('CDKN2A', rownames(covs))]
   
+  # process RefCDS 
+  nbefore <- length(buildRefRes$RefCDS)
+  genesInRefcds <- sapply(buildRefRes$RefCDS, function(x) x$gene_name)
+  buildRefRes$RefCDS <- buildRefRes$RefCDS[genesInRefcds %in% 
+                                             c('CDKN2A', rownames(covs))] 
+  nafter <- length(buildRefRes$RefCDS)
   message('[', Sys.time(), '] Removed ', nbefore - nafter, '(',
           round(100 * (nbefore - nafter) / nbefore, 2), '%) genes from ', 
-          'GTF due to not being present in covs object of dNdScv.')
-  rm(covs)
+          'GTF due to not being present in covariates object of dNdScv.')
   
-  result
+
+  rm(covs)
+  buildRefRes
 }
 
 #' create_transcript_table
@@ -372,10 +379,11 @@ message('[', Sys.time(), '] Started building RefRda object for ',
         'dNdScv/DIGdriver')
 rda <- buildref_faster(cdsfile = transrTabPath, cores = args$cores,
                        genomefile = args$target_genome_path)
-RefCDS <- rda$RefCDS
-gr_genes <- rda$gr_genes
-save(RefCDS, gr_genes, file = paste0(args$output, '/', args$cancer_subtype,
-                                     '_', refGenStyle, '.Rda'))
+
+# Save to file RefCDS without restriction to covariates -----------------------
+outputFile <- paste0(args$output, '/', args$cancer_subtype, '_', refGenStyle,
+                     '.Rda')
+save(rda$RefCDS, rda$gr_genes, file = outputFile)
 
 # change refGenStyle to the opposite (NCBI -> UCSC, UCSC -> NCBI) to save 
 # Rda in both formats. 
@@ -383,26 +391,55 @@ if (refGenStyle == 'NCBI') {
   seqlevelsStyle(rda$gr_genes) <- 'UCSC'
   
   for (RefCDSidx in 1:length(rda$RefCDS)) {
-    rda$RefCDS[[RefCDSidx]]$chr <- paste0('chr', RefCDS[[RefCDSidx]]$chr)
-    }
+    rda$RefCDS[[RefCDSidx]]$chr <- paste0('chr', rda$RefCDS[[RefCDSidx]]$chr)
+  }
   
   outputFile <- paste0(args$output, '/', args$cancer_subtype, '_UCSC.Rda')
-  RefCDS <- rda$RefCDS
-  gr_genes <- rda$gr_genes
-  save(RefCDS, gr_genes, file = outputFile)
 }
 if (refGenStyle == 'UCSC') {
   seqlevelsStyle(rda$gr_genes) <- 'NCBI'
+  
   for (RefCDSidx in 1:length(rda$RefCDS)) {
-    rda$RefCDS[[RefCDSidx]]$chr <- gsub('^chr', '', RefCDS[[RefCDSidx]]$chr)
+    rda$RefCDS[[RefCDSidx]]$chr <- gsub('^chr', '', 
+                                        rda$RefCDS[[RefCDSidx]]$chr)
   }
    
   outputFile <- paste0(args$output, '/', args$cancer_subtype, '_NCBI.Rda')
-  RefCDS <- rda$RefCDS
-  gr_genes <- rda$gr_genes
-  save(RefCDS, gr_genes, file = outputFile)
-} 
+}
+save(rda$RefCDS, rda$gr_genes, file = outputFile)
+
+# Save to file RefCDS with restriction to covariates --------------------------
+RefCDS <- removeGenesNotIndNdScvCovs(RefCDS)
+
+outputFile <- paste0(args$output, '/', args$cancer_subtype, '_', refGenStyle,
+                     '_removedGenesNotInCovs.Rda')
+save(rda$RefCDS, rda$gr_genes, file = outputFile)
+
+# change refGenStyle to the opposite (NCBI -> UCSC, UCSC -> NCBI) to save 
+# Rda in both formats. 
+if (refGenStyle == 'NCBI') {
+  seqlevelsStyle(rda$gr_genes) <- 'UCSC'
   
+  for (RefCDSidx in 1:length(rda$RefCDS)) {
+    rda$RefCDS[[RefCDSidx]]$chr <- paste0('chr', rda$RefCDS[[RefCDSidx]]$chr)
+  }
+  
+  outputFile <- paste0(args$output, '/', args$cancer_subtype, 
+                       '_UCSC_removedGenesNotInCovs.Rda')
+}
+if (refGenStyle == 'UCSC') {
+  seqlevelsStyle(rda$gr_genes) <- 'NCBI'
+  
+  for (RefCDSidx in 1:length(rda$RefCDS)) {
+    rda$RefCDS[[RefCDSidx]]$chr <- gsub('^chr', '', 
+                                        rda$RefCDS[[RefCDSidx]]$chr)
+  }
+  
+  outputFile <- paste0(args$output, '/', args$cancer_subtype, 
+                       '_NCBI_removedGenesNotInCovs.Rda')
+}
+save(rda$RefCDS, rda$gr_genes, file = outputFile)
+
 message('[', Sys.time(), '] Finished building RefRda object for ',
         'dNdScv/DIGdriver')
 
