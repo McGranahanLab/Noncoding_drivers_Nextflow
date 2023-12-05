@@ -353,7 +353,7 @@ filterStats[, `% genomic regions` := round(100 * `N genomic regions` /
 message(paste0(capture.output(knitr::kable(filterStats, format = "markdown")), 
                collapse = '\n'))
 
-# [SAVE] Tiered results as a table --------------------------------------------
+# Save filtered results as a table --------------------------------------------
 colOrderToPrint <- c('tumor_subtype', 'gr_id', 'gene_id', 'gene_name', 
                      'is_known_cancer', 'FILTER', 'participant_tumor_subtype', 
                      'nMuts', 'nMutsUniq', 'nParts', 'nMuts_total', 

@@ -40,7 +40,7 @@ get_script_dir <- function() {
 }
 
 srcDir <- get_script_dir()
-# to spread out multiple processes accessing the same file
+# to spRead out multiple processes accessing the same file
 Sys.sleep(sample(1:15, 1))
 source(paste0(srcDir, '/custom_functions.R'))
 source(paste0(srcDir, '/custom_functions_preprocessing.R'))
@@ -56,7 +56,7 @@ suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
 suppressWarnings(suppressPackageStartupMessages(library(VariantAnnotation)))
 options(scipen = 999)
 
-# FUNCTIONS: matching variants to regions -------------------------------------
+# Functions: matching variants to regions -------------------------------------
 #' overlapVariantsToRegions
 #' @description Overlaps mutations to genomic regions of interest.
 #' @author Maria Litovchenko
@@ -443,7 +443,7 @@ matchVariantsToRegions <- function(varsDT, GRs, checkAnnoMatch = F,
   result
 }
 
-# FUNCTIONS: coding variants re-annotation ------------------------------------
+# Functions: coding variants re-annotation ------------------------------------
 #' parseKeys
 #' @description Parses vector of variant keys into data table with columns chr,
 #'              start, end, REF, ALT
@@ -701,7 +701,7 @@ reannotateCodVars <- function(varsDT, specieCode = 'Hsapiens',
   result
 }
 
-# FUNCTIONS: mutational rate --------------------------------------------------
+# Functions: mutational rate --------------------------------------------------
 #' calcTotalGrLen
 #' @description Calculates a total length of genomic regions for each gr_name 
 #'              in GRs. Assigns quantiles of length distribution.
@@ -830,7 +830,7 @@ matchLocalMutRateToRegions <- function(GRs, genomicTilesGR, genomeTilesRates) {
   result
 }
 
-# FUNCTIONS: enrichment of certain structural types ---------------------------
+# Functions: enrichment of certain structural types ---------------------------
 #' checkVarTypeEnrichment
 #' @description Checks if a certain type of mutations (i.e. SNP, MNP, INDEL of
 #' 1bp length, INDEL of 2bp lenght, etc) is enriched in a gene in comparison to
@@ -1026,9 +1026,9 @@ printArgs(args)
 #              synAcceptedClass = 'Silent', annotation_failed_code = 'Unknown',
 #              output = '.')
 
-# READ in mutation, genome region and chr lengths files -----------------------
-message('[', Sys.time(), '] Started reading input mutation file')
-message('[', Sys.time(), '] Started reading ', args$variants)
+# Read in mutation, genome region and chr lengths files -----------------------
+message('[', Sys.time(), '] Started Reading input mutation file')
+message('[', Sys.time(), '] Started Reading ', args$variants)
 colsToKeep <- c('Tumor_Sample_Barcode', 'key', 'Chromosome',
                 'Start_Position', 'End_Position', 'Gene.refGene', 
                 'Variant_Classification', 'Variant_Type', 'mut_len', 
@@ -1036,41 +1036,41 @@ colsToKeep <- c('Tumor_Sample_Barcode', 'key', 'Chromosome',
 updColNames <- c('participant_id', 'key', 'chr', 'start', 'end', 
                  'gene_name_var', 'var_class', 'var_type', 'mut_len',
                  'struct_type', 'participant_tumor_subtype')
-allVars <- fread(args$variants, header = T, stringsAsFactors = F, 
+allVars <- fRead(args$variants, header = T, stringsAsFactors = F, 
                  select = colsToKeep)
 setnames(allVars, colsToKeep, updColNames, skip_absent = T)
-message('[', Sys.time(), '] Finished reading ', args$variants)
+message('[', Sys.time(), '] Finished Reading ', args$variants)
 
-message('[', Sys.time(), '] Started reading input genomic ranges file')
+message('[', Sys.time(), '] Started Reading input genomic ranges file')
 # GR = regions of interest
-GR <- readBED12(args$genomic_regions)
+GR <- ReadBED12(args$genomic_regions)
 
 if (!is.null(args$bin_len)) {
-  message('[', Sys.time(), '] Started reading chromosomal length file')
-  chrLensDT <- fread(args$target_genome_chr_len, header = F, 
+  message('[', Sys.time(), '] Started Reading chromosomal length file')
+  chrLensDT <- fRead(args$target_genome_chr_len, header = F, 
                      stringsAsFactors = F)
   chrLensVect <- chrLensDT$V3
   names(chrLensVect) <- chrLensDT$V1
-  message('[', Sys.time(), '] Finished reading chromosomal length file')
+  message('[', Sys.time(), '] Finished Reading chromosomal length file')
   rm(chrLensDT)
 }
 
-# READ in table with gene name synonyms & variant codes conversion ------------
+# Read in table with gene name synonyms & variant codes conversion ------------
 symbolSynsDT <- NULL
 if (!is.null(args$gene_name_synonyms)) {
-  message('[', Sys.time(), '] Started reading gene name synonyms table')
-  symbolSynsDT <- fread(args$gene_name_synonyms, header = T, 
+  message('[', Sys.time(), '] Started Reading gene name synonyms table')
+  symbolSynsDT <- fRead(args$gene_name_synonyms, header = T, 
                         stringsAsFactors = F, select = c('idx', 'gene_name'))
-  message('[', Sys.time(), '] Finished reading gene name synonyms table')
+  message('[', Sys.time(), '] Finished Reading gene name synonyms table')
 }
 
 codesConvertDT <- NULL
 if (!is.null(args$varanno_conversion_table)) {
-  message('[', Sys.time(), '] Started reading variant annotation conversion ',
+  message('[', Sys.time(), '] Started Reading variant annotation conversion ',
           'table')
-  codesConvertDT <- fread(args$varanno_conversion_table, header = T, 
+  codesConvertDT <- fRead(args$varanno_conversion_table, header = T, 
                           stringsAsFactors = F)
-  message('[', Sys.time(), '] Finished reading variant annotation conversion ',
+  message('[', Sys.time(), '] Finished Reading variant annotation conversion ',
           'table')
 }
 
@@ -1218,7 +1218,7 @@ varCatEnrich <- checkVarTypeEnrichment(varsToRegsMap)
 message('[', Sys.time(), '] Finished calculations of variant types ',
         'enrichment across genes')
 
-# OUTPUT to files -------------------------------------------------------------
+# Output to files -------------------------------------------------------------
 varsToRegsMap[, target_genome_version := NULL]
 write.table(cbind('tumor_subtype' = args$tumor_subtype, varsToRegsMap), 
             sep = '\t', row.names = F, col.names = T, append = F, quote = F,

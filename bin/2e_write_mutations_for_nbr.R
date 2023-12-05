@@ -97,13 +97,13 @@ colsToGet <- c('Tumor_Sample_Barcode', 'Chromosome', 'Start_Position',
 colsOutNames <- c('sampleID', 'chr', 'pos', 'ref', 'mut')
 printColnames <- F
 
-# READ MAF file ---------------------------------------------------------------
+# Read maf file ---------------------------------------------------------------
 maf <- fread(args$maf, header = T, stringsAsFactors = F)
 
 message('[', Sys.time(), '] Formatting mutations for NBR, ', 
         args$cancer_subtype)
 
-# PROCESS MAF file to suit the software ---------------------------------------
+# Process maf file to suit the software ---------------------------------------
 maf <- maf[, intersect(colsToGet, colnames(maf)), with = F]
 maf <- maf[order(Chromosome, Start_Position)]
 

@@ -97,13 +97,13 @@ colsToGet <- c('Chromosome', 'Start_Position', 'End_Position',
 colsOutNames <- c('CHROM', 'START', 'END', 'REF', 'ALT', 'SAMPLE')
 printColnames <- F
 
-# READ MAF file ---------------------------------------------------------------
+# Read maf file ---------------------------------------------------------------
 maf <- fread(args$maf, header = T, stringsAsFactors = F)
 
 message('[', Sys.time(), '] Formatting mutations for DIGdriver, ', 
         args$cancer_subtype)
 
-# PROCESS MAF file to suit the software ---------------------------------------
+# Process maf file to suit the software ---------------------------------------
 maf <- maf[, intersect(colsToGet, colnames(maf)), with = F]
 maf <- maf[order(Chromosome, Start_Position)]
 

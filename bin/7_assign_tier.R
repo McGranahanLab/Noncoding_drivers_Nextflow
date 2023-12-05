@@ -42,7 +42,7 @@ srcDir <- get_script_dir()
 Sys.sleep(sample(1:15, 1))
 source(paste0(srcDir, '/custom_functions.R'))
 
-# FUNCTIONS: assign tier ------------------------------------------------------
+# Functions: assign tier ------------------------------------------------------
 #' is_tier
 #' @author Maria Litovchenko
 #' @description Checks if all criteria for tier assigment are satisfied or not
@@ -235,7 +235,7 @@ setnames(combinedPsAdj, paste0(args$combine_p_value_method, '.tier'), 'tier')
 
 message('[', Sys.time(), '] Finished tier assignment to drivers')
 
-# [SAVE] tiered results as table ----------------------------------------------
+# Save tiered results as table ------------------------------------------------
 write.table(combinedPsAdj, args$output, append = F, quote = F,  sep = '\t', 
             row.names = F, col.names = T)
 message('[', Sys.time(), '] Wrote tiered drivers table to ', args$output)

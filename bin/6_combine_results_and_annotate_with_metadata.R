@@ -46,7 +46,7 @@ suppressWarnings(suppressPackageStartupMessages(library(EmpiricalBrownsMethod)))
 suppressWarnings(suppressPackageStartupMessages(library(plyr)))
 suppressWarnings(suppressPackageStartupMessages(library(poolr)))
 
-# [FUNCTIONS] Reading results of de-novo cancer driver genes calling  ---------
+# Functions : Reading results of de-novo cancer driver genes calling  ---------
 #' read_DIGdriver_results
 #' @description Reads raw results files from DIGdriver
 #' @author Maria Litovchenko
@@ -219,7 +219,7 @@ readSoftwareResults <- function(softName, acceptedSoftware, filePath, infoStr){
   result
 }
 
-# [FUNCTIONS] gene ID and gene name unification across software ---------------
+# Functions : gene ID and gene name unification across software ---------------
 #' fillInGeneIDs
 #' @description Fills in missing gene_id -s based on gene_name or gene_name
 #' synonyms and a map from gene_id to gene_name.
@@ -325,7 +325,7 @@ fillInGeneName <- function(DT, id_To_Name_Map) {
   result
 }
 
-# [FUNCTIONS] Brown method of combining p-values ------------------------------
+# Functions : Brown method of combining p-values ------------------------------
 #' transformData
 #' Derived from EmpiricalBrownsMethod package, modified to handle NA values
 #' @description Transforms (aka normalizes) data_vector with mean and standard
@@ -397,7 +397,7 @@ empiricalBrownsMethod_V <- function(covar_matrix, p_values_list,
   return(result)
 }
 
-# [FUNCTIONS] Combining p-values ----------------------------------------------
+# Functions : Combining p-values ----------------------------------------------
 #' meltToWide
 #' @description Melts result data table into wide format where each software
 #' has its own column with raw p values.
@@ -520,7 +520,7 @@ combineRawPvalues <- function(resDTwide) {
   result
 }
 
-# [FUNCTIONS] Annotations with expression -------------------------------------
+# Functions : Annotations with expression -------------------------------------
 #' annotateWithExpression
 #' @description Annotates table containing genes with expression status.
 #' @author Maria Litovchenko
@@ -568,7 +568,7 @@ annotateWithExpression <- function(dt, expression_InvPath,
            paste0('expr_in_', unique(inventory_expression$expr_db)))
   result
 }
-# [FUNCTIONS] Misc ------------------------------------------------------------
+# Functions : Misc ------------------------------------------------------------
 #' mergeBasedOnAtLeastOneKey
 #' @description Performs merge of two data tables based on at least one 
 #'              overlapping key column
@@ -706,7 +706,7 @@ printArgs(args)
 #                                '../data/assets/TCGA_expression.csv'),
 #              output = '../TEST/results/tables/combined_p_values/combinedP_LUAD-5primeUTR_hg19.csv')
 
-# [READ] in raw results of software runs --------------------------------------
+# Read in raw results of software runs ----------------------------------------
 message('[', Sys.time(), '] Started reading results of de-novo driver ',
         'discovery')
 rawPs <- lapply(names(args$run_results), 
@@ -717,12 +717,12 @@ rawPs <- do.call(rbind, rawPs)
 message('[', Sys.time(), '] Finished reading results of de-novo driver ',
         'discovery')
 
-# [READ] in mutation rate table -----------------------------------------------
+# Read in mutation rate table -------------------------------------------------
 message('[', Sys.time(), '] Started reading mutation rate table')
 mutRate <- fread(args$mut_rate, header = T, stringsAsFactors = F)
 message('[', Sys.time(), '] Finished reading mutation rate table')
 
-# [READ] in gene name synonyms ------------------------------------------------
+# Read in gene name synonyms --------------------------------------------------
 GENE_NAME_SYNS <- NULL
 if (!is.null(args$gene_name_synonyms)) {
   message('[', Sys.time(), '] Started reading gene names synonyms table')
@@ -815,7 +815,7 @@ if (length(unique(rawPs[!is.na(raw_p)]$software)) == 1) {
   message('[', Sys.time(), '] Finished combining p-values')
 }
 
-# [READ & ANNOTATE] with known cancer genes -----------------------------------
+# Read & annotate with known cancer genes -------------------------------------
 if (!is.null(args$known_cancer_genes)) {
   message('[', Sys.time(), '] Started reading known cancer genes table')
   known_cancer <- fread(args$known_cancer_genes, header = T, 
@@ -836,7 +836,7 @@ if (!is.null(args$known_cancer_genes)) {
   combinedPs[, is_known_cancer := F]
 }
 
-# [ANNOTATE] with olfactory gene status ---------------------------------------
+# Annotate with olfactory gene status -----------------------------------------
 if (!is.null(args$olfactory_genes)) {
   message('[', Sys.time(), '] Started reading olfactory genes table')
   olfactory <- fread(args$olfactory_genes, header = T, sep = '\t', 
@@ -849,7 +849,7 @@ if (!is.null(args$olfactory_genes)) {
   combinedPs[is.na(is_olfactory)]$is_olfactory <- F
 }
 
-# [ANNOTATE] with length & quantile of length, N mutations, etc ---------------
+# Annotate with length & quantile of length, N mutations, etc -----------------
 combinedPs <- merge(combinedPs, mutRate[, setdiff(colnames(mutRate), 
                                                   c('gr_name', 'gene_name')), 
                                         with = F], allow.cartesian = T,
@@ -897,7 +897,7 @@ rm(mutRate)
 gc()
 message('[', Sys.time(), '] Annotated with mutation rate statistics')
 
-# [ANNOTATE] with expression status (True/False/NA) ---------------------------
+# Annotate with expression status (True/False/NA) -----------------------------
 if (!is.null(args$expression)) {
   for (eIdx in 1:length(args$expression)) {
     combinedPs <- annotateWithExpression(combinedPs, 
@@ -906,7 +906,7 @@ if (!is.null(args$expression)) {
   }
 }
 
-# [SAVE] Raw results as table -------------------------------------------------
+# Save raw results as table ---------------------------------------------------
 write.table(combinedPs, args$output, append = F, quote = F,  sep = '\t', 
             row.names = F, col.names = T)
 message('[', Sys.time(), '] Wrote raw drivers table to ', args$output)

@@ -100,13 +100,13 @@ message('[', Sys.time(), '] Formatting genomic regions for NBR, ',
         args$cancer_subtype)
 outfileBase <- paste0(args$output, '/inputGR-', args$cancer_subtype, '-nbr-')
 
-# READ BED12 file -------------------------------------------------------------
+# Read BED12 file -------------------------------------------------------------
 bed <- readBED12(args$bed)
 # select only regions of interest
 bed <- bed[bed$gr_id %in% args$gr_id]
 target_genome_version <- unique(bed$target_genome_version)
 
-# PROCESS bed to software format ----------------------------------------------
+# Process bed to software format ----------------------------------------------
 mcols(bed) <- mcols(bed)[, c('gr_id', 'gene_id')]
 bed <- as.data.table(bed)
 message('[', Sys.time(), '] NBR needs 0-based regions! Converting regions to ',
@@ -119,7 +119,7 @@ bed <- split(bed, by = 'gr_id')
 bed <- lapply(bed, function(x) x[, colsToGet, with = F])
 bed <- lapply(bed, setnames, colsToGet, colsOutNames)
 
-# WRITE -----------------------------------------------------------------------
+# Write -----------------------------------------------------------------------
 lapply(names(bed),
        function(x) write.table(bed[[x]], col.names = printColnames,
                                row.names = F, quote = F, sep = '\t',

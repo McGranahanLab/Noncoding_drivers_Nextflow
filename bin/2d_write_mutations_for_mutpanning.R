@@ -107,13 +107,13 @@ colsOutNames <- c('Hugo_Symbol', 'Chromosome', 'Start_Position',
                   'Tumor_Seq_Allele2', 'Tumor_Sample_Barcode')
 printColnames <- T
 
-# READ MAF file ---------------------------------------------------------------
+# Read maf file ---------------------------------------------------------------
 maf <- fread(args$maf, header = T, stringsAsFactors = F)
 
 message('[', Sys.time(), '] Formatting mutations for MutPanning, ', 
         args$cancer_subtype)
 
-# PROCESS MAF file to suit the software ---------------------------------------
+# Process maf file to suit the software ---------------------------------------
 maf <- maf[, intersect(colsToGet, colnames(maf)), with = F]
 maf <- maf[order(Chromosome, Start_Position)]
 

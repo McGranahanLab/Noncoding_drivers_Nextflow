@@ -1611,7 +1611,7 @@ dir.create(args$output, recursive = T)
 #              chain = '../data/assets/reference_genome/hg38ToHg19.over.chain',
 #              ignore_strand = T, min_reg_len = 5, cores = 2, output = 'test/')
 
-# READ inventories ------------------------------------------------------------
+# Read inventories ------------------------------------------------------------
 analysisInv <- readAnalysisInventory(args$inventory_analysis, args$cores)
 # check that if gr_genome in analysisInv is not the same as target one
 # chain file is submitted
@@ -1690,7 +1690,7 @@ if (all(filesGenomeVersion$genomeVersion == args$target_genome_version)) {
   }
 }
 
-# EXTRACT target and exclusion genomic regions (& liftover, if needed) --------
+# Extract target and exclusion genomic regions (& liftover, if needed) --------
 # get unique combos of files and gr_code so that if in one analysis a region,
 # i.e. CDS is target, and in the other it is excluded we wouldn't extract it 
 # twice.
@@ -1768,7 +1768,7 @@ for (fileIdx in 1:length(grIDtoFileDT)) {
 }
 names(allGenomicRegions) <- names(grIDtoFileDT)
 
-# SUBSTRACT exclusion regions from target regions -----------------------------
+# Substract exclusion regions from target regions -----------------------------
 analysisInv <- split(analysisInv, analysisInv$gr_id)
 cleanTargets <- lapply(analysisInv, getCleanRegions, allGenomicRegions,
                        args$ignore_strand)
@@ -1788,7 +1788,7 @@ if (liftOverIsNeeded == 'end') {
                          function(x) unlist(liftOverGenomicRegion(x, chain)))
 }
 
-# REMOVE black-/include only white- listed regions from/into target regions----
+# Remove black-/include only white- listed regions from/into target regions----
 # read all black- and white- listed files
 if (!is.null(bwInv)) {
   setkey(bwInv, 'list_name')
@@ -1822,7 +1822,7 @@ if (!is.null(bwInv)) {
   rm(bwGR)
   suppressMessages(suppressWarnings(gc()))
 }
-# Perform UNION or INTERSECTION of overlapping regions of different genes -----
+# Perform union or intersection of overlapping regions of different genes -----
 doUnionIntersect <- sapply(analysisInv, 
                            function(x) any(c(!is.na(x$union_percentage), 
                                              c(!is.na(x$intersect_percentage)))))
@@ -1851,7 +1851,7 @@ if (length(doUnionIntersect) != 0) {
 
 suppressMessages(suppressWarnings(gc()))
 
-# REMOVE regions outside of chromosomal lengths -------------------------------
+# Remove regions outside of chromosomal lengths -------------------------------
 if (!is.null(args$target_genome_chr_len)) {
   message('[', Sys.time(), '] --target_genome_chr_len file is given. Will ',
           'remove any regions surpassing chromosomal length')
@@ -1870,7 +1870,7 @@ if (!is.null(args$target_genome_chr_len)) {
           'length')
 }
 
-# REMOVE too short regions ----------------------------------------------------
+# Remove too short regions ----------------------------------------------------
 if (args$min_reg_len > 1) {
   for (grID in names(cleanTargets)) {
     nbefore <- length(cleanTargets[[grID]])
@@ -1914,7 +1914,7 @@ message(paste0(capture.output(knitr::kable(summaryToPrint,
                                            format = "markdown")),
                collapse = '\n'))
 
-# [SAVE] BED12 file with all genomic regions to scan --------------------------
+# Save BED12 file with all genomic regions to scan ----------------------------
 # these files (one per tumor type) will be very useful further down the 
 # pipeline for overlapping mutations and regions.
 bed12Regs <- lapply(cleanTargets, gRangesToBed12, args$target_genome_version)

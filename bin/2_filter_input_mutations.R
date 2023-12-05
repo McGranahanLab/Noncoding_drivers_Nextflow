@@ -79,7 +79,7 @@ suppressWarnings(suppressPackageStartupMessages(library(plyr)))
 suppressWarnings(suppressPackageStartupMessages(library(rtracklayer)))
 options(scipen = 999)
 
-# FUNCTIONS: reading original input files with mutations in ANNOVAR format ----
+# Functions: reading original input files with mutations in ANNOVAR format ----
 #' getVarStructTypeFromAnnovar
 #' @description Gets structural type of a variant, i.e. SNP, MNP, INS, DEL.
 #' @author Maria Litovchenko
@@ -195,7 +195,7 @@ readAnnovarMutFile <- function(filePath, cores = 1) {
   result
 }
 
-# FUNCTIONS: reading original imput files with mutations in MAF format --------
+# Functions: reading original imput files with mutations in MAF format --------
 #' getVarStructType
 #' @description Gets structural type of a variant, i.e. SNP, MNP, INS, DEL.
 #' @author Maria Litovchenko
@@ -284,7 +284,7 @@ readMafMutFile <- function(filePath, cores = 1) {
   result
 }
 
-# FUNCTIONS: reading original input files with mutations ----------------------
+# Functions: reading original input files with mutations ----------------------
 #' getFileType
 #' @description Retrieves file type (annovar or maf) from the file's header
 #' @author Maria Litovchenko
@@ -322,7 +322,7 @@ readSomaticVars <- function(filePath, cores = 1) {
   result
 }
 
-# FUNCTIONS: lifting over mutations -------------------------------------------
+# Functions: lifting over mutations -------------------------------------------
 #' liftOverVariants
 #' @description IF NESSECARY, lifts over coordinates from original genome given by 
 #' inDT to targetGenome with using chain chainObj
@@ -402,7 +402,7 @@ liftOverVariants <- function(inDT, targetGenome, chainObj) {
   result
 }
 
-# FUNCTIONS: filtering mutations by black& white regions ----------------------
+# Functions: filtering mutations by black& white regions ----------------------
 #' filterVarsByBlackWhiteList
 #' @description 
 #' @author Maria Litovchenko
@@ -460,7 +460,7 @@ filterVarsByBlackWhiteList <- function(varsDT, bwFile, chrStyle, bwName,
   result
 }
 
-# FUNCTIONS: exporting --------------------------------------------------------
+# Functions: exporting --------------------------------------------------------
 #' mutTabToMAF
 #' @description Converts variant data table to MAF format
 #' @author Maria Litovchenko
@@ -620,7 +620,7 @@ printArgs(args)
 #              chain = '../data/assets/reference_genome/hg38ToHg19.over.chain',
 #              output = 'test.maf', cores = 2)
 
-# READ inventories ------------------------------------------------------------
+# Read inventories ------------------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients, args$cores)
 # check that if somatic_genome in patientsInv is not the same as target one
 # chain file is submitted
@@ -667,7 +667,7 @@ if (!is.null(args$inventory_blacklisted)) {
   }
 }
 
-# READ mutations files --------------------------------------------------------
+# Read mutations files --------------------------------------------------------
 message('[', Sys.time(), '] Started reading input mutation files')
 n_files <- nrow(patientsInv)
 allVars <- list()
@@ -701,7 +701,7 @@ if (outChrStyle == 'UCSC') {
 
 suppressMessages(suppressWarnings(gc()))
 
-# FILTER variants: noncanonical chr, duplicated, N var/ref, same alt/ref ------
+# Filter variants: noncanonical chr, duplicated, N var/ref, same alt/ref ------
 # 1) Non canonical chr
 before <- nrow(allVars)
 allVars <- allVars[chr %in% acceptedChrNames]
@@ -744,7 +744,7 @@ if (after != before) {
 
 suppressMessages(suppressWarnings(gc()))
 
-# FILTER variants : VAF, ALT counts, etc --------------------------------------
+# Filter variants : VAF, ALT counts, etc --------------------------------------
 # 1) minimum depth of coverage for mutations
 if (!is.null(args$min_depth)) {
   if ('t_depth' %in% colnames(allVars)) {
@@ -962,7 +962,7 @@ if (!is.null(args$max_germline_vac)) {
 
 suppressMessages(suppressWarnings(gc()))
 
-# LIFTOVER variants to target genome ------------------------------------------
+# Liftover variants to target genome ------------------------------------------
 if (any(unique(allVars$somatic_genome) != args$target_genome_version)) {
   # read in chain file
   chain <- import.chain(args$chain)
@@ -977,7 +977,7 @@ if (any(unique(allVars$somatic_genome) != args$target_genome_version)) {
 
 suppressMessages(suppressWarnings(gc()))
 
-# FILTER variants: location outside target genome chromosomes -----------------
+# Filter variants: location outside target genome chromosomes -----------------
 if (!is.null(args$target_genome_chr_len)) {
   message('[', Sys.time(), '] Lengths of chromosomes are given, will check ',
           'that mutations do not surpass them.')
@@ -999,7 +999,7 @@ if (!is.null(args$target_genome_chr_len)) {
   }
 }
 
-# FILTER variants: location in black-/white- listed regions -------------------
+# Filter variants: location in black-/white- listed regions -------------------
 if ('blacklisted_codes' %in% colnames(analysisInv)) {
   if (!is.null(bwInv)) {
     for (i in 1:nrow(bwInv)) {
@@ -1019,7 +1019,7 @@ if ('blacklisted_codes' %in% colnames(analysisInv)) {
 
 suppressMessages(suppressWarnings(gc()))
 
-# FILTER patients: number of variants does not exceed max_n_vars --------------
+# Filter patients: number of variants does not exceed max_n_vars --------------
 varsPerParticip <- allVars[,.N, by = participant_id]
 
 if (any(varsPerParticip$N > args$max_n_vars)) {
@@ -1046,7 +1046,7 @@ allVars <- allVars[participant_id %in% varsPerParticip$participant_id]
 
 suppressMessages(suppressWarnings(gc()))
 
-# SAVE annotated cancer subtype mutation table as MAF file --------------------
+# Save annotated cancer subtype mutation table as MAF file --------------------
 # bring allVars chromosome notation to the one of reference genome, yes, again
 allVars[, chr := gsub('chr', '', chr)] # this covers NCBI
 if (outChrStyle == 'UCSC') {
