@@ -917,6 +917,12 @@ synHelp <- paste('Boolean, indicating whether mutation rate based on',
 parser$add_argument("-s", "--calc_synonymous", required = F, default = T,
                     type = 'logical', help = synHelp)
 
+removeSynHelp <- paste('Boolean, indicating whether synonymous mutations ',
+                       'should be removed from calculations of mutational ',
+                       'rates in coding genomic regions.')
+parser$add_argument("-r", "--remove_synonymous_from_coding", required = F, 
+                    default = T, type = 'logical', help = removeSynHelp)
+
 targetGenomeChrHelp <- paste('Path to the tab-separated file containing', 
                              'chromosomal lengths of the target genome.',
                              'Must have 3 columns: chr, start(1) and length',
@@ -945,7 +951,7 @@ parser$add_argument("-n", "--ncAcceptedClass", required = T, nargs = '+',
                     type = 'character', help = ncClassHelp)
 
 synClassHelp <- paste('Variant_Classification-s from MAF format which are',
-                      'acceptable as markers of synonymous variants.',
+                      'acceptable as markers of synonymous variants. ',
                       'Suggested values: Silent')
 parser$add_argument("-sc", "--synAcceptedClass", required = F, nargs = '+',
                     default = NULL, type = 'character', help = synClassHelp)
@@ -986,9 +992,11 @@ if (is.null(args$target_genome_chr_len) & !is.null(args$bin_len)) {
        '--bin_len =', args$bin_len, '), but --target_genome_chr_len is not ',
        'given.')
 }
-if (args$calc_synonymous & is.null(args$synAcceptedClass)) {
-  stop('[', Sys.time(), '] --calc_synonymous is set to True, but ',
-       'synAcceptedClass is NULL.')
+if ((args$calc_synonymous | args$remove_synonymous_from_coding) & 
+    is.null(args$synAcceptedClass)) {
+  stop('[', Sys.time(), '] --calc_synonymous or ',
+       '--remove_synonymous_from_coding is set to True, but synAcceptedClass ',
+       'is NULL.')
 }
 
 check_input_arguments_preproc(args, outputType = 'folder')
@@ -1085,22 +1093,37 @@ varsToRegsMap <- matchVariantsToRegions(varsDT = allVars, GRs = GR,
 # several independent tumor types) tumor_subtype. We can count number of 
 # mutations as .N and not as length(unique(key)) because mutations can occur  
 # at the same spot in different patients.
+
+varsToRegsMap[, countMeIn := T]
+if (args$remove_synonymous_from_coding) {
+  coding_gr_id <- unique(varsToRegsMap[gr_code == 'CDS']$gr_id)
+  varsToRegsMap[gr_id %in% coding_gr_id & 
+                  var_class %in% args$synAcceptedClass]$countMeIn <- F
+  message('[', Sys.time(), '] Synonymous mutations will not be taking into ',
+          'consideration for computing columns nMuts, nMutsUniq, nParts, ',
+          'nMuts_total, nMutsUniq_total and nParts_total. However, they ',
+          'will be taken into account in the mutational rate computations.')
+}
 varsToRegsMap[, pos := gsub(':[ATGC].*', '', key)]
-grMutStats <- varsToRegsMap[,.(nMuts = .N, nMutsUniq = length(unique(pos)),
-                               nParts = length(unique(participant_id))),
-                            by = .(gr_name, gr_id, gene_id, gene_name, 
-                                   participant_tumor_subtype)]
+grMutStats <- varsToRegsMap[countMeIn == T][,.(nMuts = .N, 
+                                               nMutsUniq = length(unique(pos)),
+                                               nParts = length(unique(participant_id))),
+                                            by = .(gr_name, gr_id, gene_id,
+                                                   gene_name, 
+                                                   participant_tumor_subtype)]
 
 # nParts_total will hold a total number of participants with mutation in that
 # region regardless of participant_tumor_subtype
 grMutStats <- merge(grMutStats, 
-                    varsToRegsMap[,.(nMuts_total = .N, 
-                                     nMutsUniq_total = length(unique(pos)),
-                                     nParts_total = length(unique(participant_id))),
-                                by = .(gr_name, gr_id, gene_id, gene_name)],
+                    varsToRegsMap[countMeIn == T][,.(nMuts_total = .N, 
+                                                     nMutsUniq_total = length(unique(pos)),
+                                                     nParts_total = length(unique(participant_id))),
+                                                  by = .(gr_name, gr_id, 
+                                                         gene_id, gene_name)],
                     by = c('gr_name', 'gr_id', 'gene_id', 'gene_name'),
                     all = T)
 varsToRegsMap[, pos := NULL]
+varsToRegsMap[, countMeIn := NULL]
 
 # Calculate mutation rates averaged across participants for custom regions ----
 message('[', Sys.time(), '] Started calculating averaged across ',
@@ -1114,7 +1137,9 @@ if (args$calc_synonymous) {
   message('[', Sys.time(), '] Started calculating averaged across ',
           'participants synonymous mutation rate (genomic regions from bed12 ',
           'file)')
-  synMutRate <- calcMutRate(mutsToGRmap = varsToRegsMap[var_class %in% args$synAcceptedClass],
+  coding_gr_id <- unique(varsToRegsMap[gr_code == 'CDS']$gr_id)
+  synMutRate <- calcMutRate(mutsToGRmap = varsToRegsMap[gr_id %in% coding_gr_id & 
+                                                          var_class %in% args$synAcceptedClass],
                             allParticipantsID = unique(allVars$participant_id),
                             GRs = GR)
   synMutRate <- synMutRate[,.(gr_name, meanMutRate, meanMutRateQuant)]
@@ -1194,16 +1219,16 @@ message('[', Sys.time(), '] Finished calculations of variant types ',
         'enrichment across genes')
 
 # OUTPUT to files -------------------------------------------------------------
-write.table(cbind('tumor_subtype' = args$tumor_subtype, mutRate),
-            sep = '\t', row.names = F, col.names = T, append = F, quote = F,
-            file = paste0(args$output, '/meanMutRatePerGR-', 
-                          args$cancer_subtype, '--', 
-                          args$target_genome_version, '.csv'))
 varsToRegsMap[, target_genome_version := NULL]
 write.table(cbind('tumor_subtype' = args$tumor_subtype, varsToRegsMap), 
             sep = '\t', row.names = F, col.names = T, append = F, quote = F,
             file = paste0(args$output, '/mutMapToGR-', args$cancer_subtype,
                           '--', args$target_genome_version, '.csv'))
+write.table(cbind('tumor_subtype' = args$tumor_subtype, mutRate),
+            sep = '\t', row.names = F, col.names = T, append = F, quote = F,
+            file = paste0(args$output, '/meanMutRatePerGR-', 
+                          args$cancer_subtype, '--', 
+                          args$target_genome_version, '.csv'))
 write.table(cbind('tumor_subtype' = args$tumor_subtype, varCatEnrich), 
             sep = '\t', row.names = F, col.names = T, append = F, quote = F,
             file = paste0(args$output, '/varCatEnrich-', args$cancer_subtype,

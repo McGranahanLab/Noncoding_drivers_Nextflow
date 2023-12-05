@@ -21,6 +21,7 @@ process CALCULATE_MUTATION_RATES {
                                  --bin_len $params.bin_len \
                                  --target_genome_version $params.target_genome_version \
                                  --calc_synonymous $params.calc_synonymous \
+                                 --remove_synonymous_from_coding $params.remove_synon_from_coding \
                                  --cdsAcceptedClass $params.cdsAcceptedClass \
                                  --synAcceptedClass $params.synAcceptedClass \
                                  --ncAcceptedClass $params.ncAcceptedClass \
