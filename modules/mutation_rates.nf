@@ -4,7 +4,7 @@ process CALCULATE_MUTATION_RATES {
     input:
     tuple val(tumor_subtype), path(bed_path), path(maf_path), 
           path(target_genome_chr_len), path(gene_name_synonyms),
-          path(varanno_conversion_table)
+          path(varanno_conversion_table), val(coding_gr_id)
 
     output:
     tuple val(tumor_subtype), path('meanMutRatePerGR*'), path('mutMapToGR*'), path('varCatEnrich*'), emit: mutrates
@@ -15,6 +15,7 @@ process CALCULATE_MUTATION_RATES {
     def target_genome_chr_len = target_genome_chr_len.name != '.NO_FILE' ? "--target_genome_chr_len $target_genome_chr_len" : ''
     def varanno_conversion_table = varanno_conversion_table.name != '.NO_FILE' ? "--varanno_conversion_table $varanno_conversion_table" : ''
     """
+    coding_gr_id_parsed=`echo $coding_gr_id | sed 's/\\[//g' | sed 's/,//g' | sed 's/\\]//g'` 
     4_calculate_mutation_rates.R --cancer_subtype $tumor_subtype \
                                  --variants $maf_path \
                                  --genomic_regions $bed_path \
@@ -23,8 +24,9 @@ process CALCULATE_MUTATION_RATES {
                                  --calc_synonymous $params.calc_synonymous \
                                  --remove_synonymous_from_coding $params.remove_synon_from_coding \
                                  --cdsAcceptedClass $params.cdsAcceptedClass \
-                                 --synAcceptedClass $params.synAcceptedClass \
                                  --ncAcceptedClass $params.ncAcceptedClass \
+                                 --coding_gr_id \$coding_gr_id_parsed \
+                                 --synAcceptedClass $params.synAcceptedClass \
                                  --annotation_failed_code $params.annotation_failed_code \
                                  --output '.' $gene_name_synonyms $target_genome_chr_len \
                                  $varanno_conversion_table \

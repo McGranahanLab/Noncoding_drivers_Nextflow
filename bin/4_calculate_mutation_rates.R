@@ -950,6 +950,12 @@ ncClassHelp <- paste('Variant_Classification-s from MAF format which are',
 parser$add_argument("-n", "--ncAcceptedClass", required = T, nargs = '+',
                     type = 'character', help = ncClassHelp)
 
+codGRidHelp <- paste('gr_id(s) which designate regions considered to be ',
+                     'coding. Essential if --calc_synonymous or ',
+                     '--remove_synonymous_from_coding is set to T.')
+parser$add_argument('-cod', '--coding_gr_id', required = F, nargs = '+',
+                    default = NULL, type = 'character', help = codGRidHelp)
+
 synClassHelp <- paste('Variant_Classification-s from MAF format which are',
                       'acceptable as markers of synonymous variants. ',
                       'Suggested values: Silent')
@@ -992,11 +998,18 @@ if (is.null(args$target_genome_chr_len) & !is.null(args$bin_len)) {
        '--bin_len =', args$bin_len, '), but --target_genome_chr_len is not ',
        'given.')
 }
+
+if ((args$calc_synonymous | args$remove_synonymous_from_coding) & 
+    is.null(args$coding_gr_id)) {
+  stop('[', Sys.time(), '] --calc_synonymous or ',
+       '--remove_synonymous_from_coding is set to True, but --coding_gr_id ',
+       'is NULL.')
+}
 if ((args$calc_synonymous | args$remove_synonymous_from_coding) & 
     is.null(args$synAcceptedClass)) {
   stop('[', Sys.time(), '] --calc_synonymous or ',
-       '--remove_synonymous_from_coding is set to True, but synAcceptedClass ',
-       'is NULL.')
+       '--remove_synonymous_from_coding is set to True, but ',
+       '--synAcceptedClass is NULL.')
 }
 
 check_input_arguments_preproc(args, outputType = 'folder')
@@ -1023,7 +1036,8 @@ printArgs(args)
 #              ncAcceptedClass = list("3'UTR", "3'Flank", "5'UTR", "5'Flank", 
 #                                     "IGR", "Intron", "RNA", "Targeted_Region",
 #                                     "Splice_Site", 'Unknown'), 
-#              synAcceptedClass = 'Silent', annotation_failed_code = 'Unknown',
+#              coding_gr_id = 'CDS', synAcceptedClass = 'Silent', 
+#              annotation_failed_code = 'Unknown',
 #              output = '.')
 
 # Read in mutation, genome region and chr lengths files -----------------------
@@ -1096,10 +1110,9 @@ varsToRegsMap <- matchVariantsToRegions(varsDT = allVars, GRs = GR,
 
 varsToRegsMap[, countMeIn := T]
 if (args$remove_synonymous_from_coding) {
-  coding_gr_id <- unique(varsToRegsMap[gr_code == 'CDS']$gr_id)
-  varsToRegsMap[gr_id %in% coding_gr_id & 
+  varsToRegsMap[gr_id %in% args$coding_gr_id & 
                   var_class %in% args$synAcceptedClass]$countMeIn <- F
-  message('[', Sys.time(), '] Synonymous mutations will not be taking into ',
+  message('[', Sys.time(), '] Synonymous mutations will not be taken into ',
           'consideration for computing columns nMuts, nMutsUniq, nParts, ',
           'nMuts_total, nMutsUniq_total and nParts_total. However, they ',
           'will be taken into account in the mutational rate computations.')
@@ -1137,8 +1150,7 @@ if (args$calc_synonymous) {
   message('[', Sys.time(), '] Started calculating averaged across ',
           'participants synonymous mutation rate (genomic regions from bed12 ',
           'file)')
-  coding_gr_id <- unique(varsToRegsMap[gr_code == 'CDS']$gr_id)
-  synMutRate <- calcMutRate(mutsToGRmap = varsToRegsMap[gr_id %in% coding_gr_id & 
+  synMutRate <- calcMutRate(mutsToGRmap = varsToRegsMap[gr_id %in% args$coding_gr_id & 
                                                           var_class %in% args$synAcceptedClass],
                             allParticipantsID = unique(allVars$participant_id),
                             GRs = GR)

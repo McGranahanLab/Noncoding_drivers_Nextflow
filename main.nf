@@ -142,11 +142,23 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
     */
     gene_name_synonyms = channel_from_params_path(params.gene_name_synonyms)
     varanno_conversion_table = channel_from_params_path(params.varanno_conversion_table)
+    coding_gr_id = analysis_inv.splitCsv(header: true)
+                               .map { row -> 
+                                        tuple(row.tumor_subtype, row.gr_code,
+                                              row.gr_id)
+                               }
+                               .filter{ it[1] == 'CDS' }
+                               .map { it ->
+                                         return(tuple(it[0], it[2]))
+                               }
+                               .unique()
+                               .groupTuple(by: [0, 1], remainder: true)
     CALCULATE_MUTATION_RATES (PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.bed
                                   .combine(PREPARE_INPUT_MUTATION_FILES.out.maf, by: [0])
                                   .combine(target_genome_chr_len)
                                   .combine(gene_name_synonyms)
-                                  .combine(varanno_conversion_table))
+                                  .combine(varanno_conversion_table)
+                                  .combine(coding_gr_id, by: [0]))
 
     /* 
         Step 5a: run CHASMplus
