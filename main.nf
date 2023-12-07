@@ -250,12 +250,12 @@ workflow POSTPROCESSING {
                                                               .combine(gtex_expression)
                                                               .combine(tcga_inventory)
                                                               .combine(tcga_expression)).csv
-    tiered_pvals  = ASSIGN_TIER (combined_pvals.groupTuple(by: [0], remainder: true)
-                                               .combine(tier_inventory)
-                                               .combine(Channel.of(params.combine_p_method))).csv
+    tiered_pvals   = ASSIGN_TIER (combined_pvals.groupTuple(by: [0], remainder: true)
+                                                .combine(tier_inventory)
+                                                .combine(Channel.of(params.combine_p_method))).csv
  
-    drivers       = FILTER_TIERED_DRIVERS (tiered_pvals.combine(Channel.fromPath(params.analysis_inventory,
-                                                                                 checkIfExists: true)))
+    drivers        = FILTER_TIERED_DRIVERS (tiered_pvals.combine(Channel.fromPath(params.analysis_inventory,
+                                                                                  checkIfExists: true)))
 }
 
 
