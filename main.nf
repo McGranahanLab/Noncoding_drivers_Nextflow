@@ -48,15 +48,19 @@ def channel_from_params_path (staticPath) {
 }
 
 def create_result_file_tuple (inventoryRow, outputDir, genomeVersion) {
+    mutRatePath = file(outputDir + '/results/mut_rates/meanMutRatePerGR-' + 
+                       inventoryRow.tumor_subtype + '--' + genomeVersion + 
+                       '.csv', checkIfExists: false)
+    scannedGRpath = file(outputDir + '/inputs/inputGR-' + 
+                         inventoryRow.tumor_subtype + '-' + 
+                         genomeVersion + '.bed', checkIfExists: false)
     resultsPath = file(outputDir + '/results/' + inventoryRow.software + '/' +
                        inventoryRow.software + 'Results-' + 
                        inventoryRow.tumor_subtype + '-' + inventoryRow.gr_id +
                        '-' + genomeVersion + '.csv', checkIfExists: false)
-    mutRatePath = file(outputDir + '/results/mut_rates/meanMutRatePerGR-' + 
-                       inventoryRow.tumor_subtype + '--' + genomeVersion + 
-                       '.csv', checkIfExists: false)
-    return tuple(inventoryRow.tumor_subtype, inventoryRow.gr_id, mutRatePath,
-                 inventoryRow.software, resultsPath)
+    return tuple(inventoryRow.tumor_subtype, inventoryRow.gr_id, 
+                 mutRatePath, scannedGRpath, inventoryRow.software, 
+                 resultsPath)
 }
 
 /* ----------------------------------------------------------------------------
@@ -224,7 +228,7 @@ workflow POSTPROCESSING {
                                                                            params.target_genome_version)
                                      }
                                  .unique()
-                                 .groupTuple(by: [0, 1, 2], remainder: true)
+                                 .groupTuple(by: [0, 1, 2, 3], remainder: true)
     // path to tier definition table
     tier_inventory = Channel.fromPath(params.tier_inventory, 
                                       checkIfExists: true)

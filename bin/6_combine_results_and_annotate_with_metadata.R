@@ -638,6 +638,13 @@ mutRhelp <- paste('A path to file containing mutations rates for the',
 parser$add_argument("-r", "--mut_rate", required = T, type = 'character',
                     default = NULL, help = mutRhelp)
 
+grFileHelp <- paste('A path to BED21 file containing all scanned for this',
+                    'tumor subtype genomic regions. Usually this file is',
+                    'created by 3_filter_input_genomic_regions.R and has a',
+                    'prefix inputGR-')
+parser$add_argument("-gr", "--scanned_gr", required = T, type = 'character',
+                    default = NULL, help = grFileHelp)
+
 synTabHelp <- paste('Path to table containing information about gene names',
                     '(symbols) and their synonyms. Required columns: idx and',
                     'gene_name.')
@@ -696,10 +703,11 @@ printArgs(args)
 #                                 '../TEST/results/nbr/nbrResults-LUAD-5primeUTR-hg19.csv', 
 #                                 '../TEST/results/oncodrivefml/oncodrivefmlResults-LUAD-5primeUTR-hg19.csv'),
 #              mut_rate = '../TEST/results/mut_rates/meanMutRatePerGR-LUAD--hg19.csv',
+#              scanned_gr = '../TEST/inputs/inputGR-LUAD-hg19.bed',
 #              gene_name_synonyms = '../data/assets/hgnc_complete_set_processed.csv',
 #              known_cancer_genes = '../data/assets/cgc_knownCancerGenes.csv',
 #              olfactory_genes = '../data/assets/olfactory_barnes_2020.csv',
-#             rawP_cap = 10^(-8),
+#              rawP_cap = 10^(-8),
 #              expression_inventories = list('../data/inventory/inventory_expression_gtex.csv',
 #                                            '../data/inventory/inventory_expression_tcga.csv'),
 #              expression = list('../data/assets/GTEx_expression.csv',
@@ -722,6 +730,15 @@ message('[', Sys.time(), '] Started reading mutation rate table')
 mutRate <- fread(args$mut_rate, header = T, stringsAsFactors = F)
 message('[', Sys.time(), '] Finished reading mutation rate table')
 
+# Retrieve gene name to gene id maps from genomic ranges file -----------------
+message('[', Sys.time(), '] Started reading genomic regions file')
+geneNameToID <- fread(args$scanned_gr, header = F, stringsAsFactors = F,
+                      select = 4)
+geneNameToID <- unique(unlist(geneNameToID))
+geneNameToID <- parseBED12regName(geneNameToID)[,.(gene_id, gene_name)]
+geneNameToID <- unique(geneNameToID)
+message('[', Sys.time(), '] Finished reading genomic regions file')
+
 # Read in gene name synonyms --------------------------------------------------
 GENE_NAME_SYNS <- NULL
 if (!is.null(args$gene_name_synonyms)) {
@@ -735,7 +752,8 @@ if (!is.null(args$gene_name_synonyms)) {
 # create gene_id to gene_name map from bed12 and from rawPs
 GENE_ID_TO_NAME <- rawPs[,.(gene_id, gene_name)]
 GENE_ID_TO_NAME <- GENE_ID_TO_NAME[complete.cases(GENE_ID_TO_NAME)]
-GENE_ID_TO_NAME <- rbind(GENE_ID_TO_NAME, mutRate[,.(gene_name, gene_id)])
+GENE_ID_TO_NAME <- rbind(GENE_ID_TO_NAME, mutRate[,.(gene_name, gene_id)],
+                         geneNameToID)
 GENE_ID_TO_NAME <- unique(GENE_ID_TO_NAME) 
 rawPs <- fillInGeneIDs(DT = rawPs, id_To_Name_Map = GENE_ID_TO_NAME, 
                        name_syns = GENE_NAME_SYNS)
@@ -866,11 +884,12 @@ mismatched <- mismatched[, c('tumor_subtype', 'gr_id', 'gene_id', 'gene_name',
 mismatched <- melt(mismatched, id.vars = c('tumor_subtype', 'gr_id',
                                            'gene_id', 'gene_name'))
 setnames(mismatched, 'variable', 'software')
-mismatched <- mismatched[!is.na(value)]
-mismatched[, software := gsub('.raw_p$', '', software)]
-mismatched <- unique(mismatched[,.(tumor_subtype, gr_id, gene_name, software)])
 
 if (nrow(mismatched) > 0) {
+  mismatched <- mismatched[!is.na(value)]
+  mismatched[, software := gsub('.raw_p$', '', software)]
+  mismatched <- unique(mismatched[,.(tumor_subtype, gr_id, gene_name, software)])
+  
   message('[', Sys.time(), '] Found ', nrow(mismatched), '(',
           round(100 * nrow(mismatched) / 
                   nrow(unique(rawPs[,.(tumor_subtype, gr_id, gene_name, 
