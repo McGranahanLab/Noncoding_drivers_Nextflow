@@ -43,6 +43,15 @@ Sys.sleep(sample(1:15, 1))
 source(paste0(srcDir, '/custom_functions.R'))
 
 # Functions: assign tier ------------------------------------------------------
+#' get_number_of_decimals
+#' @author Maria Litovchenko
+#' @description Returns number of decimal points
+#' @param x number
+#' @return integer
+get_number_of_decimals <- function(x) {
+  nchar(gsub('.*[.]', '', as.character(x)))
+}
+
 #' is_tier
 #' @author Maria Litovchenko
 #' @description Checks if all criteria for tier assigment are satisfied or not
@@ -68,19 +77,24 @@ is_tier <- function(tierDefVect, combAdjPdt, rawPcols, fdrPcols, mergedPcol,
   
   # 1. check that raw p-values of individual methods are < cutoff and that 
   # number of those methods is at least nIndivFDRsoft_sign
-  passRaw <- combAdjPdt[, rawPcols, with = F] < cutoffs['indivRaw_cutoff']
+  passRaw <- round(combAdjPdt[, rawPcols, with = F], 
+                   get_number_of_decimals(cutoffs['indivRaw_cutoff']))
+  passRaw <- passRaw <= cutoffs['indivRaw_cutoff']
   passRaw <- rowSums(passRaw, na.rm = T)
   passRaw <- passRaw >= cutoffs["nIndivRawSoft_sign"]
   
   # 2. check that FDR corrected p-values of individual methods are < cutoff
   # and that number of those methods is at least nIndivFDRsoft_sign
-  passFDR <- combAdjPdt[, fdrPcols, with = F] < cutoffs["indivFDR_cutoff"]
+  passFDR <- round(combAdjPdt[, fdrPcols, with = F],
+                   get_number_of_decimals(cutoffs["indivFDR_cutoff"]))
+  passFDR <- passFDR <= cutoffs["indivFDR_cutoff"]
   passFDR <- rowSums(passFDR, na.rm = T)
   passFDR <- passFDR >= cutoffs["nIndivFDRsoft_sign"]
   
   # 3. check that merged FDR corrected combined p-value is < mergedFDR_cutoff
-  passMerged <- unlist(combAdjPdt[, mergedPcol, with = F])
-  passMerged <- passMerged < cutoffs["mergedFDR_cutoff"]
+  passMerged <- round(unlist(combAdjPdt[, mergedPcol, with = F]),
+                      get_number_of_decimals(cutoffs["mergedFDR_cutoff"]))
+  passMerged <- passMerged <= cutoffs["mergedFDR_cutoff"]
   
   result <- passRaw & passFDR & passMerged
   
@@ -206,12 +220,18 @@ software <- gsub(".raw_p", "", grep('[.]raw_p$', colnames(combinedPs),
 pValCols <- grep('[.]comb_p$|[.]raw_p$', colnames(combinedPs), value = T)
 
 # perform multiple testing correction
-combinedPsAdj <- apply(combinedPs[, pValCols, with = F], 2, p.adjust, 
-                       method = 'BH')
+combinedPsAdj <- unique(combinedPs[, c('tumor_subtype', 'gr_id', 'gene_id', 
+                                       'gene_name', pValCols), with = F])
+combinedPsAdj <- cbind(combinedPsAdj[,.(tumor_subtype, gr_id, gene_id,  
+                                        gene_name)],
+                       apply(combinedPsAdj[, pValCols, with = F], 2, p.adjust, 
+                       method = 'BH'))
 combinedPsAdj <- as.data.table(combinedPsAdj)
 colnames(combinedPsAdj) <- gsub('.comb_p|.raw_p', '.bh_p', 
                                 colnames(combinedPsAdj))
-combinedPsAdj <- cbind(combinedPs, combinedPsAdj) 
+combinedPsAdj <- merge(combinedPs, combinedPsAdj, all.x = T,
+                       by = c('tumor_subtype', 'gr_id', 
+                              'gene_id', 'gene_name'))
 rm(combinedPs)
 message('[', Sys.time(), '] Finished adjustment for multiple testing')
 
