@@ -130,6 +130,39 @@ if (!dir.exists(dirname(args$ouput))) {
 #              'use_ensembl' = T, 
 #              'output' = '../data/assets/TCGA_expression.csv')
 
+# args <- list('inventory_expression' = '../data/inventory/inventory_expression_gtex.csv',
+#              'expression' = '../data/assets_raw/GTEx_Analysis_2017-06-05_v8_RNASeQCv1.1.9_gene_median_tpm.gct',
+#              'genomic_regions' = list('../completed_runs/06_12_2023/inputs/inputGR-Adenocarcinoma-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Adenocarcinoma_met-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Adenosquamous-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Carcinoid-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Large_cell-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Mesothelioma-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Neuroendocrine_carcinoma-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Panlung-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Panlung_met-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Small_cell-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Squamous_cell-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Squamous_cell_met-hg19.bed'),
+#              'use_ensembl' = T, 
+#              'output' = '../data/assets/GTEx_expression.csv')
+# args <- list('inventory_expression' = '../data/inventory/inventory_expression_tcga.csv',
+#              'expression' = '../data/assets_raw/TCGA_FPKM_per_tumor_subtype.csv',
+#              'genomic_regions' = list('../completed_runs/06_12_2023/inputs/inputGR-Adenocarcinoma-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Adenocarcinoma_met-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Adenosquamous-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Carcinoid-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Large_cell-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Mesothelioma-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Neuroendocrine_carcinoma-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Panlung-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Panlung_met-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Small_cell-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Squamous_cell-hg19.bed',
+#                                       '../completed_runs/06_12_2023/inputs/inputGR-Squamous_cell_met-hg19.bed'),
+#              'use_ensembl' = T, 
+#              'output' = '../data/assets/TCGA_expression.csv')
+
 # Read & check expression inventory -------------------------------------------
 inventory_expr <- fread(args$inventory_expression, header = T,  
                         stringsAsFactors = F,
@@ -172,9 +205,9 @@ if (identical(colnames(exprDT), c('gene_id', 'gene_name'))) {
        ') are not found in expression table: ', 
        paste0(exprTissues, collapse = ', '))
 }
-exprDT[, gene_id := gsub('[.].*', '', gene_id)]
 
-if (!args$use_ensembl) {
+exprDT[, gene_id := gsub('[.].*', '', gene_id)]
+if (args$use_ensembl) {
   exprDT[, gene_id := gene_name]
 }
 
@@ -213,6 +246,41 @@ updatedIDs <- GR[exprDT$gene_name[changeID]]
 updatedIDs <- updatedIDs[,.SD[1], by = gene_name]
 setkey(updatedIDs, 'gene_id')
 exprDT$gene_id[changeID] <- updatedIDs[exprDT$gene_id[changeID]]$gene_id
+
+# Clean up table from duplicates ----------------------------------------------
+# previous lines may lead to appearance of duplicates in the expression table
+# check it and fix, if needed.
+exprDT[, isDupl := .N > 1, by = .(gene_id, gene_name)]
+if (any(exprDT$isDupl)) {
+  duplRows <- exprDT[isDupl == T]
+  message('[', Sys.time(), '] Found ',
+          nrow(unique(duplRows[,.(gene_id, gene_name)])), ' duplicated ',
+          'entries gene_id-gene_name pairs in the expression table. They ',
+          'could be present in the table from the beginning or be created ',
+          'by removing "after the dot" part from gene_id, use of ',
+          '--use_ensembl flag or merge with gene_id-gene_name pairs from ',
+          'scanned genomic regions. Only the entry with the highest mean ',
+          'expression will be kept.')
+  duplRows[, isDupl := NULL]
+  duplRows[, meanExpr := rowMeans(duplRows[, setdiff(colnames(duplRows), 
+                                                     c('gene_id', 'gene_name')),
+                                           with = F])]
+  duplRows <- duplRows[order(gene_id, gene_name, -meanExpr)] 
+  duplRows <- duplRows[,.SD[1], by = .(gene_id, gene_name)]
+  duplRows[, meanExpr := NULL]
+  exprDT <- rbind(exprDT[isDupl == F][, setdiff(colnames(exprDT), 'isDupl'),
+                                      with = F], duplRows)
+}
+# remove rows where expression in all tumor subtypes is NA
+allIsNA <- apply(exprDT[, setdiff(colnames(exprDT), c('gene_id', 'gene_name')),
+                        with = F], 1, function(x) sum(is.na(x)))
+allIsNA <- allIsNA == (ncol(exprDT) - 2)
+if (any(allIsNA)) {
+  message('[', Sys.time(), '] Found ', sum(allIsNA), ' rows in the ',
+          'expression table where all expression values are set to NA. Will ',
+          'remove them.')
+  exprDT <- exprDT[!allIsNA]
+}
 
 # Write to file ---------------------------------------------------------------
 exprDT <- exprDT[, c('gene_id', 'gene_name',
