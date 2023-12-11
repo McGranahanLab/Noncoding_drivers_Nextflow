@@ -65,14 +65,10 @@ if (!dir.exists(dirname(args$ouput))) {
 
 # Read CGC & extract ensembl gene id ------------------------------------------
 CGC <- fread(args$input, header = T, stringsAsFactors = F, 
-             select = c('GENE_SYMBOL', 'SOMATIC', 'ROLE_IN_CANCER', 'SYNONYMS',
+             select = c('GENE_SYMBOL', 'ROLE_IN_CANCER', 'SYNONYMS',
                         'TUMOUR_TYPES_SOMATIC'), 
-             col.names = c('gene_name', 'somatic', 'known_cancer_biotype',
+             col.names = c('gene_name', 'known_cancer_biotype',
                            'gene_id', 'known_in_tumor_subtype'))
-
-# select only somatic genes
-CGC <- CGC[somatic == 'y']
-CGC[, somatic := NULL]
 
 # extract ensembl gene id
 if (args$use_ensembl) {
