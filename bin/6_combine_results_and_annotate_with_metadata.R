@@ -579,6 +579,15 @@ annotateWithExpression <- function(dt, expression_InvPath,
 #' @return data table baseDT with added columns from toAddDT matched based on
 #'         at least one column from keyCols
 mergeBasedOnAtLeastOneKey <- function(baseDT, toAddDT, keyCols) {
+  if (nrow(baseDT) != nrow(unique(baseDT[, keyCols, with = F]))) {
+    stop('[', Sys.time(), '] Error in mergeBasedOnAtLeastOneKey: keyCols ',
+         paste0(keyCols, collapse = ', '), ' do not uniquely define baseDT')
+  }
+  if (nrow(toAddDT) != nrow(unique(toAddDT[, keyCols, with = F]))) {
+    stop('[', Sys.time(), '] Error in mergeBasedOnAtLeastOneKey: keyCols ',
+         paste0(keyCols, collapse = ', '), ' do not uniquely define toAddDT')
+  }
+  
   result <- merge(baseDT, toAddDT, by = keyCols)
   notKeys <- setdiff(colnames(toAddDT), keyCols)
   for (oneKeyCol in keyCols) {
@@ -919,9 +928,16 @@ message('[', Sys.time(), '] Annotated with mutation rate statistics')
 # Annotate with expression status (True/False/NA) -----------------------------
 if (!is.null(args$expression)) {
   for (eIdx in 1:length(args$expression)) {
-    combinedPs <- annotateWithExpression(combinedPs, 
+    exprDTanno <- annotateWithExpression(unique(combinedPs[,.(tumor_subtype,
+                                                              gr_id, gene_id,
+                                                              gene_name)]),
                                          args$expression_inventories[[eIdx]],
                                          args$expression[[eIdx]])
+    combinedPs <- merge(combinedPs, exprDTanno, all.x = T,
+                        by = c('tumor_subtype', 'gr_id',
+                               'gene_id', 'gene_name'))
+    rm(exprDTanno)
+    gc()
   }
 }
 
