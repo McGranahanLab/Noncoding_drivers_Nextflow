@@ -17,11 +17,11 @@
 # CREATED:  15.11.2023
 # REVISION: 15.11.2023
 
-# LIBRARIES -------------------------------------------------------------------
+# Libraries -------------------------------------------------------------------
 suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 
-# FUNCTIONS -------------------------------------------------------------------
+# Functions -------------------------------------------------------------------
 #' printArgs
 #' @description Prints submitted to the script arguments as messages.
 #' @author Maria Litovchenko
@@ -149,7 +149,7 @@ exprTab <- lapply(exprTab,
 names(exprTab) <- unique(sample_sheet$tumor_subtype)
 message('[', Sys.time(), '] Finished reading expression tables')
 
-# Compute median expression per tumor subtype ---------------------------------
+# Compute median gene's expression per tumor subtype --------------------------
 exprTab <- lapply(exprTab, 
                   function(x) setcolorder(x, c('gene_id', 'gene_name')))
 medianExprTab <- lapply(exprTab, 
