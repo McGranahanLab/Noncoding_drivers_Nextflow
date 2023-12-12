@@ -171,7 +171,7 @@ transformAllelesFromAnnovarToNorm <- function(varDT) {
 }
 
 readAnnovarMutFile <- function(filePath, cores = 1) {
-  colsToSelect <- c('key', 'chr', 'start', 'stop', 'ref', 'var', 
+  colsToSelect <- c('chr', 'start', 'stop', 'ref', 'var', 
                     'Gene.refGene', 'Func.refGene', 'ExonicFunc.refGene', 
                     'GeneDetail.refGene', 'AAChange.refGene', 'Use.For.Plots',
                     'Use.For.Plots.Indel')
@@ -273,11 +273,6 @@ readMafMutFile <- function(filePath, cores = 1) {
     result[, chr := gsub('25', 'M', chr)]
   }
   
-  # add key
-  result[, key := apply(result[,.(chr, start, ref, var)], 1,
-                        paste, collapse = ':')]
-  result[, key := gsub(' ', '', key)]
-  
   # assign structural variant type
   result <- getVarStructType(result)
   
@@ -317,6 +312,11 @@ readSomaticVars <- function(filePath, cores = 1) {
   } else {
     result <- readMafMutFile(filePath, cores)
   }
+  
+  # add key to every mutation
+  result[, key := apply(result[,.(chr, start, ref, var)], 1,
+                        paste, collapse = ':')]
+  result[, key := gsub(' ', '', key)]
   
   result[, fileType := fileType]
   result
