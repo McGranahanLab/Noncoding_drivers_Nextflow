@@ -166,9 +166,6 @@ checkColumnNotNumber <- function(x, x_name = NULL) {
 #'    all files
 #' 9) if column mutmultiplicity_path is present in the table, check that files
 #'    exist, and inform, if they do not
-#' 10) if column mutmultiplicity_path is present in the table, check that 
-#'     column mutmultiplicity_genome is also present & contains the same genome 
-#'     version for all files
 #' @author Maria Litovchenko
 #' @param inventoryPath path to file with participants inventory
 #' @param cores integer, number of cores to use
@@ -278,23 +275,6 @@ checkParticipantInventory <- function(inventoryPath, cores = 1) {
               'inability to perform biotyping.')
     }
   }
-  
-  # 10) if column mutmultiplicity_path is present in the table, check that 
-  # column mutmultiplicity_genome is also present & contains the same genome 
-  # version for all files
-  if ('mutmultiplicity_path' %in% colnames(result)) {
-    if (!'mutmultiplicity_genome' %in% colnames(result)) {
-      stop('[', Sys.time(), '] Column mutmultiplicity_path is present in the ',
-           'patients inventory table, but mutmultiplicity_genome is not.')
-    } else {
-      n_genomes_mutmult <- length(unique(result$mutmultiplicity_genome))
-      if (n_genomes_mutmult > 1) {
-        stop('[', Sys.time(), '] all mutation multiplicity files should have ',
-             'the same genome version.')
-      }
-    }
-  }
-  
   result
 }
 
@@ -1018,9 +998,6 @@ genomesVersions <- c(patientsInv$somatic_genome, analysisInv$gr_genome,
                      analysisInv$gr_excl_genome)
 if ('cn_segments_genome' %in% colnames(patientsInv)) {
   genomesVersions <- c(genomesVersions, patientsInv$cn_segments_genome)
-}
-if ('mutmultiplicity_genome' %in% colnames(patientsInv)) {
-  genomesVersions <- c(genomesVersions, patientsInv$mutmultiplicity_genome)
 }
 if (!is.null(args$inventory_blacklisted)) {
   genomesVersions <- c(genomesVersions, bwInv$file_genome)
