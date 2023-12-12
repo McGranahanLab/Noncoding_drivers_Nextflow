@@ -1045,10 +1045,10 @@ message('[', Sys.time(), '] Started reading ', args$variants)
 colsToKeep <- c('Tumor_Sample_Barcode', 'key', 'Chromosome',
                 'Start_Position', 'End_Position', 'Gene.refGene', 
                 'Variant_Classification', 'Variant_Type', 'mut_len', 
-                'struct_type', 'participant_tumor_subtype')
+                'struct_type', 'participant_tumor_subtype', 'key_orig')
 updColNames <- c('participant_id', 'key', 'chr', 'start', 'end', 
                  'gene_name_var', 'var_class', 'var_type', 'mut_len',
-                 'struct_type', 'participant_tumor_subtype')
+                 'struct_type', 'participant_tumor_subtype', 'key_orig')
 allVars <- fread(args$variants, header = T, stringsAsFactors = F, 
                  select = colsToKeep)
 setnames(allVars, colsToKeep, updColNames, skip_absent = T)
