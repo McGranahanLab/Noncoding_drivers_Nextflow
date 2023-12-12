@@ -43,15 +43,6 @@ Sys.sleep(sample(1:15, 1))
 source(paste0(srcDir, '/custom_functions.R'))
 
 # Functions: assign tier ------------------------------------------------------
-#' get_number_of_decimals
-#' @author Maria Litovchenko
-#' @description Returns number of decimal points
-#' @param x number
-#' @return integer
-get_number_of_decimals <- function(x) {
-  nchar(gsub('.*[.]', '', as.character(x)))
-}
-
 #' is_tier
 #' @author Maria Litovchenko
 #' @description Checks if all criteria for tier assigment are satisfied or not
@@ -77,25 +68,19 @@ is_tier <- function(tierDefVect, combAdjPdt, rawPcols, fdrPcols, mergedPcol,
   
   # 1. check that raw p-values of individual methods are < cutoff and that 
   # number of those methods is at least nIndivFDRsoft_sign
-  passRaw <- round(combAdjPdt[, rawPcols, with = F], 
-                   get_number_of_decimals(cutoffs['indivRaw_cutoff']))
-  passRaw <- passRaw <= cutoffs['indivRaw_cutoff']
+  passRaw <- combAdjPdt[, rawPcols, with = F] < cutoffs['indivRaw_cutoff']
   passRaw <- rowSums(passRaw, na.rm = T)
   passRaw <- passRaw >= cutoffs["nIndivRawSoft_sign"]
   
   # 2. check that FDR corrected p-values of individual methods are < cutoff
   # and that number of those methods is at least nIndivFDRsoft_sign
-  passFDR <- round(combAdjPdt[, fdrPcols, with = F],
-                   get_number_of_decimals(cutoffs["indivFDR_cutoff"]))
-  passFDR <- passFDR <= cutoffs["indivFDR_cutoff"]
+  passFDR <- combAdjPdt[, fdrPcols, with = F] < cutoffs["indivFDR_cutoff"]
   passFDR <- rowSums(passFDR, na.rm = T)
   passFDR <- passFDR >= cutoffs["nIndivFDRsoft_sign"]
   
   # 3. check that merged FDR corrected combined p-value is < mergedFDR_cutoff
-  passMerged <- round(unlist(combAdjPdt[, mergedPcol, with = F]),
-                      get_number_of_decimals(cutoffs["mergedFDR_cutoff"]))
-  passMerged <- passMerged <= cutoffs["mergedFDR_cutoff"]
-  
+  passMerged <- unlist(combAdjPdt[, mergedPcol, 
+                                  with = F]) < cutoffs["mergedFDR_cutoff"]
   result <- passRaw & passFDR & passMerged
   
   # restrict to known cancer genes, if required
