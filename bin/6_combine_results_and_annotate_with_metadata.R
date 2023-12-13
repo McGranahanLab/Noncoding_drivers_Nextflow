@@ -467,23 +467,27 @@ parseUID <- function(UIDs, separator = '--') {
 #' stouffer.comb_p  and harmonic.comb_p
 combineRawPvalues <- function(resDTwide) {
   pValMatr <- resDTwide[,(grepl('.raw_p$', colnames(resDTwide))), with = F]
-  
-  # sometimes there are situations then there is just one non-NA value for 
-  # one of the driver calling methods. In such case covariance matrix can't be
-  # calculated and that entry should be removed.
-  if(sum(complete.cases(pValMatr)) == 1) {
-    nNonNa <- apply(pValMatr, 2, function(x) sum(!is.na(x)))
-    toRemove <- which(nNonNa == min(nNonNa))
-    message('[', Sys.time(), '] Removed ', colnames(pValMatr)[toRemove], ' ',
-            'from matrix of raw p values for ', unique(resDTwide$gr_id), 
-            ' in ', unique(resDTwide$tumor_subtype), ' because there was ',
-            'just one non-NA entry for that software.')
-    pValMatr <- pValMatr[, setdiff(1:ncol(pValMatr), toRemove), with = F]
-  }
-  
   if (any(apply(pValMatr, 1, function(x) any(x[!is.na(x)] == 0)))) {
     stop('[', Sys.time(), '] Found 0 in p-value matrix. 0 can not be handled ',
          'by harmonic mean calculations. Please replace 0 with suitable value')
+  }
+  
+  # check, that it is possible to compute covariance matrix for software. It is
+  # usually not possible if one software was run on regions on which the 
+  # other(s) software were not run. If pipeline run normally, such situation
+  # should not occur. However, nextflow may mix up the output files upon
+  # re-launch.
+  pairWiseSoftCombs <- t(combn(colnames(pValMatr), 2))
+  nNotNA <- apply(pairWiseSoftCombs, 1, 
+                  function(x) sum(complete.cases(pValMatr[, x, with = F])))
+  if (any(nNotNA == 0)) {
+    problematicSoft <- sort(table(as.vector(pairWiseSoftCombs[nNotNA == 0])), 
+                            decreasing = T)
+    outlierSoft <- names(problematicSoft)[1]
+    stop('[', Sys.time(), '] ', outlierSoft, ' has no scored regions in ',
+         'common with ', paste0(names(problematicSoft)[-1], collapse = ', '),
+         '. Such situation usually occurs if nextflow mixed up outputs upon ',
+         'resume.')
   }
   
   # brown method function understands only matrices
