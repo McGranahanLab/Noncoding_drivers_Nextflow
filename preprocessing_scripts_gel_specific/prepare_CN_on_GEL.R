@@ -27,7 +27,8 @@ dir.create(outputDir, recursive = T)
 
 # Read ASCAT table ------------------------------------------------------------
 ascat <- as.data.table(readRDS(ascatPath))
-cols_to_get <- c('patient', 'chr', 'startpos', 'endpos', 'nMajor', 'nMinor')
+cols_to_get <- c('patient', 'chr', 'startpos', 'endpos', 'nMajor', 'nMinor', 
+                 'Ploidy')
 ascat <- ascat[, intersect(colnames(ascat), cols_to_get), with = F]
 setnames(ascat, c('patient', 'startpos', 'endpos'),
          c('participant_id', 'start', 'end'))
