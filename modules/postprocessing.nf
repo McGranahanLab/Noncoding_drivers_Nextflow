@@ -76,7 +76,8 @@ process FILTER_TIERED_DRIVERS {
           path(analysis_inventory_path)
 
     output:
-    tuple val(tumor_subtype), path("drivers-${tumor_subtype}--${params.target_genome_version}.csv"), emit: csv
+    tuple val(tumor_subtype), path("drivers-${tumor_subtype}--${params.target_genome_version}.csv"),
+          env(n_drivers), emit: csv
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
@@ -100,5 +101,16 @@ process FILTER_TIERED_DRIVERS {
                               --max_gr_len_q $params.max_gr_len_q \
                               --remove_olfactory $params.remove_olfactory \
                               --output \$OUT_FILE 1>\$MSG_FILE 2>\$ERR_FILE
+
+    # check, that there are indeed drivers detected by looking at column FILTER
+    # and column tier. FILTER should be PASS and tier should not be NA.
+    tier_col_idx=`head -1 \$OUT_FILE | tr '\t' '\n' | cat -n | grep -w "tier" | grep -v '[.]' | cut -f1 | sed 's/ //g'`
+    filter_col_idx=`head -1 \$OUT_FILE | tr '\t' '\n' | cat -n | grep -w "FILTER" | cut -f1 | sed 's/ //g'`
+    n_drivers=`cut -f\$tier_col_idx,\$filter_col_idx \$OUT_FILE | grep PASS | grep -v NA | wc -l`
+    if [ "\$n_drivers" -eq "0" ]; then
+        n_drivers='no'
+    else
+        n_drivers='yes'
+    fi
     """
 }
