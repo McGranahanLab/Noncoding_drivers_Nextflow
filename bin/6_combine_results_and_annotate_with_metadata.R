@@ -436,8 +436,7 @@ harmonic_mean <- function(x) {
 #' @return vector of unique IDs made by pasting tumor_subtype, gr_id, 
 #'         gene_name and gene_id together.
 createUID <- function(geneInfoDT, separator = '--') {
-  result <- apply(geneInfoDT[,.(tumor_subtype, gr_id, gene_name, 
-                                gene_id)], 1, 
+  result <- apply(geneInfoDT[,.(tumor_subtype, gr_id, gene_id, gene_name)], 1, 
                   function(x) gsub(' ', '', paste(x, collapse = separator)))
   result
 }
@@ -452,7 +451,7 @@ parseUID <- function(UIDs, separator = '--') {
   result <- lapply(UIDs, strsplit, split = separator)
   result <- lapply(result, unlist)
   result <- as.data.table(do.call(rbind, result))
-  colnames(result) <- c('tumor_subtype', 'gr_id', 'gene_name', 'gene_id')
+  colnames(result) <- c('tumor_subtype', 'gr_id', 'gene_id', 'gene_name')
   result
 }
 

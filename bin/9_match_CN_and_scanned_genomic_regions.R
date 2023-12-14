@@ -79,29 +79,78 @@ chainHelp <- paste('Path to chain file in case genome version of ASCAT copy',
 parser$add_argument("-l", "--chain", required = F, default = NULL,
                     type = 'character', help = chainHelp)
 
+driversHelp <- paste('Path to file containing de-novo detected cancer drivers')
+parser$add_argument("-d", "--drivers", required = F,  default = NULL,
+                    type = 'character', help = driversHelp)
 
--d, --drivers # drivers are optional
--chr, --chr
--amp, --amp
--gain, --gain
--loss, --loss
-min.gapwidt
-min.width
+chrHelp <- paste('Chromosome to restrict matching of copy number to genomic ',
+                 'regions.')
+parser$add_argument("-chr", "--chr", required = F, default = NULL,
+                    type = 'character', help = chrHelp)
 
-# Test arguments --------------------------------------------------------------
-args <- list(cancer_subtype = 'Panlung',
-             inventory_patients = 'data/inventory/inventory_patients.csv',
-             genomic_regions = 'completed_runs/06_12_2023/inputs/inputGR-Panlung-hg19.bed',
-             target_genome_version = 'hg19', chain = NULL, 
-             drivers = 'completed_runs/06_12_2023/results/tables/drivers/drivers-Panlung--hg19.csv',
-             chr = NULL, amp = log2(4/2), gain = log2(2.5/2), loss = log2(1.5/2),
-             min.gapwidt = '', min.width = '', output = '')
-             
+ampHelp <- paste('Cut off (in log 2 scale) on copy number to determine',
+                 'amplification. Default: log2(4/2) = 1')
+parser$add_argument("-amp", "--amp", required = F, default = 1,
+                    type = 'double', help = ampHelp)
+
+gainHelp <- paste('Cut off (in log 2 scale) on copy number to determine',
+                  'gain. The gain cut off should be < amplification cut off.',
+                  'Default: log2(2.5/2) = 0.3219281.')
+parser$add_argument("-gain", "--gain", required = F, default = 0.3219281,
+                    type = 'double', help = gainHelp)
+
+lossHelp <- paste('Cut off (in log 2 scale) on copy number to determine',
+                  'loss. Default: log2(1.5/2) = -0.4150375')
+parser$add_argument("-loss", "--loss", required = F, default = -0.4150375,
+                    type = 'double', help = lossHelp)
+
+minGapWhelp <- paste('Minimum length of a gap between lifted over regions',
+                     'that will prevent them from being merged together.',
+                     'Default = Inf (no reduce will be performed)')
+parser$add_argument("-mgw", "--min.gapwidth", required = F, default = 'Inf',
+                    type = 'character', help = minGapWhelp)
+
+minWhelp <- paste('Minimum width of lifted over genomic regions.',
+                  'Default = 0 (no regions will be filtered out).')
+parser$add_argument("-mw", "--min.width", required = F, default = '0',
+                    type = 'character', help = minWhelp)
+
+outputHelp <- paste('Path to the output file')
+parser$add_argument("-o", "--output", required = T, 
+                    type = 'character', help = outputHelp)
+
+args <- parser$parse_args()
+args$min.gapwidt <- as.numeric(args$min.gapwidt)
+args$min.width <- as.numeric(args$min.width)
+# check_input_arguments_postproc(args, outputType = 'file')
+if (args$amp <= args$gain) {
+  stop('[', Sys.time(), '] Cut off on amplification should be > cut off on ',
+       'gain.')
+}
+
+timeStart <- Sys.time()
+message('[', Sys.time(), '] Start time of run')
 selected_chrGR <- NULL
 if (!is.null(args$chr)) {
   selected_chrGR <- makeGRangesFromDataFrame(data.frame(chr = args$chr, 
                                                         start = 1, end = 2))
 }
+printArgs(args)
+
+# Test arguments --------------------------------------------------------------
+# args <- list(cancer_subtype = 'Panlung',
+#              inventory_patients = 'data/inventory/inventory_patients.csv',
+#              genomic_regions = 'completed_runs/2023-12-14/inputs/inputGR-Panlung-hg19.bed',
+#              target_genome_version = 'hg19', chain = NULL, 
+#              drivers = 'completed_runs/2023-12-14/results/tables/drivers/drivers-Panlung--hg19.csv',
+#              chr = NULL, amp = log2(4/2), gain = log2(2.5/2), 
+#              loss = log2(1.5/2), min.gapwidt = '', min.width = '', 
+#              output = '')
+# selected_chrGR <- NULL
+# if (!is.null(args$chr)) {
+#   selected_chrGR <- makeGRangesFromDataFrame(data.frame(chr = args$chr, 
+#                                                         start = 1, end = 2))
+# }
 
 # Read patient inventory table ------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients)
@@ -111,6 +160,24 @@ message('[', Sys.time(), '] Read --inventory_patients: ',
 if (!'cn_segments_path' %in% colnames(patientsInv)) {
   stop('[', Sys.time(), '] ', args$inventory_patients, ' does not have ',
        'column cn_segments_path.')
+}
+
+# Read driver genes -----------------------------------------------------------
+if (!is.null(args$drivers)) {
+  message('[', Sys.time(), '] Started reading ', args$drivers)
+  drivers <- fread(args$drivers, header = T, stringsAsFactors = F, 
+                   select = c('gr_id', 'gene_id', 'gene_name', 'FILTER', 
+                              'tier', 'is_known_cancer', 
+                              'known_in_tumor_subtype', 
+                              'known_cancer_biotype'))
+  drivers <- unique(drivers)
+  drivers <- drivers[FILTER == 'PASS' & !is.na(tier)]
+  message('[', Sys.time(), '] Finished reading ', args$drivers)
+  
+  if (nrow(drivers) == 0) {
+    stop('[', Sys.time(), '] no significant (FILTER is PASS and tier is ',
+            'not NA) driver genes is found in ', args$drivers, ' table.')
+  }
 }
 
 # Read segment wise copy number estimates -------------------------------------
@@ -149,19 +216,6 @@ if (!is.null(selected_chrGR)) {
 
 gc()
 message('[', Sys.time(), '] Finished reading copy number segments')
-
-# Read driver genes -----------------------------------------------------------
-if (!is.null(args$drivers)) {
-  message('[', Sys.time(), '] Started reading ', args$drivers)
-  drivers <- fread(args$drivers, header = T, stringsAsFactors = F, 
-                   select = c('gr_id', 'gene_id', 'gene_name', 'FILTER', 
-                              'tier', 'is_known_cancer', 
-                              'known_in_tumor_subtype', 
-                              'known_cancer_biotype'))
-  drivers <- unique(drivers)
-  drivers <- drivers[FILTER == 'PASS' & !is.na(tier)]
-  message('[', Sys.time(), '] Finished reading ', args$drivers)
-}
 
 # Read all scanned for cancer driver genes genomic regions --------------------
 message('[', Sys.time(), '] Started reading ', args$genomic_regions)
@@ -258,3 +312,10 @@ GRs_CN[, is_max_dev_neutr := NULL]
 # Output to table -------------------------------------------------------------
 write.table(GRs_CN, args$output, append = F, quote = F, sep = '\t', 
             row.names = F, col.names = T)
+message('[', Sys.time(), '] Wrote copy number resolved genomic ranges to ',
+        args$output)
+
+message("End time of run: ", Sys.time())
+message('Total execution time: ', 
+        difftime(Sys.time(), timeStart, units = 'mins'), ' mins.')
+message('Finished!')
