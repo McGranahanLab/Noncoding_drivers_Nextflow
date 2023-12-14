@@ -244,6 +244,274 @@ readBED12 <- function(bedPath) {
   result
 }
 
+# Reading input files with mutations in ANNOVAR format ------------------------
+#' getVarStructTypeFromAnnovar
+#' @description Gets structural type of a variant, i.e. SNP, MNP, INS, DEL.
+#' @author Maria Litovchenko
+#' @param dt data table with variants, columns ref and var are needed
+#' @return data table with added columns struct_type and mut_len which give
+#' info about variants structural type (INS, DEL, SNP, MNP) and length of
+#' mutation
+getVarStructTypeFromAnnovar <- function(dt) {
+  result <- copy(dt)
+  result[, struct_type := 'NA']
+  
+  result[ref %in% c('A', 'T', 'G', 'C') & 
+           var %in% c('A', 'T', 'G', 'C')]$struct_type <- 'SNP'
+  result[ref == '-']$struct_type <- 'INS'
+  result[!ref %in% c('A', 'T', 'G', 'C', '-')]$struct_type <- 'MNP'
+  result[grepl('^-.*', var)]$struct_type <- 'DEL'
+  
+  if(nrow(result[struct_type == 'NA']) != 0) {
+    unknown <- result[struct_type == 'NA']
+    stop('[', Sys.time(), '] Unknown variant type:\n',
+         paste0(paste(colnames(unknown), collapse = '\t'), '\n',
+                paste(unlist(unknown), collapse = '\t')))
+  }
+  
+  result[, mut_len := 1]
+  result[struct_type=='MNP']$mut_len <- apply(result[struct_type == 'MNP'], 1,
+                                              function(x) max(nchar(x['ref']),
+                                                              nchar(x['var'])))
+  result[struct_type=='INS']$mut_len <- nchar(result[struct_type=='INS']$var)
+  result[struct_type=='DEL']$mut_len <- nchar(result[struct_type=='DEL']$var)-1
+  
+  result
+}
+
+#' transformAllelesFromAnnovarToNorm
+#' @description Translates mutation table from AnnoVar format written reference
+#' and alternatives alleles to usual ones.
+#' @author Maria Litovchenko
+#' @param varDT data table with mutations. Have to have columns start, end, 
+#' ref, var, struct_type
+#' @return data table with updated columns start, end, ref and var. The row 
+#' order will be the same.
+transformAllelesFromAnnovarToNorm <- function(varDT) {
+  result <- copy(varDT)
+  result[, idx := 1:nrow(varDT)] # to keep the same order
+  if (!'end' %in% colnames(result)) {
+    result[, end := start]
+  }
+  
+  # ref allele should not have values which would follow pattern ^-.*, unless 
+  # it is equal to -
+  unexpectRef <- grepl('^-.*', varDT$ref) & varDT$ref != '-'
+  if (sum(unexpectRef) != 0) {
+    unexpectRef <- which(grepl('^-.*', varDT$ref) & varDT$ref != '-')
+    message('[', Sys.time(), '] Found unexpected reference allele. Offending ',
+            'line: ', paste(varDT[unexpectRef[0]], collapse = '\t'))
+  }
+  
+  # process SNPs. Final position should be start + 1
+  result[struct_type == 'SNP']$end <- result[struct_type == 'SNP']$start + 1
+  # MNPs: adjust end so it corresponds to the end of mnp
+  result[struct_type == 'MNP']$end <- result[struct_type == 'MNP']$start + 
+    nchar(result[struct_type == 'MNP']$ref)
+  # process insertions: in Annovar their position is the actual one - 1. 
+  # Checked manually.
+  result[struct_type == 'INS']$start <- result[struct_type == 'INS']$start + 1
+  # from digdriver: final position of the interval should be the start 
+  # position + 1
+  result[struct_type == 'INS']$end <- result[struct_type == 'INS']$start + 1
+  # deletions: transform alleles into their usual shape with - as alternative 
+  # allele and stop as start + number of deleted bases + 1
+  dels <- result[struct_type == 'DEL']
+  if (nrow(dels) != 0) {
+    message('[', Sys.time(), '] Found deletions written in annovar format, ',
+            'i.e. ', dels$var[1], '. Will reformat it to usual shape with - ',
+            'as alternative.')
+    dels[, ref := gsub('^-', '', var)]
+    dels[, var := '-']
+    dels[, start := start + 1]
+    # despite that in DIG it's written to add 1, in their mutation files 1 is
+    # not added.
+    dels[, end := start + nchar(ref)]
+    result <- rbind(result[struct_type != 'DEL'], dels)
+  }
+  
+  result <- result[order(idx)]
+  if (!identical(result$idx, 1:nrow(result))) {
+    stop('[', Sys.time(), '] Extra or missing entries in variant tables')
+  }
+  result[, idx := NULL]
+  result
+}
+
+#' readAnnovarMutFile
+#' @description Reads annovar mutation table into data table
+#' @param filePath path to annovar file
+#' @param cores number of cores to used
+#' @return data table with columns chr, start, stop, ref, var, Gene.refGene,
+#' Func.refGene, ExonicFunc.refGene, GeneDetail.refGene, AAChange.refGene, 
+#' Optional columns: Use.For.Plots, Use.For.Plots.Indel, mut.multi
+readAnnovarMutFile <- function(filePath, cores = 1) {
+  colsToSelect <- c('chr', 'start', 'stop', 'ref', 'var', 
+                    'Gene.refGene', 'Func.refGene', 'ExonicFunc.refGene', 
+                    'GeneDetail.refGene', 'AAChange.refGene', 'Use.For.Plots',
+                    'Use.For.Plots.Indel', 'mut.multi')
+  result <- suppressWarnings(fread(filePath, header = T, select = colsToSelect, 
+                                   stringsAsFactors = F, nThread = cores))
+  setnames(result, 'stop', 'end', skip_absent = T)
+  
+  if (any(c(23, '23', 'chr23') %in% result$chr)) {
+    message('[', Sys.time(), '] Found that chr X is encoded as 23. Changed it',
+            ' to X.')
+    result[, chr := gsub('23', 'X', chr)]
+    result[, chr := gsub('24', 'Y', chr)]
+    result[, chr := gsub('25', 'M', chr)]
+  }
+  
+  # assign structural variant type
+  result <- getVarStructTypeFromAnnovar(result)
+  result <- transformAllelesFromAnnovarToNorm(result)
+  suppressWarnings(result[, stop := NULL])
+  
+  result
+}
+
+# Reading input files with mutations in MAF format ----------------------------
+#' getVarStructType
+#' @description Gets structural type of a variant, i.e. SNP, MNP, INS, DEL.
+#' @author Maria Litovchenko
+#' @param dt data table with variants, columns ref and var are needed
+#' @return data table with added columns struct_type and mut_len which give
+#' info about variants structural type (INS, DEL, SNP, MNP) and length of
+#' mutation
+#' @note only data tables NOT IN ANNOVAR FORMAT are processed
+getVarStructType <- function(dt) {
+  result <- copy(dt)
+  result[, struct_type := 'NA']
+  
+  result[ref %in% c('A', 'T', 'G', 'C') & 
+           var %in% c('A', 'T', 'G', 'C')]$struct_type <- 'SNP'
+  result[ref == '-']$struct_type <- 'INS'
+  result[var == '-']$struct_type <- 'DEL'
+  result[(nchar(ref) > 1 & nchar(var) > 1) | 
+           (nchar(ref) == 1 & ref != '-' & nchar(var) > 1) |
+           (nchar(var) == 1 & var != '-' & nchar(ref) > 1)]$struct_type <- 'MNP'
+  
+  if(nrow(result[struct_type == 'NA']) != 0) {
+    unknown <- result[struct_type == 'NA']
+    stop('[', Sys.time(), '] Unknown variant type:\n',
+         paste0(paste(colnames(unknown), collapse = '\t'), '\n',
+                paste(unlist(unknown), collapse = '\t')))
+  }
+  
+  result[, mut_len := 1]
+  result[struct_type=='MNP']$mut_len <- apply(result[struct_type == 'MNP'], 1,
+                                              function(x) max(nchar(x['ref']),
+                                                              nchar(x['var'])))
+  result[struct_type=='INS']$mut_len <- nchar(result[struct_type=='INS']$var)
+  result[struct_type=='DEL']$mut_len <- nchar(result[struct_type=='DEL']$var)
+  
+  result
+}
+
+#' readMafMutFile
+#' @description Reads in file with annotated variants in MAF format to data 
+#' table
+#' @author Maria Litovchenko
+#' @param filePath path to file with somatic variants, MAF format
+#' @param cores number of cores to use (used in fread only)
+#' @return data.table with columns participant_id (maf only), chr, start, end, 
+#' ref, var, Gene.refGene, ExonicFunc.refGene, AAChange.refGene, struct_type,
+#' mut_len. Optional columns: t_depth, t_ref_count, t_alt_count, n_depth,
+#' n_ref_count, n_alt_count, t_maxVAF.
+readMafMutFile <- function(filePath, cores = 1) {
+  colsToSelect <- c('Tumor_Sample_Barcode', 'Chromosome', 'Start_Position',
+                    'End_Position', 'Reference_Allele', 'Tumor_Seq_Allele2', 
+                    'Gene', 'Variant_Classification', 'Amino_acids',
+                    't_depth', 't_ref_count', 't_alt_count', 'n_depth', 
+                    'n_ref_count', 'n_alt_count', 't_maxVAF', 'mut.multi')
+  result <- suppressWarnings(fread(filePath, header = T, select = colsToSelect, 
+                                   stringsAsFactors = F, nThread = cores))
+  setnames(result, c('Tumor_Sample_Barcode', 'Chromosome', 'Start_Position', 
+                     'End_Position', 'Reference_Allele', 'Tumor_Seq_Allele2',
+                     'Gene', 'Variant_Classification', 'Amino_acids'),
+           c('participant_id', 'chr', 'start', 'end', 'ref', 'var',
+             'Gene.refGene', 'ExonicFunc.refGene', 'AAChange.refGene'), 
+           skip_absent = T)
+  
+  # bring ExonicFunc.refGene to annovar format. If clause is here to cover a
+  # case then file is actually just the multiplicity file.
+  if ('ExonicFunc.refGene' %in% colnames(result)) {
+    codingExonicRg <- c("Frame_Shift_Del", "Frame_Shift_Ins", "In_Frame_Del", 
+                        "In_Frame_Ins", "Missense_Mutation", 
+                        "Nonsense_Mutation", "Silent", 
+                        "Translation_Start_Site", "Nonstop_Mutation", 
+                        "De_novo_Start_InFrame", "De_novo_Start_OutOfFrame",
+                        "Unknown")
+    result[, Func.refGene := '']
+    result[ExonicFunc.refGene %in% codingExonicRg]$Func.refGene <- 'exonic'
+    result[ExonicFunc.refGene == "3'UTR"]$Func.refGene <- 'UTR3'
+    result[ExonicFunc.refGene == "5'UTR"]$Func.refGene <- 'UTR5'
+    result[ExonicFunc.refGene == "3'Flank"]$Func.refGene <- 'downstream'
+    result[ExonicFunc.refGene == "5'Flank"]$Func.refGene <- 'upstream'
+    result[ExonicFunc.refGene == "IGR"]$Func.refGene <- 'intergenic'
+    result[ExonicFunc.refGene == "Intron"]$Func.refGene <- 'intronic'
+    result[ExonicFunc.refGene == "RNA"]$Func.refGene <- 'ncRNA_exonic'
+    result[ExonicFunc.refGene == "Splice_Site"]$Func.refGene <- 'splicing'
+    result[, GeneDetail.refGene := NA]
+  }
+  
+  if (any(c(23, '23', 'chr23') %in% result$chr)) {
+    message('[', Sys.time(), '] Found that chr X is encoded as 23. Changed it',
+            ' to X.')
+    result[, chr := gsub('23', 'X', chr)]
+    result[, chr := gsub('24', 'Y', chr)]
+    result[, chr := gsub('25', 'M', chr)]
+  }
+  
+  # assign structural variant type
+  result <- getVarStructType(result)
+  
+  result
+}
+
+# Reading original input files with mutations ---------------------------------
+#' getFileType
+#' @description Retrieves file type (annovar or maf) from the file's header
+#' @author Maria Litovchenko
+#' @param inPath path to file with somatic variants, AnnoVar format
+#' @return string with file type, one of annovar or maf
+getFileType <- function(inPath) {
+  fileHeader <- colnames(fread(inPath, nrows = 1))
+  result <- 'annovar'
+  if (any(grepl('Tumor_Seq_Allele', fileHeader))) {
+    result <- 'maf'
+  }
+  result
+}
+
+#' readSomaticVars
+#' @description Reads in file with variants annotated by AnnoVar or MAF 
+#' formatted file  to data table
+#' @author Maria Litovchenko
+#' @param filePath path to file with somatic variants, AnnoVar or MAF format
+#' @param cores number of cores to use (used in fread only)
+#' @return data.table with columns participant_id (maf only), chr, start, end, 
+#' ref, var, Gene.refGene, ExonicFunc.refGene, AAChange.refGene, struct_type,
+#' mut_len. Optional columns: t_depth, t_ref_count, t_alt_count, n_depth,
+#' n_ref_count, n_alt_count, t_maxVAF, mut.mult
+readSomaticVars <- function(filePath, cores = 1) {
+  fileType <- getFileType(filePath)
+  
+  if (fileType == 'annovar') {
+    result <- readAnnovarMutFile(filePath, cores)
+  } else {
+    result <- readMafMutFile(filePath, cores)
+  }
+  
+  # add key to every mutation
+  result[, key := apply(result[,.(chr, start, ref, var)], 1,
+                        paste, collapse = ':')]
+  result[, key := gsub(' ', '', key)]
+  
+  result[, fileType := fileType]
+  result
+}
+
 # Liftover --------------------------------------------------------------------
 #' liftOverGenomicRegion
 #' @description Lifts over coordinates from original genome to target genome
