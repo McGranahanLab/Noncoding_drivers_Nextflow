@@ -1,10 +1,7 @@
 #!/usr/bin/env Rscript
-# FILE: filter_tiered_drivers.R -----------------------------------------------
+# FILE: match_mutmulti_and_mutations.R ----------------------------------------
 #
-# DESCRIPTION: Applies filters on minimal number of successfully run software,
-# minimal number of mutations and/or patients, maximum local mutation rate /
-# synonymous mutation rate, maximum quantile of genomic region length to tiered
-# drivers.
+# DESCRIPTION:
 #
 # USAGE: 
 # OPTIONS:
@@ -77,6 +74,13 @@ driversHelp <- paste('Path to file containing de-novo detected cancer drivers')
 parser$add_argument("-d", "--drivers", required = F, 
                     type = 'character', help = driversHelp)
 
+synClassHelp <- paste('Variant_Classification-s from MAF format which are',
+                      'acceptable as markers of synonymous variants. If given',
+                      'variants of those classes will be removed from',
+                      'consideration. Suggested values: Silent')
+parser$add_argument("-sc", "--synAcceptedClass", required = F, nargs = '+',
+                    default = NULL, type = 'character', help = synClassHelp)
+
 outputHelp <- paste('Path to the output file')
 parser$add_argument("-o", "--output", required = T, 
                     type = 'character', help = outputHelp)
@@ -89,11 +93,11 @@ message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
 # Test inputs -----------------------------------------------------------------
-args <- list(cancer_subtype = 'Adenocarcinoma',
-             inventory_patients = 'data/inventory/inventory_patients.csv',
-             muts_to_gr = 'completed_runs/2023-12-13/results/mut_rates/mutMapToGR-Adenocarcinoma--hg19.csv',
-             drivers = 'completed_runs/06_12_2023/results/tables/drivers/drivers-Panlung--hg19.csv',
-             output = '')
+# args <- list(cancer_subtype = 'Adenocarcinoma',
+#              inventory_patients = 'data/inventory/inventory_patients.csv',
+#              muts_to_gr = 'completed_runs/2023-12-13/results/mut_rates/mutMapToGR-Adenocarcinoma--hg19.csv',
+#              drivers = 'completed_runs/06_12_2023/results/tables/drivers/drivers-Panlung--hg19.csv',
+#              output = '')
 
 # Read patient inventory table ------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients)
@@ -146,13 +150,14 @@ if (!is.null(args$drivers)) {
 }
 
 # remove silent mutations, if requested
-if (args$exclude_silent) {
+if (!is.null(args$synAcceptedClass)) {
   nbefore <- nrow(varsToGRmap)
-  varsToGRmap <- varsToGRmap[!var_class %in% args$silent_class]
+  varsToGRmap <- varsToGRmap[!var_class %in% args$synAcceptedClass]
   nafter <- nrow(varsToGRmap)
   message('[', Sys.time(), '] Removed ', nbefore - nafter, ' mutations out ',
           'of ', nbefore, '(', 100*round((nbefore - nafter)/nbefore, 4), '%) ',
-          'because they fell into silent class')
+          'because they fell into ', 
+          paste(args$synAcceptedClass, collapse = ', '), ' class(es).')
 }
 
 patientsInv <- patientsInv[participant_id %in% 
@@ -207,6 +212,7 @@ message('[', Sys.time(), '] Finished joining mutation map table and mutation ',
         'multiplicity table')
 
 # Output to file --------------------------------------------------------------
+varsToGRmapMutMulti[, key_for_merge := NULL]
 write.table(varsToGRmapMutMulti, file = args$output, append = F, quote = F,
             sep = '\t', row.names = F, col.names = T)
 message('[', Sys.time(), '] Wrote multiplicity resolved mutation to ',
