@@ -107,12 +107,12 @@ parser$add_argument("-loss", "--loss", required = F, default = -0.4150375,
 minGapWhelp <- paste('Minimum length of a gap between lifted over regions',
                      'that will prevent them from being merged together.',
                      'Default = Inf (no reduce will be performed)')
-parser$add_argument("-mgw", "--min.gapwidth", required = F, default = 'Inf',
+parser$add_argument("-mgw", "--min_gapwidth", required = F, default = 'Inf',
                     type = 'character', help = minGapWhelp)
 
 minWhelp <- paste('Minimum width of lifted over genomic regions.',
                   'Default = 0 (no regions will be filtered out).')
-parser$add_argument("-mw", "--min.width", required = F, default = '0',
+parser$add_argument("-mw", "--min_width", required = F, default = '0',
                     type = 'character', help = minWhelp)
 
 outputHelp <- paste('Path to the output file')
@@ -120,8 +120,8 @@ parser$add_argument("-o", "--output", required = T,
                     type = 'character', help = outputHelp)
 
 args <- parser$parse_args()
-args$min.gapwidt <- as.numeric(args$min.gapwidt)
-args$min.width <- as.numeric(args$min.width)
+args$min_gapwidt <- as.numeric(args$min_gapwidt)
+args$min_width <- as.numeric(args$min_width)
 # check_input_arguments_postproc(args, outputType = 'file')
 if (args$amp <= args$gain) {
   stop('[', Sys.time(), '] Cut off on amplification should be > cut off on ',
@@ -144,7 +144,7 @@ printArgs(args)
 #              target_genome_version = 'hg19', chain = NULL, 
 #              drivers = 'completed_runs/2023-12-14/results/tables/drivers/drivers-Panlung--hg19.csv',
 #              chr = NULL, amp = log2(4/2), gain = log2(2.5/2), 
-#              loss = log2(1.5/2), min.gapwidt = '', min.width = '', 
+#              loss = log2(1.5/2), min_gapwidt = '', min_width = '', 
 #              output = '')
 # selected_chrGR <- NULL
 # if (!is.null(args$chr)) {
@@ -200,8 +200,8 @@ if (unique(patientsInv$cn_segments_genome) != args$target_genome_version) {
          '), but no chain file is provided.')
   }
   chain_to_use <- import.chain(args$chain)
-  cnSegs <- liftOverGenomicRegion(cnSegs, chain_to_use, args$min.gapwidt, 
-                                  args$min.width)
+  cnSegs <- liftOverGenomicRegion(cnSegs, chain_to_use, args$min_gapwidt, 
+                                  args$min_width)
   rm(chain_to_use)
   gc()
 }

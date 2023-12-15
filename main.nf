@@ -29,6 +29,7 @@ include { RUN_ONCODRIVEFML } from './subworkflows/call_driver_genes.nf'
 include { COMBINE_P_VALS_AND_ANNOTATE } from './modules/postprocessing.nf'
 include { ASSIGN_TIER } from './modules/postprocessing.nf'
 include { FILTER_TIERED_DRIVERS } from './modules/postprocessing.nf'
+include { ANNOTATE_GENOMICRANGES_WITH_CN } from './modules/drivers_characterization.nf'
 
 /* ----------------------------------------------------------------------------
 * Custom functions
@@ -229,10 +230,15 @@ workflow POSTPROCESSING {
                                      }
                                  .unique()
                                  .groupTuple(by: [0, 1, 2, 3], remainder: true)
-    // path to tier definition table
+    // load tier definition table
     tier_inventory = Channel.fromPath(params.tier_inventory, 
                                       checkIfExists: true)
                             .ifEmpty { exit 1, "[ERROR]: tier inventory file not found" }
+    // load patients inventory
+    patients_inv   = Channel.fromPath(params.patients_inventory,
+                                      checkIfExists: true)
+                            .ifEmpty { exit 1, "[ERROR]: patients inventory file not found" }
+    chain          = channel_from_params_path(params.chain)
 
     /*
         Step 3: load data used for driver annotation (i.e. known cancer gene
@@ -259,7 +265,25 @@ workflow POSTPROCESSING {
                                                 .combine(Channel.of(params.combine_p_method))).csv
  
     drivers        = FILTER_TIERED_DRIVERS (tiered_pvals.combine(Channel.fromPath(params.analysis_inventory,
-                                                                                  checkIfExists: true)))
+                                                                                  checkIfExists: true))).csv
+    // only tumor subtypes which do have drivers detected will be processed 
+    // further
+    drivers        = drivers.filter { it[2]  == 'yes' }
+                            .map { it -> return(tuple(it[0], it[1])) }
+
+    /* 
+        Step 4a: annotate drivers with copy number (if provided)
+    */
+    // INSERT HERE A BREAK TO STOP PROCESS FROM HAPPENING IN CASE NO CN WAS PROVIDED
+    // DO IT VIA MOVING CN AND MUTATION MULTIPLICITY FILES INTO SEPARATE INVENTORY
+    // THIS WILL ALSO MEAN THAT THE 1st PIPELINE WON'T BE TRIGGERED UPON CHANGE
+    // IN INVENTORY
+    driver_gr_annotated_with_cn = ANNOTATE_GENOMICRANGES_WITH_CN(analysis_inv.map { it -> return(tuple(it[0], it[3])) }
+                                                                             .unique()
+                                                                             .combine(drivers, by: [0])
+                                                                             .combine(patients_inv)
+                                                                             .combine(chain))
+    
 }
 
 
