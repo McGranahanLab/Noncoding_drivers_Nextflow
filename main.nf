@@ -30,6 +30,7 @@ include { COMBINE_P_VALS_AND_ANNOTATE } from './modules/postprocessing.nf'
 include { ASSIGN_TIER } from './modules/postprocessing.nf'
 include { FILTER_TIERED_DRIVERS } from './modules/postprocessing.nf'
 include { ANNOTATE_GENOMICRANGES_WITH_CN } from './modules/drivers_characterization.nf'
+include { ANNOTATE_MUTATIONS_WITH_MULTIPLICITY } from './modules/drivers_characterization.nf'
 
 /* ----------------------------------------------------------------------------
 * Custom functions
@@ -49,6 +50,9 @@ def channel_from_params_path (staticPath) {
 }
 
 def create_result_file_tuple (inventoryRow, outputDir, genomeVersion) {
+    mutMapPath = file(outputDir + '/results/mut_rates/mutMapToGR-' + 
+                      inventoryRow.tumor_subtype + '--' + genomeVersion + 
+                      '.csv', checkIfExists: false)
     mutRatePath = file(outputDir + '/results/mut_rates/meanMutRatePerGR-' + 
                        inventoryRow.tumor_subtype + '--' + genomeVersion + 
                        '.csv', checkIfExists: false)
@@ -60,7 +64,7 @@ def create_result_file_tuple (inventoryRow, outputDir, genomeVersion) {
                        inventoryRow.tumor_subtype + '-' + inventoryRow.gr_id +
                        '-' + genomeVersion + '.csv', checkIfExists: false)
     return tuple(inventoryRow.tumor_subtype, inventoryRow.gr_id, 
-                 mutRatePath, scannedGRpath, inventoryRow.software, 
+                 mutMapPath, mutRatePath, scannedGRpath, inventoryRow.software,
                  resultsPath)
 }
 
@@ -229,7 +233,7 @@ workflow POSTPROCESSING {
                                                                            params.target_genome_version)
                                      }
                                  .unique()
-                                 .groupTuple(by: [0, 1, 2, 3], remainder: true)
+                                 .groupTuple(by: [0, 1, 2, 3, 4], remainder: true)
     // load tier definition table
     tier_inventory = Channel.fromPath(params.tier_inventory, 
                                       checkIfExists: true)
@@ -278,12 +282,15 @@ workflow POSTPROCESSING {
     // DO IT VIA MOVING CN AND MUTATION MULTIPLICITY FILES INTO SEPARATE INVENTORY
     // THIS WILL ALSO MEAN THAT THE 1st PIPELINE WON'T BE TRIGGERED UPON CHANGE
     // IN INVENTORY
-    driver_gr_annotated_with_cn = ANNOTATE_GENOMICRANGES_WITH_CN(analysis_inv.map { it -> return(tuple(it[0], it[3])) }
+    driver_gr_annotated_with_cn = ANNOTATE_GENOMICRANGES_WITH_CN(analysis_inv.map { it -> return(tuple(it[0], it[4])) }
                                                                              .unique()
                                                                              .combine(drivers, by: [0])
                                                                              .combine(patients_inv)
                                                                              .combine(chain))
-    
+    mutsinDrives_annotated_with_mults = ANNOTATE_MUTATIONS_WITH_MULTIPLICITY(analysis_inv.map { it -> return(tuple(it[0], it[2]))}
+                                                                                         .unique()
+                                                                                         .combine(drivers, by: [0])
+                                                                                         .combine(patients_inv))
 }
 
 

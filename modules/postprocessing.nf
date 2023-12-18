@@ -2,8 +2,8 @@ process COMBINE_P_VALS_AND_ANNOTATE {
     tag "$tumor_subtype-$gr_id"
 
 	input:
-    tuple val(tumor_subtype), val(gr_id), path(mut_rate), path(scanned_gr),
-          val(softwares), path(result_files), val(rawP_cap),
+    tuple val(tumor_subtype), val(gr_id), path(mut_map), path(mut_rate), 
+          path(scanned_gr), val(softwares), path(result_files), val(rawP_cap),
           path(gene_name_synonyms), path(known_cancer_genes),
           path(olfactory_genes), 
           path(inventory_gtex), path(expression_gtex),
