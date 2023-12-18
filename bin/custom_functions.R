@@ -679,3 +679,14 @@ checkLiftOverByTr <- function(origGR, loGR) {
   
   result
 }
+
+# Misc ------------------------------------------------------------------------
+#' stop_quietly
+#' @description Stops script without error
+#' @author Maria Litovchenko
+#' @return void
+stop_quietly <- function() {
+  opt <- options(show.error.messages = FALSE)
+  on.exit(options(opt))
+  quit(save = 'no', status = 0)
+}
