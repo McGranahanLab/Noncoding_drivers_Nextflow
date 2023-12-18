@@ -95,8 +95,8 @@ printArgs(args)
 # Test inputs -----------------------------------------------------------------
 # args <- list(cancer_subtype = 'Adenocarcinoma',
 #              inventory_patients = 'data/inventory/inventory_patients.csv',
-#              muts_to_gr = 'completed_runs/2023-12-13/results/mut_rates/mutMapToGR-Adenocarcinoma--hg19.csv',
-#              drivers = 'completed_runs/06_12_2023/results/tables/drivers/drivers-Panlung--hg19.csv',
+#              muts_to_gr = 'completed_runs/2023-12-14/results/mut_rates/mutMapToGR-Adenocarcinoma--hg19.csv',
+#              drivers = 'completed_runs/2023-12-14/results/tables/drivers/drivers-Panlung--hg19.csv',
 #              output = '')
 
 # Read patient inventory table ------------------------------------------------
