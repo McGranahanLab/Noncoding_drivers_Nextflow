@@ -60,3 +60,34 @@ process ANNOTATE_MUTATIONS_WITH_MULTIPLICITY {
         --output \$OUT_FILE 1>\$MSG_FILE 2>\$ERR_FILE
     """
 }
+
+process BIOTYPE_DRIVERS {
+    tag "$tumor_subtype"
+
+    input:
+    tuple val(tumor_subtype), path(subtype_drivers), path(muts_mults), 
+          path(cn_in_drivers)
+
+    output:
+    tuple val(tumor_subtype), path("driversBiotyped-${tumor_subtype}--${params.target_genome_version}.csv"), emit: csv
+    tuple path('*.out'), path('*.err'), emit: logs
+
+    script:
+    """
+    RUN_CODE=$tumor_subtype'--'$params.target_genome_version
+    MSG_FILE="biotyped-"\$RUN_CODE'.out'
+    ERR_FILE="biotyped-"\$RUN_CODE'.err'
+    OUT_FILE="driversBiotyped-"\$RUN_CODE'.csv'
+
+    11_biotype_drivers.R --cancer_subtype $tumor_subtype \
+        --cn $cn_in_drivers --mutmult $muts_mults \
+        --drivers $subtype_drivers \
+        --min_n_patient_mut $params.min_biotype_muts_patients \
+        --min_n_patient_cna $params.min_biotype_cna_patients \
+        --weak_tsg $params.weak_tsg \
+        --tsg $params.tsg \
+        --weak_og $params.weak_og \
+        --og $params.og \
+        --output \$OUT_FILE 1>\$MSG_FILE 2>\$ERR_FILE
+    """
+}

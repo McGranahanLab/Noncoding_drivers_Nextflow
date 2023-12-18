@@ -31,6 +31,7 @@ include { ASSIGN_TIER } from './modules/postprocessing.nf'
 include { FILTER_TIERED_DRIVERS } from './modules/postprocessing.nf'
 include { ANNOTATE_GENOMICRANGES_WITH_CN } from './modules/drivers_characterization.nf'
 include { ANNOTATE_MUTATIONS_WITH_MULTIPLICITY } from './modules/drivers_characterization.nf'
+include { BIOTYPE_DRIVERS } from './modules/drivers_characterization.nf'
 
 /* ----------------------------------------------------------------------------
 * Custom functions
@@ -286,11 +287,14 @@ workflow POSTPROCESSING {
                                                                              .unique()
                                                                              .combine(drivers, by: [0])
                                                                              .combine(patients_inv)
-                                                                             .combine(chain))
+                                                                             .combine(chain)).csv
     mutsinDrives_annotated_with_mults = ANNOTATE_MUTATIONS_WITH_MULTIPLICITY(analysis_inv.map { it -> return(tuple(it[0], it[2]))}
                                                                                          .unique()
                                                                                          .combine(drivers, by: [0])
-                                                                                         .combine(patients_inv))
+                                                                                         .combine(patients_inv)).csv
+    drivers_biotype = BIOTYPE_DRIVERS(drivers
+                                      .combine(mutsinDrives_annotated_with_mults, by: [0])
+                                      .combine(driver_gr_annotated_with_cn, by: [0]))
 }
 
 
