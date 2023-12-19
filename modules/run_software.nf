@@ -262,3 +262,33 @@ process ONCODRIVEFML {
     mv "inputMutations-"$tumor_subtype"-oncodrivefml-"$params.target_genome_version"-oncodrivefml.tsv" \$OUT_FILE
     """
 }
+
+
+process RUN_DISCOVER {
+    tag "$tumor_subtype"
+
+    input:
+    tuple val(tumor_subtype), path(muts_to_gr), path(subtype_drivers),
+          path(analysis_inventory_path), val(software)
+
+    output:
+    tuple val(tumor_subtype), path("discoverResults-${tumor_subtype}--${params.target_genome_version}.csv"), emit: csv
+    tuple path('*.out'), path('*.err'), emit: logs
+
+    script:
+    """
+    RUN_CODE=$tumor_subtype'--'$params.target_genome_version
+    MSG_FILE="discover-"\$RUN_CODE'.out'
+    ERR_FILE="discover-"\$RUN_CODE'.err'
+    OUT_FILE="discoverResults-"\$RUN_CODE'.csv'
+
+    12_cooccurrence_and_exclusivity.R \
+            --cancer_subtype $tumor_subtype \
+            --inventory_analysis $analysis_inventory_path \
+            --drivers $subtype_drivers --muts_to_gr $muts_to_gr \
+            --synAcceptedClass $params.synAcceptedClass \
+            --fold_splicesites_in_coding $params.fold_splicesites_in_coding \
+            --min_patients_discover $params.min_patients_discover \
+            --output \$OUT_FILE 1>\$MSG_FILE 2>\$ERR_FILE
+    """
+}

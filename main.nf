@@ -32,6 +32,7 @@ include { FILTER_TIERED_DRIVERS } from './modules/postprocessing.nf'
 include { ANNOTATE_GENOMICRANGES_WITH_CN } from './modules/biotyping_of_drivers.nf'
 include { ANNOTATE_MUTATIONS_WITH_MULTIPLICITY } from './modules/biotyping_of_drivers.nf'
 include { BIOTYPE_DRIVERS } from './modules/biotyping_of_drivers.nf'
+include { RUN_DISCOVER } from './modules/run_software.nf'
 
 /* ----------------------------------------------------------------------------
 * Custom functions
@@ -288,13 +289,33 @@ workflow POSTPROCESSING {
                                                                              .combine(drivers, by: [0])
                                                                              .combine(patients_inv)
                                                                              .combine(chain)).csv
+    /* 
+        Step 4b: annotate SNVs and small indels in drivers with mutation
+        multiplicity
+    */
     mutsinDrives_annotated_with_mults = ANNOTATE_MUTATIONS_WITH_MULTIPLICITY(analysis_inv.map { it -> return(tuple(it[0], it[2]))}
                                                                                          .unique()
                                                                                          .combine(drivers, by: [0])
                                                                                          .combine(patients_inv)).csv
+    /* 
+        Step 4c: perform biotyping
+    */
     drivers_biotype = BIOTYPE_DRIVERS(drivers
                                       .combine(mutsinDrives_annotated_with_mults, by: [0])
                                       .combine(driver_gr_annotated_with_cn, by: [0]))
+
+
+
+    /* 
+        Step 5: mutual co-occurrence and exclusivity analysis
+    */
+    // PATCH 
+    drivers_coocc_incompat = RUN_DISCOVER(analysis_inv.map { it -> return(tuple(it[0], it[2]))}
+                                                      .unique()
+                                                      .combine(drivers, by: [0])
+                                                      .combine(Channel.fromPath(params.analysis_inventory, checkIfExists: true)
+                                                                      .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" })
+                                                      .combine(Channel.from('discover')))
 }
 
 
