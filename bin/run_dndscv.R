@@ -209,8 +209,12 @@ if (!args$with_covariates) {
   write.table(results_dNdScvNoCov$globaldnds, args$outputGlobal, append = F, 
               col.names = T, sep = ',', quote = F, row.names = F)
   # table to write to txt file
-  write.table(results_dNdScvNoCov$sel_cv, args$output, append = F, 
-              col.names = T, sep = ',', quote = F, row.names = F)
+  dtToWrite <- as.data.table(results_dNdScvNoCov$genemuts)
+  dtToWrite <- dtToWrite[,.(gene_name, exp_syn, exp_mis, exp_non, exp_spl)]
+  dtToWrite <- merge(as.data.table(results_dNdScvNoCov$sel_cv), dtToWrite,
+                     by = 'gene_name', all.x = T)
+  write.table(dtToWrite, args$output, append = F, col.names = T, sep = ',',
+              quote = F, row.names = F)
 }
 
 # Run dNdScv with covariates --------------------------------------------------
@@ -252,8 +256,12 @@ if (args$with_covariates) {
   write.table(results_dNdScvCov$globaldnds, args$outputGlobal, append = F, 
               col.names = T, sep = ',', quote = F, row.names = F)
   # table to write to txt file
-  write.table(results_dNdScvCov$sel_cv, args$output, append = F, 
-              col.names = T, sep = ',', quote = F, row.names = F)
+  dtToWrite <- as.data.table(results_dNdScvCov$genemuts)
+  dtToWrite <- dtToWrite[,.(gene_name, exp_syn, exp_mis, exp_non, exp_spl)]
+  dtToWrite <- merge(as.data.table(results_dNdScvCov$sel_cv), dtToWrite,
+                     by = 'gene_name', all.x = T)
+  write.table(dtToWrite, args$output, append = F, col.names = T, sep = ',',
+              quote = F, row.names = F)
 }
 
 message("End time of run: ", Sys.time())
