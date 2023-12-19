@@ -29,9 +29,9 @@ include { RUN_ONCODRIVEFML } from './subworkflows/call_driver_genes.nf'
 include { COMBINE_P_VALS_AND_ANNOTATE } from './modules/postprocessing.nf'
 include { ASSIGN_TIER } from './modules/postprocessing.nf'
 include { FILTER_TIERED_DRIVERS } from './modules/postprocessing.nf'
-include { ANNOTATE_GENOMICRANGES_WITH_CN } from './modules/drivers_characterization.nf'
-include { ANNOTATE_MUTATIONS_WITH_MULTIPLICITY } from './modules/drivers_characterization.nf'
-include { BIOTYPE_DRIVERS } from './modules/drivers_characterization.nf'
+include { ANNOTATE_GENOMICRANGES_WITH_CN } from './modules/biotyping_of_drivers.nf'
+include { ANNOTATE_MUTATIONS_WITH_MULTIPLICITY } from './modules/biotyping_of_drivers.nf'
+include { BIOTYPE_DRIVERS } from './modules/biotyping_of_drivers.nf'
 
 /* ----------------------------------------------------------------------------
 * Custom functions
