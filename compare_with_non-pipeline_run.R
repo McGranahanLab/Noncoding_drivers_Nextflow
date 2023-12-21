@@ -22,7 +22,7 @@ suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
 # Inputs ----------------------------------------------------------------------
 currentRunPath <- 'completed_runs/06_12_2023/results/tables/drivers/drivers-Panlung--hg19.csv'
 tumor_subtype_current <- 'Panlung'
-oldRunPath <- '../Noncoding_drivers/results/2023-03-21_synRemoved/tables/tiered_drivers_CGConly.csv'
+oldRunPath <- '../Noncoding_drivers/results/2023-03-21_synRemoved/tables/tiered_drivers_CGConly_USE_ME.csv'
 tumor_subtype_old <- 'PANCAN'
 
 keyCols <- c('gr_id', 'gene_id', 'gene_name')
@@ -95,6 +95,7 @@ merged[is.na(status)]$status <- 'not driver'
 
 # Plot correlations between p-values ------------------------------------------
 corrVals <- c()
+compPlotList <- list()
 for (varToCheck in names(colsToCheck[colsToCheck == 'numeric'])) {
   corrDT <- merged[, c(paste0(varToCheck, '.current'),
                        paste0(varToCheck, '.old')), with = F]
@@ -102,43 +103,49 @@ for (varToCheck in names(colsToCheck[colsToCheck == 'numeric'])) {
   corrVals <- c(corrVals, cor(corrDT[, 1], corrDT[, 2]))
   names(corrVals)[length(corrVals)] <- varToCheck
   
-  compPlot <- ggplot(merged,
+  plotData <- merged[, c('gr_id', paste0(varToCheck, '.current'), 
+                        paste0(varToCheck, '.old')), with = F]
+  plotData <- plotData[!is.na(unlist(plotData[, 2])) | 
+                         !is.na(unlist(plotData[, 3]))]
+  compPlot <- ggplot(plotData,
                      aes(x = get(paste0(varToCheck, '.current')),
                          y = get(paste0(varToCheck, '.old')), 
-                         color = status)) + 
+                         color = gr_id)) + 
     geom_point() + coord_equal() + xlab(paste0(varToCheck, ', current')) +
-    ylab(paste0(varToCheck, ', old')) + geom_abline(slope = 1)
-  print(compPlot)
+    ylab(paste0(varToCheck, ', old')) + geom_abline(slope = 1) + 
+    theme_classic() + xlab('pipeline') + ylab('previously') +
+    theme(legend.position = 'bottom', legend.direction = 'horizontal') +
+    guides(color = guide_legend(title = "Genomic region")) +
+    ggtitle(paste('Version comparison for', varToCheck,
+                  '. R = ', round(corrVals[length(corrVals)], 4)))
+  compPlotList[[length(compPlotList) + 1]] <- compPlot
+  rm(plotData)
+  gc()
 }
 message('[', Sys.time(), '] Look at warnings! They are helpful to see if ',
         'there is an influx of NA')
 warnings()
 rm(varToCheck)
 
-# Plot correlations between brown p-values for each genomic region ------------
-varToCheck <- 'brown.comb_p'
-corrVals_grID <- c()
-for (grID in sort(unique(merged$gr_id))) {
-  corrDT <- merged[gr_id == grID][, c(paste0(varToCheck, '.current'),
-                                      paste0(varToCheck, '.old')), with = F]
-  corrDT <- corrDT[complete.cases(corrDT)]
-  corrVals_grID <- c(corrVals_grID, cor(corrDT[, 1], corrDT[, 2]))
-  names(corrVals_grID)[length(corrVals_grID)] <- grID
-  
-  compPlot <- ggplot(merged[gr_id == grID],
-                     aes(x = get(paste0(varToCheck, '.current')),
-                         y = get(paste0(varToCheck, '.old')), 
-                         color = status)) + 
-    geom_point() + coord_equal() + xlab(paste0(varToCheck, ', current')) +
-    ylab(paste0(varToCheck, ', old')) + geom_abline(slope = 1) +
-    ggtitle(grID)
-  print(compPlot)
-}
-message('[', Sys.time(), '] Look at warnings! They are helpful to see if ',
-        'there is an influx of NA')
-warnings()
+# Find where raw p-values are computed in one version, but not in the other----
+noRawPold <- merged[(is.na(digdriver.raw_p.old) & !is.na(digdriver.raw_p.current)) |
+                      (is.na(dndscv.raw_p.old) & !is.na(dndscv.raw_p.current)) | 
+                      (is.na(mutpanning.raw_p.old) & !is.na(mutpanning.raw_p.current)) |
+                      (is.na(nbr.raw_p.old) & !is.na(nbr.raw_p.current)) |
+                      (is.na(oncodrivefml.raw_p.old) & !is.na(oncodrivefml.raw_p.current))]
+message('[', Sys.time(), '] Number of entries, where previously raw p-value ',
+        'was not computed: ', dim(noRawPold))
+noRawPcurrent <- merged[(!is.na(digdriver.raw_p.old) & is.na(digdriver.raw_p.current)) |
+                          (!is.na(dndscv.raw_p.old) & is.na(dndscv.raw_p.current)) | 
+                          (!is.na(mutpanning.raw_p.old) & is.na(mutpanning.raw_p.current)) |
+                          (!is.na(nbr.raw_p.old) & is.na(nbr.raw_p.current)) |
+                          (!is.na(oncodrivefml.raw_p.old) & is.na(oncodrivefml.raw_p.current))]
+message('[', Sys.time(), '] Number of entries, where currently raw p-value ',
+        'is not computed: ', dim(noRawPcurrent))
 
 # Find where previously brown.comb_p was not computed, but now it is ----------
 noBrownInOld <- merged[is.na(brown.comb_p.old) & !is.na(brown.comb_p.current)]
 noBrownInOld <- merge(noBrownInOld[, keyCols, with = F], old, by = keyCols)
 
+noBrownInNew <- merged[!is.na(brown.comb_p.old) & is.na(brown.comb_p.current)]
+noBrownInNew <- merge(noBrownInNew[, keyCols, with = F], old, by = keyCols)

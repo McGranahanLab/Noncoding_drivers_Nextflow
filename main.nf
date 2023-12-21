@@ -316,6 +316,9 @@ workflow POSTPROCESSING {
                                                       .combine(Channel.fromPath(params.analysis_inventory, checkIfExists: true)
                                                                       .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" })
                                                       .combine(Channel.from('discover')))
+
+
+    // do not forget to remove nbr from cds
 }
 
 
