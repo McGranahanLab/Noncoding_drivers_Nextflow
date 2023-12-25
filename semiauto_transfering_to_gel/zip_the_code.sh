@@ -10,7 +10,8 @@ zip $OUT_DIR'/launch_and_doc.zip'                     $BASE_DIR'/'DOCUMENTATION.
                                                       $BASE_DIR'/'GEL_modification.Rmd \
                                                       $BASE_DIR'/'launch_pipeline_helix.sh \
                                                       $BASE_DIR'/'main.nf \
-                                                      $BASE_DIR'/'nextflow.config
+                                                      $BASE_DIR'/'nextflow.config \
+                                                      $BASE_DIR'/'compare_with_non-pipeline_run.R
 zip $OUT_DIR'/modules.zip'                            $BASE_DIR'/'modules/*.nf
 zip $OUT_DIR'/preprocessing_scripts.zip'              $BASE_DIR'/'preprocessing_scripts/*.R
 zip $OUT_DIR'/subworkflows.zip'                       $BASE_DIR'/'subworkflows/*.nf
