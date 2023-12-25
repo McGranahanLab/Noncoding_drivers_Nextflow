@@ -20,4 +20,6 @@ docker tag noncoding_driver_pipeline:$TAG \
            marialitovchenko/noncoding_driver_pipeline:$TAG
 docker push marialitovchenko/noncoding_driver_pipeline:$TAG
 
+mv $TMP_DIR'/md5sums_originals.txt' .
+
 rm -r $TMP_DIR
