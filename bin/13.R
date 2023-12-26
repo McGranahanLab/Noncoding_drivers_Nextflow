@@ -1,28 +1,64 @@
+#!/usr/bin/env Rscript
+# FILE: find_driver_mutations.R -----------------------------------------------
+#
+# DESCRIPTION: 
+#
+# USAGE: 
+# OPTIONS:
+# EXAMPLE: 
+# REQUIREMENTS: 
+# BUGS: --
+# NOTES:  ---
+# AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk
+# COMPANY:  UCL, London, the UK
+# VERSION:  1
+# CREATED:  17.12.2020
+# REVISION: 25.12.2023
+
+# Source custom functions -----------------------------------------------------
+#' get_script_dir
+#' @description Returns parent directory of the currently executing script
+#' @author https://stackoverflow.com/questions/47044068/get-the-path-of-current-script
+#' @return string, absolute path
+#' @note this functions has to be present in all R scripts sourcing any other
+#' script. Sourcing R scripts with use of box library is unstable then multiple
+#' processes try to execute the source at the same time.
+get_script_dir <- function() {
+  cArgs <- tibble::enframe(commandArgs(), name = NULL)
+  cArgsSplit <- tidyr::separate(cArgs, col = value, into = c("key", "value"),
+                                sep = "=", fill = "right")
+  cArgsFltr <- dplyr::filter(cArgsSplit, key == "--file")
+  
+  result <- dplyr::pull(cArgsFltr, value)
+  result <- tools::file_path_as_absolute(dirname(result))
+  result
+}
+
+srcDir <- get_script_dir()
+# to spread out multiple processes accessing the same file
+Sys.sleep(sample(1:15, 1))
+source(paste0(srcDir, '/custom_functions.R'))
+
 # Libraries -------------------------------------------------------------------
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 suppressWarnings(suppressPackageStartupMessages(library(plyr)))
 
 # Functions : reading from dNdScv & NBR ---------------------------------------
 #' readExpObsNmuts
-#' @description Reads in result files from dndscv & nbr into uniformal data 
+#' @description Reads in result files from dNdScv & NBR into uniformal data 
 #' table while extracting columns containing information about expected and 
 #' observed number of mutations. 
 #' @author Maria Litovchenko
 #' @param filePath path to result file
-#' @param softName name of the software filePath corresponds to. dndscv or nbr
 #' @param infoStr named vector with at least items cancer_subtype, gr_id
-#' @return data table with columns software, tumor_subtype, gr_id +
-#' n_syn, n_mis, n_non, n_spl, n_ind, mis_mle, tru_mle, mis_low, tru_low, 
-#' mis_high, tru_high, ind_mle, ind_low, ind_high
-readExpObsNmuts <- function(filePath, softName, infoStr) {
+#' @return data table with columns tumor_subtype, gr_id + n_syn, n_mis, n_non, 
+#' n_spl, n_ind, mis_mle, tru_mle, mis_low, tru_low, mis_high, tru_high, 
+#' ind_mle, ind_low, ind_high
+readExpObsNmuts <- function(filePath, infoStr) {
   if (!file.exists(filePath)) {
     message('[', Sys.time(), '] File not found: ', filePath, '. Return empty ',
             'data table.')
     return(data.table())
-  }
-  if (!softName %in% c('dndscv', 'nbr')) {
-    stop('[', Sys.time(), '] readExpectedNmuts: softName should be one of ',
-         'dndscv or nbr.', 'Current value: ', softName)
   }
   
   if (!all(c('cancer_subtype', 'gr_id') %in% names(infoStr))) {
@@ -33,33 +69,23 @@ readExpObsNmuts <- function(filePath, softName, infoStr) {
   infoStr <- as.data.table(t(infoStr))
   setnames(infoStr, 'cancer_subtype', 'tumor_subtype')
   
-  if (softName == 'dndscv') {
-    result <- fread(filePath, header = T, stringsAsFactors = F)
-    result <- result[,.(gene_name, n_syn, n_mis, n_non, n_spl, n_ind, mis_mle,
-                        tru_mle, mis_low, tru_low, mis_high, tru_high, ind_mle,
-                        ind_low, ind_high, exp_syn, exp_mis, exp_non, exp_spl)]
-    setnames(result, 'gene_name', 'gene_id')
-    result <- cbind(result, infoStr)
-  }
-  
-  if (softName == 'nbr') {
-    result <- fread(filePath, header = T, stringsAsFactors = F,
-                    select = c('region', 'obs_subs', 'obs_indels',
-                               'obsexp_subs_mle', 'obsexp_subs_low',
-                               'obsexp_subs_high', 'obsexp_indels_mle', 
-                               'obsexp_indels_low', 'obsexp_indels_high',
-                               'exp_subs', 'exp_indels'))
-    setnames(result, 
-             c('region', 'obs_subs', 'obs_indels', 'obsexp_subs_mle', 
-               'obsexp_subs_low', 'obsexp_subs_high', 'obsexp_indels_mle', 
-               'obsexp_indels_low', 'obsexp_indels_high'), 
-             c('gene_id', 'n_subs', 'n_ind', 'subs_mle', 'subs_low', 
-               'subs_high', 'ind_mle', 'ind_low', 'ind_high'), skip_absent = T)
-    result <- cbind(result, infoStr)
-  }
-  
-  result[, software := softName]
-  
+  colsToGet <- c('gene_name', 'n_syn', 'n_mis', 'n_non', 'n_spl', 'n_ind', 
+                 'mis_mle', 'tru_mle', 'mis_low', 'tru_low', 'mis_high', 
+                 'tru_high', 'ind_mle', 'ind_low', 'ind_high', 'exp_syn', 
+                 'exp_mis', 'exp_non', 'exp_spl',#colums for dndscv finish here
+                 'region', 'obs_subs', 'obs_indels', 'obsexp_subs_mle', 
+                 'obsexp_subs_low', 'obsexp_subs_high', 'obsexp_indels_mle',
+                 'obsexp_indels_low', 'obsexp_indels_high', 'exp_subs',
+                 'exp_indels')
+  result <- suppressWarnings(fread(filePath, header = T, stringsAsFactors = F, 
+                                   select = colsToGet))
+  setnames(result, 
+           c('gene_name', 'region', 'obs_subs', 'obs_indels', 
+             'obsexp_subs_mle', 'obsexp_subs_low', 'obsexp_subs_high', 
+             'obsexp_indels_mle', 'obsexp_indels_low', 'obsexp_indels_high'),
+           c('gene_id', 'gene_id', 'n_subs', 'n_ind', 'subs_mle', 'subs_low', 
+             'subs_high', 'ind_mle', 'ind_low', 'ind_high'), skip_absent = T)
+  result <- cbind(result, infoStr)
   result
 }
 
@@ -87,33 +113,23 @@ readCHASMplus <- function(chasmResPath) {
 #' @description Estimates number and percentage of driver mutations per gene
 #' @author Maria Litovchenko
 #' @param inDT data table, result of run of either dNdScv or NBR. Should have
-#' columns gene_id, tumor_subtype, gr_id, software, obsexp_subs_mle, 
-#' obsexp_subs_low, obsexp_subs_high, obsexp_indels_mle, obsexp_indels_low, 
-#' obsexp_indels_high for result of NBR and mis_mle, tru_mle, mis_low, tru_low,
-#' mis_high, tru_high for result of dNdScv. 
-#' @return data table with columns gene_id, tumor_subtype, gr_id, software,
-#' var_type (indicates type of mutations, i.e. mis - missense), dN/dS ratios 
-#' for each gene and mutation type (high - top level of 95th percentile 
-#' confidence interval, low - bottom level of 95th percentile confidence 
-#' interval, and mle - maximum likelihood estimation), observed_n - observed 
-#' number of mutations, prob_is_driver_low - bottom level of 95th percentile 
-#' confidence interval of estimated percentage of driver mutations, 
-#' prob_is_driver_mle - maximum likelihood of estimated percentage of driver 
-#' mutations, prob_is_driver_high - top level of 95th percentile confidence 
-#' interval of estimated percentage of driver mutations
+#' columns gene_id, tumor_subtype, gr_id, obsexp_subs_mle, obsexp_subs_low, 
+#' obsexp_subs_high, obsexp_indels_mle, obsexp_indels_low, obsexp_indels_high
+#' for result of NBR and mis_mle, tru_mle, mis_low, tru_low, mis_high, tru_high
+#' for result of dNdScv. 
+#' @return data table with columns gene_id, tumor_subtype, gr_id, var_type 
+#' (indicates type of mutations, i.e. mis - missense), dN/dS ratios for each
+#' gene and mutation type (high - top level of 95th percentile confidence 
+#' interval, low - bottom level of 95th percentile confidence interval, and mle
+#' - maximum likelihood estimation), observed_n - observed number of mutations,
+#' prob_is_driver_low - bottom level of 95th percentile confidence interval of
+#' estimated percentage of driver mutations, prob_is_driver_mle - maximum 
+#' likelihood of estimated percentage of driver mutations, prob_is_driver_high
+#' - top level of 95th percentile confidence interval of estimated percentage 
+#' of driver mutations
 estimatePercOfDriverMuts <- function(inDT) {
-  stopMsg <- paste('[', Sys.time(), '] estimatePercOfDriverMuts: please ',
-                   'submit results of ONE software run. Software should be ',
-                   'either dndscv or nbr.')
-  if (length(unique(inDT$software)) != 1 |
-      !all(inDT$software %in% c('dndscv', 'nbr'))) {
-    stop('[', Sys.time(), '] estimatePercOfDriverMuts: please  submit ',
-         'results of ONE software run. Software should be either dndscv or ',
-         'nbr.')
-  } 
-  
   # columns identifying a gene driver
-  idCols <- c('gene_id', 'tumor_subtype', 'gr_id', 'software')
+  idCols <- c('gene_id', 'tumor_subtype', 'gr_id')
   # columns with MLE
   mleCols <- '_mle$|_low$|_high$'
   # columns with observed number of mutations
@@ -132,8 +148,9 @@ estimatePercOfDriverMuts <- function(inDT) {
   mleDT[, var_type := gsub(mleCols, '',  measurement)]
   mleDT[, measurement := gsub('.*_', '', measurement)]
   # convert back to wide, it prevents a lot of bugs
-  mleDT <- dcast(mleDT, gene_id + tumor_subtype + gr_id + 
-                   var_type + software ~ measurement, value.var = 'value')
+  mleDT <- dcast(mleDT,
+                 gene_id + tumor_subtype + gr_id + var_type ~ measurement, 
+                 value.var = 'value')
   
   # retrieve number of observed mutations
   nObsVars <- inDT[, grepl(paste0(paste0('^', idCols, '$|', collapse = ''), 
@@ -420,8 +437,7 @@ findDriverMutations <- function(mutDT, patientsInvDT, varType,
     
     result <- rbind(result, chasmMore, fill = T)
     # info message
-    display_driverMut_update_msg(patientsInvDT, result,
-                                 confLvl = 'dNdScv&CHASM+')
+    display_driverMut_update_msg(patientsInvDT, result, confLvl = cLvl)
   }
   
   # If for some reason number of sum of driver mutations identified by CHASM+ 
@@ -438,6 +454,7 @@ findDriverMutations <- function(mutDT, patientsInvDT, varType,
     # if should be "nbr_only"
     dnds_only <- mutInfoDT[status == 'high_perc']
     cLvl <- ifelse(varType == 'noncoding', 'NBR', 'dNdScv')
+    cLvl <- paste0(varType, ',', cLvl)
     dnds_only[, confidenceLvl := cLvl]
     
     result <- rbind(result, dnds_only, fill = T)
@@ -453,11 +470,12 @@ findDriverMutations <- function(mutDT, patientsInvDT, varType,
               status == '']$status <- 'known mut.'
   if (nrow(mutInfoDT[status == 'known mut.']) > 0) {
     known_only <- mutInfoDT[status == 'known mut.']
-    known_only[, confidenceLvl := 'known mut.']
+    known_only[, confidenceLvl := paste0(varType, ',', 'known mut.')]
     
     result <- rbind(result, known_only, fill = T)
     # info message
-    display_driverMut_update_msg(patientsInvDT, result, confLvl = 'known mut.')
+    display_driverMut_update_msg(patientsInvDT, result, 
+                                 confLvl = paste0(varType, ',', 'known mut.'))
   }
   
   # If gene was not identified as driver by dNdScv, it is likely that the
@@ -467,26 +485,29 @@ findDriverMutations <- function(mutDT, patientsInvDT, varType,
               status == '']$status <- 'CHASM+'
   if (nrow(mutInfoDT[status == 'CHASM+']) > 0) {
     chasm_only <- mutInfoDT[status == 'CHASM+']
-    chasm_only[, confidenceLvl := 'CHASM+']
+    chasm_only[, confidenceLvl := paste0(varType, ',', 'CHASM+')]
     
     result <- rbind(result, chasm_only, fill = T)
     # info message
-    display_driverMut_update_msg(patientsInvDT, result, confLvl = 'CHASM+')
+    display_driverMut_update_msg(patientsInvDT, result, 
+                                 confLvl = paste0(varType, ',', 'CHASM+'))
   }
   
   # If at this point status is still empty, it means that we can only 
   # reliably estimate number of missence drivers in the gene
   if (nrow(mutInfoDT[status == '']) != 0) {
     n_only <- mutInfoDT[status == '']
-    n_only[, confidenceLvl := 'only n. driver mutations'] 
+    n_only[, confidenceLvl := paste0(varType, ',', 'only n. driver mutations')] 
     
     result <- rbind(result, n_only, fill = T)
     display_driverMut_update_msg(patientsInvDT, result,
-                                 confLvl = 'only n. driver mutations')
+                                 confLvl = paste0(varType, ',',
+                                                  'only n. driver mutations'))
   }
   
   # simple check that all mutations were accounted for
   result <- result[, status := NULL]
+  result[, confidenceLvl := as.character(confidenceLvl)]
   result <- unique(result)
   result[, participant_id := as.character(participant_id)]
   resultCheck <- mutDT[,.(key, gr_id, gene_id, var_type, gene_name,
@@ -532,24 +553,119 @@ display_driverMut_update_msg <- function(patientsInvDT, driveMutsDT, confLvl) {
           100 * round(nExplained_total/total_nParticip, 4), '%)')
 }
 
+# Parse input arguments -------------------------------------------------------
+# create parser object
+parser <- ArgumentParser(prog = 'find_driver_mutations.R')
+
+analysisHelp <- paste('Path to inventory table containing details of the',
+                      'future analysis to be conducted. Minimal columns:',
+                      'tumor_subtype,', 'software,', 'gr_id,', 'gr_code,', 
+                      'gr_file,', 'gr_upstr,', 'gr_downstr,', 'gr_genome,', 
+                      'gr_excl_id,', 'gr_excl_code,', 'gr_excl_file,',
+                      'gr_excl_upstr,', 'gr_excl_downstr,', 'gr_excl_genome,',
+                      'blacklisted_codes.')
+parser$add_argument("-a", "--inventory_analysis", required = T, 
+                    type = 'character', help = analysisHelp)
+
+patientsHelp <- paste('Path to patientsInv table listing information about',
+                      'patients, their cancer types and mutation files.',
+                      'Minimal columns: participant_id, tumor_subtype,',
+                      'participant_tumor_subtype, somatic_path,',
+                      'somatic_genome, cohort_name')
+parser$add_argument("-p", "--inventory_patients", required = T, 
+                    type = 'character', help = patientsHelp)
+
+subtypeHelp <- paste('A cancer subtype to select from patientsInv table. Only',
+                     'mutations from patients with that cancer type will be',
+                     'selected. In case an analysis of several cancer types',
+                     'needed to be performed please run this script ',
+                     'separetedly for each cancer type.')
+parser$add_argument("-c", "--cancer_subtype", required = T, type = 'character',
+                    help = subtypeHelp)
+
+parser$add_argument("-g", "--gr_id", required = T, type = 'character',
+                    help = 'IDs of a genomic region', nargs = '+')
+
+resHelp <- paste('A list of file paths to results of software runs on current',
+                 'cancer subtype genomic region pair. The order of paths',
+                 'should match the order of software names in --software',
+                 'argument')
+parser$add_argument("-d", "--run_results", required = T, type = 'character',
+                    nargs = '+', default = NULL, help = resHelp)
+
+chasmplusHelp <- paste('Path to chasmplus result files')
+parser$add_argument('-cp', "--chasmplus", required = F, type = 'character',
+                    nargs = '+', default = NULL, help = chasmplusHelp)
+
+driversHelp <- paste('Path to file containing de-novo detected cancer drivers')
+parser$add_argument("-d", "--drivers", required = F,
+                    type = 'character', help = driversHelp)
+
+mutstoGrHelp <- paste('Path to files containing information about mutations',
+                      'mapping to genomic regions. Usually produced by',
+                      'calculate_mutation_rates.R')
+parser$add_argument("-m", "--muts_to_gr", required = T, 
+                    type = 'character', help = mutstoGrHelp)
+
+synClassHelp <- paste('Variant_Classification-s from MAF format which are',
+                      'acceptable as markers of synonymous variants. If given',
+                      'variants of those classes will be removed from',
+                      'consideration. Suggested values: Silent')
+parser$add_argument("-sc", "--synAcceptedClass", required = F, nargs = '+',
+                    default = NULL, type = 'character', help = synClassHelp)
+
+chasmScoreHelp <- paste0()
+parser$add_argument("-cs", "--chasm_score_min", required = F, default = 0.5,
+                    type = 'numeric', help = chasmScoreHelp)
+
+chasmPhelp <- paste0()
+parser$add_argument("-c", "--chasm_padj", required = F, default = 0.05,
+                    type = 'numeric', help = chasmPhelp)
+
+maxFPhelp <- paste0()
+parser$add_argument("-mfp", "--max_fp", required = F, default = 0.05,
+                    type = 'numeric', help = maxFPhelp)
+
+--inferred_biotype 
+--cn_of_drivers
+
+outputHelp <- paste('Path to the output file')
+parser$add_argument("-o", "--output", required = T, 
+                    type = 'character', help = outputHelp)
+
+args <- parser$parse_args()
+timeStart <- Sys.time()
+message('[', Sys.time(), '] Start time of run')
+printArgs(args)
+
 # Test arguments --------------------------------------------------------------
 args <- list(inventory_analysis = 'data/inventory/inventory_analysis.csv', 
              inventory_patients = 'data/inventory/inventory_patients.csv',
-             cancer_subtype = 'Panlung', gr_id = 'CDS', software = 'dndscv',
-             run_result = 'test_fixed_dndscv_Panlung_CDS.csv', 
+             cancer_subtype = 'Panlung', 
+             gr_id = list('CDS', '3primeUTR', '5primeUTR', 'enhancer',
+                          'lincRNA', 'lincRNA_promoter', 'lincRNA_ss',
+                          'miRNA', 'promoter', 'shortRNA', 'ss'),
+             run_result = list('test_fixed_dndscv_Panlung_CDS.csv', 
+                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-3primeUTR-hg19.csv',
+                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-5primeUTR-hg19.csv',
+                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-enhancer-hg19.csv',
+                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-lincRNA-hg19.csv',
+                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-lincRNA_promoter-hg19.csv',
+                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-lincRNA_ss-hg19.csv',
+                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-miRNA-hg19.csv',
+                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-promoter-hg19.csv',
+                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-shortRNA-hg19.csv',
+                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-ss-hg19.csv'),
              chasmplus = 'chasmplus-results-PANCAN-CDS-hg19.csv', 
              drivers = 'completed_runs/2023-12-14/results/tables/drivers/drivers-Panlung--hg19.csv',
+             known_driver_mutations = 'data/assets/CancerGenomeInterpreter_lung_hg19.tsv',
              muts_to_gr = 'completed_runs/2023-12-14/results/mut_rates/mutMapToGR-Panlung--hg19.csv',
-             inferred_biotype = 'completed_runs/2023-12-14/results/',
              synAcceptedClass = 'Silent', 
-             chasm_padj = 0.05, chasm_score_min = 0.5, max_fp = 0.05)
+             chasm_padj = 0.05, chasm_score_min = 0.5, max_fp = 0.05,
+             inferred_biotype = 'completed_runs/2023-12-14/results/tables/drivers_biotyped/driversBiotyped-Panlung--hg19.csv',
+             cn_of_drivers = 'test_fixed_cn_Panlung.csv')
 # known_driver_mutations = ''
-
-if (!args$software %in% c('dndscv', 'nbr')) {
-  stop('[', Sys.time(), '] Can not perform inference of number of driver ',
-       'mutations on ', args$software, '. Please use results of dNdScv',
-       '(coding regions) or NBR intead')
-}
+names(args$run_result) <- unlist(args$gr_id)
 
 # Read in patients inventory --------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients, 1)
@@ -588,23 +704,26 @@ if (!is.null(args$drivers)) {
     stop('[', Sys.time(), '] no significant (FILTER is PASS and tier is not ',
          'NA) driver genes is found in ', args$drivers, ' table.')
   }
-  
-  
-  drivers <- drivers[gr_id %in% args$gr_id]
-  
-  "SOFT STOOOOOP"
 }
 
 # Read in observed and estimated number of driver mutations - dNdScv, NBR -----
-mleDriveMuts <- readExpObsNmuts(args$run_result, args$software, unlist(args))
-message('[', Sys.time(), '] Read ', args$run_result)
-# restrict to drivers
-mleDriveMuts <- mleDriveMuts[gene_id %in% unique(drivers$gene_id)]
+message('[', Sys.time(), '] Started reading ',
+        paste(args$run_result, collapse = ','))
+mleDriveMuts <- lapply(names(args$run_result), 
+                       function(x) readExpObsNmuts(args$run_result[[x]],
+                                                   c(cancer_subtype = args$cancer_subtype,
+                                                     gr_id = x)))
+message('[', Sys.time(), '] Finished reading ',
+        paste(args$run_result, collapse = ','))
 
 # Estimate percentage and number of driver mutations --------------------------
-mleDriveMuts <- estimatePercOfDriverMuts(mleDriveMuts)
+mleDriveMuts <- lapply(mleDriveMuts, estimatePercOfDriverMuts)
+mleDriveMuts <- do.call(rbind, mleDriveMuts)
 message('[', Sys.time(), '] Finished estimating number of driver mutations')
 mleDriveMuts[, tumor_subtype := NULL]
+# restrict to drivers
+mleDriveMuts <- merge(mleDriveMuts, drivers[,.(gr_id, gene_id)], 
+                      by = c('gr_id', 'gene_id'))
 
 # Read mutation map to genomic regions & restrict to driver genes -------------
 varsToGRmap <- fread(args$muts_to_gr, header = T, stringsAsFactors = F, 
@@ -663,7 +782,8 @@ mleDriveMuts[is.na(prob_is_driver_high)]$prob_is_driver_high <- 0
 if (!is.null(args$chasmplus)) {
   message('[', Sys.time(), '] Started reading results of CHASM+ analysis')
   
-  chasmDT <- readCHASMplus(args$chasmplus)
+  chasmDT <- lapply(args$chasmplus, readCHASMplus)
+  chasmDT <- as.data.table(do.call(rbind, chasmDT))
   chasmDT[, chasmPadj := p.adjust(chasmPval, method = 'BH')]
   chasmDT[, key := apply(chasmDT[,.(chr, pos, ref, alt)], 1, paste0, 
                           collapse = ':')]
@@ -686,43 +806,18 @@ if (!is.null(args$chasmplus)) {
 }
 
 # Read known driver mutations & annotate mutations with them ------------------
+mleDriveMuts[, is_known_driver_mut := F]
 if (!is.null(args$known_driver_mutations)) {
-  message('[', Sys.time(), '] Started annotation with known driver mutations')
-  if (args$known_mut_drivers_ovrl_mode == 'location') {
-    mleDriveMuts[, key_loc := gsub(':[ATGC-].*', '', key)]
-    mleDriveMuts <- merge(mleDriveMuts, 
-                         unique(knownDriverMuts[,.(gene_name, key_loc,
-                                                   is_known_driver_mut)]),
-                         all.x = T, by = c('gene_name', 'key_loc'))
-  } else {
-    mleDriveMuts <- merge(mleDriveMuts, knownDriverMuts, all.x = T,
-                         by = c('gene_name', 'key'))
-  }
+  message('[', Sys.time(), '] Started reading known driver mutations')
+  knownDriverMuts <- fread(args$known_driver_mutations, header = T, 
+                           stringsAsFactors = F)
+  message('[', Sys.time(), '] Finished reading known driver mutations')
+  
+  mleDriveMuts[key %in% knownDriverMuts$key]$is_known_driver_mut <- T
   mleDriveMuts[var_type == 'indels']$is_known_driver_mut <- F
-  mleDriveMuts[is.na(is_known_driver_mut)]$is_known_driver_mut <- F
   message('[', Sys.time(), '] Finished annotation with known driver mutations')
   gc()
-} else {
-  mleDriveMuts[, is_known_driver_mut := F]
 }
-
-# Initialize driver mutations data table --------------------------------------
-driverMutations <- data.table(mkey = character(), gr_id = character(),
-                              gene_id = character(), gene_name = character(),
-                              var_type = character(), 
-                              participant_id = character(), 
-                              key_orig = character(), var_class = character(),
-                              struct_type = character(),
-                              software = character(), high = numeric(), 
-                              low = numeric(), mle = numeric(), 
-                              observed_n = numeric(),
-                              prob_is_driver_low = numeric(),  
-                              prob_is_driver_mle = numeric(), 
-                              prob_is_driver_high = numeric(), 
-                              chasmScore = numeric(), chasmScore = numeric(),
-                              is_known_driver_mut = logical(), 
-                              confidenceLvl = character())
-setnames(driverMutations, 'mkey', 'key')
 
 # Identify DRIVER mutation based on dNdScv, NBR, CHASM & known muts -----------
 # Select missence mutations. We do selection based on var_type = 'mis' and not
@@ -730,24 +825,118 @@ setnames(driverMutations, 'mkey', 'key')
 # Translation_Start_Site or Unknown for var_type = 'mis'. Yet, the same dNdScv
 # probability as for Missense_Mutation will be assigned to for example 
 # Nonstop_Mutation. It could even be scored by CHASM+, which normally works on
-#  missence mutations only!
-missen_muts <- mleDriveMuts[gr_id %in% coding_gr_id & var_type == 'mis']
-missenDrivers <- findDriverMutations(missen_muts, patientsInv, 
-                                     varType = 'missense',
-                                     chasm_score_min = args$chasm_score_min,
-                                     chasm_padj = args$chasm_padj)
-nonsense_muts <- mleDriveMuts[gr_id %in% coding_gr_id & var_type == 'non']
-nonsenDrivers <- findDriverMutations(nonsense_muts, patientsInv, 
-                                     varType = 'nonsense',
-                                     chasm_score_min = args$chasm_score_min,
-                                     chasm_padj = args$chasm_padj)
-indels_muts <- mleDriveMuts[gr_id %in% coding_gr_id & var_type == 'indels']
-indeDrivers <- findDriverMutations(indels_muts, patientsInv, 
-                                   varType = 'indels',
-                                   chasm_score_min = args$chasm_score_min,
-                                   chasm_padj = args$chasm_padj)
-noncoding_muts <- mleDriveMuts[!gr_id %in% coding_gr_id]
-noncodDrivers <- findDriverMutations(noncoding_muts, patientsInv, 
-                                     varType = 'noncoding',
-                                     chasm_score_min = args$chasm_score_min,
-                                     chasm_padj = args$chasm_padj)
+# missence mutations only!
+mleDriveMuts <- split(mleDriveMuts, by = c('gr_id', 'var_type'), drop = T)
+driverMutations <- lapply(mleDriveMuts, 
+                          function(x) findDriverMutations(x, patientsInv, 
+                                                          varType = paste0(unique(x$gr_id), ',',
+                                                                           unique(x$var_type)), 
+                                                          chasm_score_min = args$chasm_score_min,
+                                                          chasm_padj = args$chasm_padj))
+driverMutations <- do.call(rbind, driverMutations)
+# since we didn't use 'noncoding' in varType, all the noncoding regions will
+# have "dNdScv" instead of of "NBR"
+noncodIdx <- !driverMutations$gr_id %in% coding_gr_id
+driverMutations[noncodIdx]$confidenceLvl <- gsub('dNdScv', 'NBR',
+                                                 driverMutations[noncodIdx]$confidenceLvl)
+# remove varType from confidenceLvl
+driverMutations[, confidenceLvl := gsub('.*,', '', confidenceLvl)]
+
+# Mark TSG/OG driver elements based on inferred/known biotypes ----------------
+if (!is.null(args$inferred_biotype)) {
+  message('[', Sys.time(), '] Found file with inferred cancer biotypes for ',
+          'drivers. It will be used instead of known cancer biotype (if ',
+          'available) to locate copy number drivers (amplifications and ',
+          'losses) in driver genomic elements (oncogenes and TSG respectively')
+  inferred_biotype <- fread(args$inferred_biotype, header = T,
+                            stringsAsFactors = F,
+                            select = c('gr_id', 'gene_id', 'gene_name',
+                                       'inferred_biotype'))
+  setnames(inferred_biotype, 'inferred_biotype', 'biotype')
+  inferred_biotype <- unique(inferred_biotype)
+  message('[', Sys.time(), '] Read ', args$inferred_biotype)
+  drivers <- merge(drivers, inferred_biotype, all.x = T,
+                   by = c('gr_id', 'gene_id', 'gene_name'))
+} else {
+  message('[', Sys.time(), '] File with inferred cancer biotypes for drivers ',
+          'was not given. Known cancer biotype (if available) to locate copy ',
+          'number drivers (amplifications and losses) in driver genomic ',
+          'elements (oncogenes and TSG respectively')
+  setnames(drivers, 'known_cancer_biotype', 'biotype', skip_absent = T)
+}
+
+# Read copy number states in identified driver elements -----------------------
+cnOfDrivers <- data.table()
+if (!is.null(args$cn_drivers) & 'biotype' %in% colnames(drivers)) {
+  cnOfDrivers <- fread(args$cn_of_drivers, header = T, stringsAsFactors = F,
+                       select = c('participant_id', 'gr_name', 'cn_type',
+                                  'nMinor', 'nMajor'))
+  cnOfDrivers[, participant_id := as.character(participant_id)]
+  message('[', Sys.time(), '] Read ', args$cn_of_drivers)
+  
+  cnOfDrivers <- cnOfDrivers[!is.na(cn_type)]
+  cnOfDrivers <- cnOfDrivers[participant_id %in% 
+                               as.character(patientsInv$participant_id)]
+  cnOfDrivers[nMinor == 0 & nMajor == 0]$cn_type <- 'hom.del.'
+  cnOfDrivers <- cnOfDrivers[,.(participant_id, gr_name, cn_type)]
+  cnOfDrivers <- unique(cnOfDrivers)
+  
+  if (nrow(cnOfDrivers) != 0) {
+    cnNameParsed <- parseBED12regName(unique(cnOfDrivers$gr_name))
+    setnames(cnNameParsed, 'name', 'gr_name')
+    cnNameParsed <- cnNameParsed[,.(gr_id, gene_id, gene_name, gr_name)]
+    cnOfDrivers <- merge(cnOfDrivers, cnNameParsed, by = 'gr_name')
+    cnOfDrivers[, gr_name := NULL]
+    
+    # select driver genes only
+    cnOfDrivers <- merge(cnOfDrivers, drivers,
+                         by = c('gr_id', 'gene_id', 'gene_name'))
+    cnOfDrivers <- cnOfDrivers[!is.na(biotype)]
+  }
+  gc()
+} else {
+  message('[', Sys.time(), '] Identification of driver mutations as ',
+          'homozygous deletions in TSG or amplifications in OG is not ',
+          'possible due to either absence of biotype information or absence ',
+          'of copy number states of driver genomic regions.')
+}
+
+# Identify driver mutations as homdels in TSG and amps in OGs -----------------
+if (nrow(cnOfDrivers) != 0) {
+  cnOfDrivers <- cnOfDrivers[(cn_type %in% 'hom.del.' & grepl("TSG", biotype)) |
+                               (cn_type %in% 'amp' & grepl("OG", biotype))]
+  cnOfDrivers[, key := apply(cnOfDrivers[,.(gene_id, cn_type)], 1, 
+                             paste0, collapse = ',')]
+  cnOfDrivers[, var_type    := cn_type]
+  cnOfDrivers[, var_class   := cn_type]
+  cnOfDrivers[, struct_type := cn_type]
+  cnOfDrivers <- cnOfDrivers[,.(gr_id, gene_id, gene_name, participant_id,
+                                key, var_type, var_class, struct_type)]
+  
+  # assign confidence level 
+  cnOfDrivers[, confidenceLvl := '']
+  cnOfDrivers[var_type == 'amp' & 
+                gr_id %in% coding_gr_id]$confidenceLvl <- 'amp'
+  cnOfDrivers[var_type == 'amp' & 
+                !gr_id %in% coding_gr_id]$confidenceLvl <- 'NC,amp'
+  cnOfDrivers[var_type == 'hom.del.' & 
+                gr_id %in% coding_gr_id]$confidenceLvl <- 'hom.del.'
+  cnOfDrivers[var_type == 'hom.del.' & 
+                !gr_id %in% coding_gr_id]$confidenceLvl <- 'NC,hom.del.'
+  
+  driverMutations <- rbind(driverMutations, cnOfDrivers, fill = T)
+  display_driverMut_update_msg(patientsInv, driverMutations, 'amp')
+  display_driverMut_update_msg(patientsInv, driverMutations, 'NC,amp')
+  display_driverMut_update_msg(patientsInv, driverMutations, 'hom.del.')
+  display_driverMut_update_msg(patientsInv, driverMutations, 'NC,hom.del.')
+}
+
+# Output to table -------------------------------------------------------------
+write.table(driverMutations, args$output, append = F, quote = F, sep = '\t', 
+            row.names = F, col.names = T)
+message('[', Sys.time(), '] Wrote driver mutations to ', args$output)
+
+message("End time of run: ", Sys.time())
+message('Total execution time: ', 
+        difftime(Sys.time(), timeStart, units = 'mins'), ' mins.')
+message('Finished!')
