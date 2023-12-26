@@ -23,3 +23,12 @@ docker push marialitovchenko/noncoding_driver_pipeline:$TAG
 mv $TMP_DIR'/md5sums_originals.txt' .
 
 rm -r $TMP_DIR
+
+# to download on GEL
+# module load tools/singularity/3.8.3
+# singularity pull docker://marialitovchenko/noncoding_driver_pipeline:transfer_code
+# BASE_DIR=`pwd`'/'
+# singularity shell --bind $BASE_DIR:$BASE_DIR noncoding_driver_pipeline_transfer_code.sif 
+# cp /*.zip .
+# exit
+# unzip *.zip
