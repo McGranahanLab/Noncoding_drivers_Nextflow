@@ -26,6 +26,7 @@ include { RUN_DNDSCV } from './subworkflows/call_driver_genes.nf'
 include { RUN_MUTPANNING } from './subworkflows/call_driver_genes.nf'
 include { RUN_NBR } from './subworkflows/call_driver_genes.nf'
 include { RUN_ONCODRIVEFML } from './subworkflows/call_driver_genes.nf'
+include { RUN_CHASMplus } from './subworkflows/call_driver_genes.nf'
 include { COMBINE_P_VALS_AND_ANNOTATE } from './modules/postprocessing.nf'
 include { ASSIGN_TIER } from './modules/postprocessing.nf'
 include { FILTER_TIERED_DRIVERS } from './modules/postprocessing.nf'
@@ -173,10 +174,10 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
 
     /* 
         Step 5a: run CHASMplus
-    
+    */
     RUN_CHASMplus (analysis_inv, PREPARE_INPUT_MUTATION_FILES.out.chasmplus, 
                    chasmplus_inv)
-    */
+    
 
     /* 
         Step 5b: run DIGdriver

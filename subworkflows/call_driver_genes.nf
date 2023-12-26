@@ -25,7 +25,6 @@ workflow RUN_CHASMplus {
     analysis_inv_path
     chasmplus_mutations
     chusmplusAnno_inv_path
-    target_genome_version
 
     main:
     chasm_analysis_inv = analysis_inv_path.splitCsv(header: true)
