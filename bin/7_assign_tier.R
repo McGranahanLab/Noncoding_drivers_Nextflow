@@ -7,9 +7,11 @@
 # tumor subtype (one tumor subtype).
 #
 # USAGE: 
-# OPTIONS:
+# OPTIONS: Run 
+#          Rscript --vanilla assign_tier.R -h
+#          to see the full list of options and their descriptions.
 # EXAMPLE: 
-# REQUIREMENTS: 
+# REQUIREMENTS: argparse, data.table, plyr
 # BUGS: --
 # NOTES:  ---
 # AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk

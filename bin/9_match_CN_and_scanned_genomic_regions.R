@@ -1,12 +1,15 @@
 #!/usr/bin/env Rscript
 # FILE: match_CN_and_scanned_genomic_regions.R --------------------------------
 #
-# DESCRIPTION: 
+# DESCRIPTION: Annotates genomic regions scanned for de novo cancer driver 
+# discovery with their copy number state.
 #
 # USAGE: 
-# OPTIONS:
+# OPTIONS: Run 
+#          Rscript --vanilla match_CN_and_scanned_genomic_regions.R -h
+#          to see the full list of options and their descriptions.
 # EXAMPLE: 
-# REQUIREMENTS: 
+# REQUIREMENTS: argparse, data.table, GenomicRanges, plyranges
 # BUGS: --
 # NOTES:  ---
 # AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk

@@ -1,12 +1,15 @@
 #!/usr/bin/env Rscript
 # FILE: biotype_drivers.R -----------------------------------------------------
 #
-# DESCRIPTION:
+# DESCRIPTION: Assigns, where possible, cancer biotype (tumor suppressor or 
+# oncogene) of detected cancer genomic elements.
 #
 # USAGE: 
-# OPTIONS:
+# OPTIONS: Run 
+#          Rscript --vanilla biotype_drivers.R -h
+#          to see the full list of options and their descriptions.
 # EXAMPLE: 
-# REQUIREMENTS: 
+# REQUIREMENTS: argparse, data.table
 # BUGS: --
 # NOTES:  ---
 # AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk

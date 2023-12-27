@@ -1,12 +1,15 @@
 #!/usr/bin/env Rscript
 # FILE: match_mutmulti_and_mutations.R ----------------------------------------
 #
-# DESCRIPTION:
+# DESCRIPTION: Annotates mutations in genomic regions scanned for de novo 
+# cancer driver discovery with their mutation multiplicity.
 #
 # USAGE: 
-# OPTIONS:
+# OPTIONS: Run 
+#          Rscript --vanilla match_CN_and_scanned_genomic_regions.R -h
+#          to see the full list of options and their descriptions.
 # EXAMPLE: 
-# REQUIREMENTS: 
+# REQUIREMENTS: argparse, data.table, plyr
 # BUGS: --
 # NOTES:  ---
 # AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk

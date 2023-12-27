@@ -1,12 +1,17 @@
 #!/usr/bin/env Rscript
 # FILE: combine_p_values_and_annotate_with_metadata.R -------------------------
 #
-# DESCRIPTION: A script to 
+# DESCRIPTION: A script to read raw results of de-novo driver discovery 
+# software, compute combined p-values and annotate results with known cancer
+# driver status, olfactory gene status, gene lenght, quantile of mutation 
+# rates, etc.
 #
 # USAGE: 
-# OPTIONS:
+# OPTIONS: Run 
+#          Rscript --vanilla combine_p_values_and_annotate_with_metadata.R -h
+#          to see the full list of options and their descriptions.
 # EXAMPLE: 
-# REQUIREMENTS: 
+# REQUIREMENTS: argparse, data.table, EmpiricalBrownsMethod, plyr, poolr
 # BUGS: --
 # NOTES:  ---
 # AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk

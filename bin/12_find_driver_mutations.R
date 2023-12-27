@@ -1,12 +1,16 @@
 #!/usr/bin/env Rscript
 # FILE: find_driver_mutations.R -----------------------------------------------
 #
-# DESCRIPTION: 
+# DESCRIPTION: Determines driver mutations (SNV, small indels, homozygous 
+# deletions in tumor suppressors and amplifications in oncogenes) in the 
+# detected cancer driver genomic elements.
 #
 # USAGE: 
-# OPTIONS:
+# OPTIONS: Run 
+#          Rscript --vanilla find_driver_mutations.R -h
+#          to see the full list of options and their descriptions.
 # EXAMPLE: 
-# REQUIREMENTS: 
+# REQUIREMENTS: data.table, plyr
 # BUGS: --
 # NOTES:  ---
 # AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk
@@ -42,52 +46,6 @@ source(paste0(srcDir, '/custom_functions.R'))
 # Libraries -------------------------------------------------------------------
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 suppressWarnings(suppressPackageStartupMessages(library(plyr)))
-
-# Functions : reading from dNdScv & NBR ---------------------------------------
-#' readExpObsNmuts
-#' @description Reads in result files from dNdScv & NBR into uniformal data 
-#' table while extracting columns containing information about expected and 
-#' observed number of mutations. 
-#' @author Maria Litovchenko
-#' @param filePath path to result file
-#' @param infoStr named vector with at least items cancer_subtype, gr_id
-#' @return data table with columns tumor_subtype, gr_id + n_syn, n_mis, n_non, 
-#' n_spl, n_ind, mis_mle, tru_mle, mis_low, tru_low, mis_high, tru_high, 
-#' ind_mle, ind_low, ind_high
-readExpObsNmuts <- function(filePath, infoStr) {
-  if (!file.exists(filePath)) {
-    message('[', Sys.time(), '] File not found: ', filePath, '. Return empty ',
-            'data table.')
-    return(data.table())
-  }
-  
-  if (!all(c('cancer_subtype', 'gr_id') %in% names(infoStr))) {
-    stop('[', Sys.time(), '] readExpectedNmuts: infoStr vector should have ',
-         'items under names cancer_subtype, gr_id')
-  }
-  infoStr <- infoStr[c('cancer_subtype', 'gr_id')]
-  infoStr <- as.data.table(t(infoStr))
-  setnames(infoStr, 'cancer_subtype', 'tumor_subtype')
-  
-  colsToGet <- c('gene_name', 'n_syn', 'n_mis', 'n_non', 'n_spl', 'n_ind', 
-                 'mis_mle', 'tru_mle', 'mis_low', 'tru_low', 'mis_high', 
-                 'tru_high', 'ind_mle', 'ind_low', 'ind_high', 'exp_syn', 
-                 'exp_mis', 'exp_non', 'exp_spl',#colums for dndscv finish here
-                 'region', 'obs_subs', 'obs_indels', 'obsexp_subs_mle', 
-                 'obsexp_subs_low', 'obsexp_subs_high', 'obsexp_indels_mle',
-                 'obsexp_indels_low', 'obsexp_indels_high', 'exp_subs',
-                 'exp_indels')
-  result <- suppressWarnings(fread(filePath, header = T, stringsAsFactors = F, 
-                                   select = colsToGet))
-  setnames(result, 
-           c('gene_name', 'region', 'obs_subs', 'obs_indels', 
-             'obsexp_subs_mle', 'obsexp_subs_low', 'obsexp_subs_high', 
-             'obsexp_indels_mle', 'obsexp_indels_low', 'obsexp_indels_high'),
-           c('gene_id', 'gene_id', 'n_subs', 'n_ind', 'subs_mle', 'subs_low', 
-             'subs_high', 'ind_mle', 'ind_low', 'ind_high'), skip_absent = T)
-  result <- cbind(result, infoStr)
-  result
-}
 
 # Functions : reading CHASM+ --------------------------------------------------
 #' readCHASMplus
@@ -634,38 +592,39 @@ parser$add_argument("-o", "--output", required = T,
                     type = 'character', help = outputHelp)
 
 args <- parser$parse_args()
+names(args$run_result) <- unlist(args$gr_id)
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 printArgs(args)
+# write check that no genomic regions in args is presented twice!
 
 # Test arguments --------------------------------------------------------------
-args <- list(inventory_analysis = 'data/inventory/inventory_analysis.csv', 
-             inventory_patients = 'data/inventory/inventory_patients.csv',
-             cancer_subtype = 'Panlung', 
-             gr_id = list('CDS', '3primeUTR', '5primeUTR', 'enhancer',
-                          'lincRNA', 'lincRNA_promoter', 'lincRNA_ss',
-                          'miRNA', 'promoter', 'shortRNA', 'ss'),
-             run_result = list('test_fixed_dndscv_Panlung_CDS.csv', 
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-3primeUTR-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-5primeUTR-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-enhancer-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-lincRNA-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-lincRNA_promoter-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-lincRNA_ss-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-miRNA-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-promoter-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-shortRNA-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-ss-hg19.csv'),
-             chasmplus = 'chasmplus-results-PANCAN-CDS-hg19.csv', 
-             drivers = 'completed_runs/2023-12-14/results/tables/drivers/drivers-Panlung--hg19.csv',
-             known_driver_mutations = 'data/assets/CancerGenomeInterpreter_lung_hg19.tsv',
-             muts_to_gr = 'completed_runs/2023-12-14/results/mut_rates/mutMapToGR-Panlung--hg19.csv',
-             synAcceptedClass = 'Silent', 
-             chasm_padj = 0.05, chasm_score_min = 0.5, max_fp = 0.05,
-             inferred_biotype = 'completed_runs/2023-12-14/results/tables/drivers_biotyped/driversBiotyped-Panlung--hg19.csv',
-             cn_of_drivers = 'test_fixed_cn_Panlung.csv')
-# known_driver_mutations = ''
-names(args$run_result) <- unlist(args$gr_id)
+# args <- list(inventory_analysis = 'data/inventory/inventory_analysis.csv', 
+#              inventory_patients = 'data/inventory/inventory_patients.csv',
+#              cancer_subtype = 'Panlung', 
+#              gr_id = list('CDS', '3primeUTR', '5primeUTR', 'enhancer',
+#                           'lincRNA', 'lincRNA_promoter', 'lincRNA_ss',
+#                           'miRNA', 'promoter', 'shortRNA', 'ss'),
+#              run_result = list('test_fixed_dndscv_Panlung_CDS.csv', 
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-3primeUTR-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-5primeUTR-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-enhancer-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-lincRNA-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-lincRNA_promoter-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-lincRNA_ss-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-miRNA-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-promoter-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-shortRNA-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-ss-hg19.csv'),
+#              chasmplus = 'chasmplus-results-PANCAN-CDS-hg19.csv', 
+#              drivers = 'completed_runs/2023-12-14/results/tables/drivers/drivers-Panlung--hg19.csv',
+#              known_driver_mutations = 'data/assets/CancerGenomeInterpreter_lung_hg19.tsv',
+#              muts_to_gr = 'completed_runs/2023-12-14/results/mut_rates/mutMapToGR-Panlung--hg19.csv',
+#              synAcceptedClass = 'Silent', 
+#              chasm_padj = 0.05, chasm_score_min = 0.5, max_fp = 0.05,
+#              inferred_biotype = 'completed_runs/2023-12-14/results/tables/drivers_biotyped/driversBiotyped-Panlung--hg19.csv',
+#              cn_of_drivers = 'test_fixed_cn_Panlung.csv')
+# names(args$run_result) <- unlist(args$gr_id)
 
 # Read in patients inventory --------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients, 1)
@@ -689,21 +648,18 @@ rm(analysisInv)
 gc()
 
 # Read driver genes -----------------------------------------------------------
-if (!is.null(args$drivers)) {
-  message('[', Sys.time(), '] Started reading ', args$drivers)
-  drivers <- fread(args$drivers, header = T, stringsAsFactors = F, 
-                   select = c('gr_id', 'gene_id', 'gene_name', 'FILTER', 
-                              'tier', 'is_known_cancer', 
-                              'known_in_tumor_subtype', 
-                              'known_cancer_biotype'))
-  drivers <- unique(drivers)
-  drivers <- drivers[FILTER == 'PASS' & !is.na(tier)]
-  
-  message('[', Sys.time(), '] Finished reading ', args$drivers)
-  if (nrow(drivers) == 0) {
-    stop('[', Sys.time(), '] no significant (FILTER is PASS and tier is not ',
-         'NA) driver genes is found in ', args$drivers, ' table.')
-  }
+message('[', Sys.time(), '] Started reading ', args$drivers)
+drivers <- fread(args$drivers, header = T, stringsAsFactors = F, 
+                 select = c('gr_id', 'gene_id', 'gene_name', 'FILTER', 'tier',
+                            'is_known_cancer', 'known_in_tumor_subtype',
+                            'known_cancer_biotype'))
+drivers <- unique(drivers)
+drivers <- drivers[FILTER == 'PASS' & !is.na(tier)]
+
+message('[', Sys.time(), '] Finished reading ', args$drivers)
+if (nrow(drivers) == 0) {
+  stop('[', Sys.time(), '] no significant (FILTER is PASS and tier is not ',
+       'NA) driver genes is found in ', args$drivers, ' table.')
 }
 
 # Read in observed and estimated number of driver mutations - dNdScv, NBR -----
@@ -713,6 +669,7 @@ mleDriveMuts <- lapply(names(args$run_result),
                        function(x) readExpObsNmuts(args$run_result[[x]],
                                                    c(cancer_subtype = args$cancer_subtype,
                                                      gr_id = x)))
+mleDriveMuts <- mleDriveMuts[sapply(mleDriveMuts, function(x) nrow(x) != 0)]
 message('[', Sys.time(), '] Finished reading ',
         paste(args$run_result, collapse = ','))
 
