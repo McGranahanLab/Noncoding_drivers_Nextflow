@@ -220,31 +220,30 @@ workflow POSTPROCESSING {
     */
 
     /*
-        Step 2: load analyis inventory & check that all software run & produced
-                 result files
+        Step 2: load analyis & patients inventory & check that all software run
+        & produced result files
     */
+    // load patients inventory
+    patients_inv = Channel.fromPath(params.patients_inventory,
+                                    checkIfExists: true)
+                          .ifEmpty { exit 1, "[ERROR]: patients inventory file not found" }
     analysis_inv = Channel.fromPath(params.analysis_inventory,
                                     checkIfExists: true)
                           .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" }
-
     // DO NOT FORGET TO TURN checkIfExists TO true IN FUNCTION create_path_to_result_file
-
-    analysis_inv  = analysis_inv.splitCsv(header: true)
-                                .map { row -> 
-                                           return create_result_file_tuple(row,
-                                                                           params.outdir,
-                                                                           params.target_genome_version)
-                                     }
-                                 .unique()
-                                 .groupTuple(by: [0, 1, 2, 3, 4], remainder: true)
+    results_inv  = analysis_inv.splitCsv(header: true)
+                               .map { row -> 
+                                        return create_result_file_tuple(row,
+                                                                        params.outdir,
+                                                                        params.target_genome_version)
+                               }
+                               .unique()
+                               .groupTuple(by: [0, 1, 2, 3, 4], remainder: true)
     // load tier definition table
     tier_inventory = Channel.fromPath(params.tier_inventory, 
                                       checkIfExists: true)
                             .ifEmpty { exit 1, "[ERROR]: tier inventory file not found" }
-    // load patients inventory
-    patients_inv   = Channel.fromPath(params.patients_inventory,
-                                      checkIfExists: true)
-                            .ifEmpty { exit 1, "[ERROR]: patients inventory file not found" }
+
     chain          = channel_from_params_path(params.chain)
 
     /*
@@ -259,14 +258,14 @@ workflow POSTPROCESSING {
     tcga_inventory     = channel_from_params_path(params.tcga_inventory) 
     tcga_expression    = channel_from_params_path(params.tcga_expression)
 
-    combined_pvals = COMBINE_P_VALS_AND_ANNOTATE (analysis_inv.combine(Channel.from(params.rawP_cap))
-                                                              .combine(gene_name_synonyms)
-                                                              .combine(known_cancer_genes)
-                                                              .combine(olfactory_genes)
-                                                              .combine(gtex_inventory)
-                                                              .combine(gtex_expression)
-                                                              .combine(tcga_inventory)
-                                                              .combine(tcga_expression)).csv
+    combined_pvals = COMBINE_P_VALS_AND_ANNOTATE (results_inv.combine(Channel.from(params.rawP_cap))
+                                                             .combine(gene_name_synonyms)
+                                                             .combine(known_cancer_genes)
+                                                             .combine(olfactory_genes)
+                                                             .combine(gtex_inventory)
+                                                             .combine(gtex_expression)
+                                                             .combine(tcga_inventory)
+                                                             .combine(tcga_expression)).csv
     tiered_pvals   = ASSIGN_TIER (combined_pvals.groupTuple(by: [0], remainder: true)
                                                 .combine(tier_inventory)
                                                 .combine(Channel.of(params.combine_p_method))).csv
@@ -285,19 +284,19 @@ workflow POSTPROCESSING {
     // DO IT VIA MOVING CN AND MUTATION MULTIPLICITY FILES INTO SEPARATE INVENTORY
     // THIS WILL ALSO MEAN THAT THE 1st PIPELINE WON'T BE TRIGGERED UPON CHANGE
     // IN INVENTORY
-    driver_gr_annotated_with_cn = ANNOTATE_GENOMICRANGES_WITH_CN(analysis_inv.map { it -> return(tuple(it[0], it[4])) }
-                                                                             .unique()
-                                                                             .combine(drivers, by: [0])
-                                                                             .combine(patients_inv)
-                                                                             .combine(chain)).csv
+    driver_gr_annotated_with_cn = ANNOTATE_GENOMICRANGES_WITH_CN(results_inv.map { it -> return(tuple(it[0], it[4])) }
+                                                                            .unique()
+                                                                            .combine(drivers, by: [0])
+                                                                            .combine(patients_inv)
+                                                                            .combine(chain)).csv
     /* 
         Step 4b: annotate SNVs and small indels in drivers with mutation
         multiplicity
     */
-    mutsinDrives_annotated_with_mults = ANNOTATE_MUTATIONS_WITH_MULTIPLICITY(analysis_inv.map { it -> return(tuple(it[0], it[2]))}
-                                                                                         .unique()
-                                                                                         .combine(drivers, by: [0])
-                                                                                         .combine(patients_inv)).csv
+    mutsinDrives_annotated_with_mults = ANNOTATE_MUTATIONS_WITH_MULTIPLICITY(results_inv.map { it -> return(tuple(it[0], it[2]))}
+                                                                                        .unique()
+                                                                                        .combine(drivers, by: [0])
+                                                                                        .combine(patients_inv)).csv
     /* 
         Step 4c: perform biotyping
     */
@@ -305,13 +304,17 @@ workflow POSTPROCESSING {
                                       .combine(mutsinDrives_annotated_with_mults, by: [0])
                                       .combine(driver_gr_annotated_with_cn, by: [0]))
 
-
+    /* 
+        Step 5: tumor subtype specificity of drivers detected in histologically
+        uniform (i.e. Adenocarcinoma, but not Panlung) cohorts
+    */
+    // find histologically uniform tumor subtypes
 
     /* 
         Step 5: mutual co-occurrence and exclusivity analysis
     */
     // PATCH 
-    drivers_coocc_incompat = RUN_DISCOVER(analysis_inv.map { it -> return(tuple(it[0], it[2]))}
+    drivers_coocc_incompat = RUN_DISCOVER(results_inv.map { it -> return(tuple(it[0], it[2]))}
                                                       .unique()
                                                       .combine(drivers, by: [0])
                                                       .combine(Channel.fromPath(params.analysis_inventory, checkIfExists: true)
@@ -328,13 +331,17 @@ workflow.onComplete {
     println ( workflow.success ? """
         Pipeline execution summary
         ---------------------------
-        Completed at: ${workflow.complete}
-        Duration    : ${workflow.duration}
-        Success     : ${workflow.success}
+        exectuted by: ${workflow.userName}
+        runName     : ${workflow.runName}
+        started at  : ${workflow.start}
+        completed at: ${workflow.complete}
+        duration    : ${workflow.duration}
+        success     : ${workflow.success}
         workDir     : ${workflow.workDir}
+        configFiles : ${workflow.configFiles}
         exit status : ${workflow.exitStatus}
         """ : """
-        Failed: ${workflow.errorReport}
+        failed: ${workflow.errorReport}
         exit status : ${workflow.exitStatus}
         """
     )
