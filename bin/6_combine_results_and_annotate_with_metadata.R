@@ -867,8 +867,7 @@ if (!is.null(args$known_cancer_genes)) {
           'table')
 } else {
   message('[', Sys.time(), '] Known cancer genes table is not given. Will ',
-          'set value of column is_known_cancer to F.')
-  combinedPs[, is_known_cancer := F]
+          'not add column is_known_cancer.')
 }
 
 # Annotate with olfactory gene status -----------------------------------------

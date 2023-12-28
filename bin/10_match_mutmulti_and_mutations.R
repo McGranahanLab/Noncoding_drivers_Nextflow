@@ -117,11 +117,10 @@ if (!is.null(args$drivers)) {
   message('[', Sys.time(), '] Started reading ', args$drivers)
   drivers <- fread(args$drivers, header = T, stringsAsFactors = F, 
                    select = c('gr_id', 'gene_id', 'gene_name', 'FILTER', 
-                              'tier', 'is_known_cancer', 
-                              'known_in_tumor_subtype', 
-                              'known_cancer_biotype'))
+                              'tier'))
   drivers <- unique(drivers)
   drivers <- drivers[FILTER == 'PASS' & !is.na(tier)]
+  drivers <- drivers[,.(gr_id, gene_id, gene_name)]
   message('[', Sys.time(), '] Finished reading ', args$drivers)
   if (nrow(drivers) == 0) {
     stop('[', Sys.time(), '] no significant (FILTER is PASS and tier is not ',

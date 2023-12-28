@@ -192,6 +192,8 @@ if (!is.null(args$drivers)) {
                               'known_cancer_biotype'))
   drivers <- unique(drivers)
   drivers <- drivers[FILTER == 'PASS' & !is.na(tier)]
+  drivers <- drivers[, FILTER := NULL]
+  drivers <- drivers[, tier := NULL]
   message('[', Sys.time(), '] Finished reading ', args$drivers)
   if (nrow(drivers) == 0) {
     stop('[', Sys.time(), '] no significant (FILTER is PASS and tier is not ',
@@ -381,11 +383,10 @@ infBiotype_out[, gr_name := NULL]
 # in case driver genes were given and annotated with known cancer biotype
 # status
 if (!is.null(args$drivers)) {
-  if (any(c('is_known_cancer', 'known_cancer_biotype') %in% 
-          colnames(drivers))) {
+  if ('is_known_cancer' %in% colnames(drivers)) {
     colsToGet <- intersect(c('gr_id', 'gene_id', 'gene_name',
-                             'is_known_cancer', 'known_cancer_biotype'),
-                           colnames(drivers))
+                             'is_known_cancer', 'known_cancer_biotype',
+                             'known_in_tumor_subtype'), colnames(drivers))
     infBiotype_out <- merge(infBiotype_out,
                             unique(drivers[, colsToGet, with = F]),
                             by = c('gr_id', 'gene_id', 'gene_name'), all.x = T)

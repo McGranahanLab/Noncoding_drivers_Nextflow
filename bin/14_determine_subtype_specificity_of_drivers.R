@@ -21,6 +21,31 @@
 # CREATED:  17.12.2020
 # REVISION: 27.12.2023
 
+# Source custom functions -----------------------------------------------------
+#' get_script_dir
+#' @description Returns parent directory of the currently executing script
+#' @author https://stackoverflow.com/questions/47044068/get-the-path-of-current-script
+#' @return string, absolute path
+#' @note this functions has to be present in all R scripts sourcing any other
+#' script. Sourcing R scripts with use of box library is unstable then multiple
+#' processes try to execute the source at the same time.
+get_script_dir <- function() {
+  cArgs <- tibble::enframe(commandArgs(), name = NULL)
+  cArgsSplit <- tidyr::separate(cArgs, col = value, into = c("key", "value"),
+                                sep = "=", fill = "right")
+  cArgsFltr <- dplyr::filter(cArgsSplit, key == "--file")
+  
+  result <- dplyr::pull(cArgsFltr, value)
+  result <- tools::file_path_as_absolute(dirname(result))
+  result
+}
+
+srcDir <- get_script_dir()
+# to spread out multiple processes accessing the same file
+Sys.sleep(sample(1:15, 1))
+source(paste0(srcDir, '/custom_functions.R'))
+
+
 # Libraries -------------------------------------------------------------------
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 suppressWarnings(suppressPackageStartupMessages(library(plyr)))
@@ -253,10 +278,37 @@ assign_specificity <- function(pwCompDT, pCutOff = 0.05) {
   result
 }
 
+
+# Parse input arguments -------------------------------------------------------
+# create parser object
+parser <- ArgumentParser(prog = 'determine_subtype_specificity_of_drivers.R')
+
+selectHelp <- paste('Path(s) to files containing calculated selection rates',
+                     'for all cancer driver genomic elements detected in',
+                     'tumor subtypes of single histological origin')
+parser$add_argument("-s", "--selection_rates", required = T, nargs = '+', 
+                    type = 'character', help = selectHelp)
+
+pHelp <- paste('P value below which test is considered significant')
+parser$add_argument("-p", "--p_val_max", required = T, default = 0.05,
+                    type = 'double', help = pHelp)
+
+outputHelp <- paste('Path to the output file')
+parser$add_argument("-o", "--output", required = T, 
+                    type = 'character', help = outputHelp)
+
+args <- parser$parse_args()
+# check_input_arguments_postproc(args, outputType = 'file')
+names(args$run_result) <- unlist(args$gr_id)
+
+timeStart <- Sys.time()
+message('[', Sys.time(), '] Start time of run')
+printArgs(args)
+
 # Test inputs -----------------------------------------------------------------
-args <- list(selection_rates = c('selectionRates-Adenocarcinoma--hg19.csv',
-                                 'selectionRates-Squamous_cell--hg19.csv'),
-             p_val_max = 0.05, output = '')
+# args <- list(selection_rates = c('selectionRates-Adenocarcinoma--hg19.csv',
+#                                  'selectionRates-Squamous_cell--hg19.csv'),
+#              p_val_max = 0.05, output = '')
 
 # Read selection rates --------------------------------------------------------
 selection_rates <- lapply(args$selection_rates, fread, header = T,

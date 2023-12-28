@@ -105,28 +105,68 @@ calculateGlobalMisTruList <- function(goi, goi_gr_id, raw_results_list) {
   result
 }
 
-# Test inputs -----------------------------------------------------------------
-# submit only drivers for single origin tumor subtypes
-args <- list(drivers = list('completed_runs/2023-12-14/results/tables/drivers/drivers-Adenocarcinoma--hg19.csv',
-                            'completed_runs/2023-12-14/results/tables/drivers/drivers-Squamous_cell--hg19.csv'),
-             cancer_subtype = 'Adenocarcinoma',
-             gr_id = list('CDS', '3primeUTR', '5primeUTR', 'enhancer',
-                          'lincRNA', 'lincRNA_promoter', 'lincRNA_ss',
-                          'miRNA', 'promoter', 'shortRNA', 'ss'),
-             run_result = list('completed_runs/2023_12_25/results/dndscv/dndscvResults-Adenocarcinoma-CDS-hg19.csv', 
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-3primeUTR-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-5primeUTR-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-enhancer-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-lincRNA-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-lincRNA_promoter-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-lincRNA_ss-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-miRNA-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-promoter-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-shortRNA-hg19.csv',
-                               'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-ss-hg19.csv'),
-             output = 'selectionRates-Adenocarcinoma--hg19.csv')
+# Parse input arguments -------------------------------------------------------
+# create parser object
+parser <- ArgumentParser(prog = 'calculate_selection_rates.R')
+
+driversHelp <- paste('Path to file(s) containing de-novo detected cancer drivers')
+parser$add_argument("-d", "--drivers", required = T, nargs = '+', 
+                    type = 'character', help = driversHelp)
+
+subtypeHelp <- paste('A cancer subtype to select from patientsInv table. Only',
+                     'mutations from patients with that cancer type will be',
+                     'selected. In case an analysis of several cancer types',
+                     'needed to be performed please run this script ',
+                     'separetedly for each cancer type.')
+parser$add_argument("-c", "--cancer_subtype", required = T, type = 'character',
+                    help = subtypeHelp)
+
+grIDhelp <- paste0('Genomic regions IDs corresponding to files submitted in',
+                   '--run_results argument. Each genomic region ID should be',
+                   'mentioned only once.')
+parser$add_argument("-g", "--gr_id", required = T, type = 'character',
+                    help = grIDhelp, nargs = '+')
+
+resHelp <- paste('A list of file paths to results of software runs on current',
+                 'cancer subtype genomic region pair. The order of paths',
+                 'should match the order of software names in --software',
+                 'argument')
+parser$add_argument("-r", "--run_results", required = T, type = 'character',
+                    nargs = '+', default = NULL, help = resHelp)
+
+outputHelp <- paste('Path to the output file')
+parser$add_argument("-o", "--output", required = T, 
+                    type = 'character', help = outputHelp)
+
+args <- parser$parse_args()
+# check_input_arguments_postproc(args, outputType = 'file')
 names(args$run_result) <- unlist(args$gr_id)
 # check that each each gr_id is only one
+
+timeStart <- Sys.time()
+message('[', Sys.time(), '] Start time of run')
+printArgs(args)
+
+# Test inputs -----------------------------------------------------------------
+# submit only drivers for single origin tumor subtypes
+# args <- list(drivers = list('completed_runs/2023-12-14/results/tables/drivers/drivers-Adenocarcinoma--hg19.csv',
+#                             'completed_runs/2023-12-14/results/tables/drivers/drivers-Squamous_cell--hg19.csv'),
+#              cancer_subtype = 'Adenocarcinoma',
+#              gr_id = list('CDS', '3primeUTR', '5primeUTR', 'enhancer',
+#                           'lincRNA', 'lincRNA_promoter', 'lincRNA_ss',
+#                           'miRNA', 'promoter', 'shortRNA', 'ss'),
+#              run_result = list('completed_runs/2023_12_25/results/dndscv/dndscvResults-Adenocarcinoma-CDS-hg19.csv', 
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-3primeUTR-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-5primeUTR-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-enhancer-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-lincRNA-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-lincRNA_promoter-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-lincRNA_ss-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-miRNA-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-promoter-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-shortRNA-hg19.csv',
+#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Adenocarcinoma-ss-hg19.csv'),
+#              output = 'selectionRates-Adenocarcinoma--hg19.csv')
 
 # Read driver genes -----------------------------------------------------------
 message('[', Sys.time(), '] Started reading ', paste0(args$drivers, 

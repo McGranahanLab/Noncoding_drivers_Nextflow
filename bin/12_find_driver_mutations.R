@@ -541,14 +541,17 @@ subtypeHelp <- paste('A cancer subtype to select from patientsInv table. Only',
 parser$add_argument("-c", "--cancer_subtype", required = T, type = 'character',
                     help = subtypeHelp)
 
+grIDhelp <- paste0('Genomic regions IDs corresponding to files submitted in',
+                   '--run_results argument. Each genomic region ID should be',
+                   'mentioned only once.')
 parser$add_argument("-g", "--gr_id", required = T, type = 'character',
-                    help = 'IDs of a genomic region', nargs = '+')
+                    help = grIDhelp, nargs = '+')
 
 resHelp <- paste('A list of file paths to results of software runs on current',
                  'cancer subtype genomic region pair. The order of paths',
                  'should match the order of software names in --software',
                  'argument')
-parser$add_argument("-d", "--run_results", required = T, type = 'character',
+parser$add_argument("-r", "--run_results", required = T, type = 'character',
                     nargs = '+', default = NULL, help = resHelp)
 
 chasmplusHelp <- paste('Path to chasmplus result files')
@@ -556,7 +559,7 @@ parser$add_argument('-cp', "--chasmplus", required = F, type = 'character',
                     nargs = '+', default = NULL, help = chasmplusHelp)
 
 driversHelp <- paste('Path to file containing de-novo detected cancer drivers')
-parser$add_argument("-d", "--drivers", required = F,
+parser$add_argument("-d", "--drivers", required = T,
                     type = 'character', help = driversHelp)
 
 mutstoGrHelp <- paste('Path to files containing information about mutations',
@@ -572,27 +575,41 @@ synClassHelp <- paste('Variant_Classification-s from MAF format which are',
 parser$add_argument("-sc", "--synAcceptedClass", required = F, nargs = '+',
                     default = NULL, type = 'character', help = synClassHelp)
 
-chasmScoreHelp <- paste0()
+chasmScoreHelp <- paste('Minimal CHASMplus score for a SNV to be found',
+                        'significant')
 parser$add_argument("-cs", "--chasm_score_min", required = F, default = 0.5,
-                    type = 'numeric', help = chasmScoreHelp)
+                    type = 'double', help = chasmScoreHelp)
 
-chasmPhelp <- paste0()
-parser$add_argument("-c", "--chasm_padj", required = F, default = 0.05,
-                    type = 'numeric', help = chasmPhelp)
+chasmPhelp <- paste('Minimal adjusted for multiple testing CHASMplus p value',
+                    'for a SNV to be found significant')
+parser$add_argument("-cpadj", "--chasm_padj", required = F, default = 0.05,
+                    type = 'double', help = chasmPhelp)
 
-maxFPhelp <- paste0()
+maxFPhelp <- paste('Maximum false positive rate in finding driver mutations')
 parser$add_argument("-mfp", "--max_fp", required = F, default = 0.05,
-                    type = 'numeric', help = maxFPhelp)
+                    type = 'double', help = maxFPhelp)
 
---inferred_biotype 
---cn_of_drivers
+biotypeHelp <- paste('Path to file containing inferred biotypes (TSG or ',
+                     'oncogene) of the drivers. Will be used to find copy',
+                     'number driver mutation (homozygous deletion of TSG and',
+                     'amlification of oncogenes)')
+parser$add_argument("-ib", "--inferred_biotype", required = F, default = NULL,
+                    type = 'character', help = biotypeHelp)
+
+cnHelp <- paste('Path to file containing copy number states of detected',
+                'driver genomic elements')
+parser$add_argument("-cn", "--cn_of_drivers", required = F, default = NULL,
+                    type = 'character', help = biotypeHelp)
 
 outputHelp <- paste('Path to the output file')
 parser$add_argument("-o", "--output", required = T, 
                     type = 'character', help = outputHelp)
 
 args <- parser$parse_args()
+# check_input_arguments_postproc(args, outputType = 'file')
 names(args$run_result) <- unlist(args$gr_id)
+# check that each each gr_id is only one
+
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 printArgs(args)
@@ -650,11 +667,14 @@ gc()
 # Read driver genes -----------------------------------------------------------
 message('[', Sys.time(), '] Started reading ', args$drivers)
 drivers <- fread(args$drivers, header = T, stringsAsFactors = F, 
-                 select = c('gr_id', 'gene_id', 'gene_name', 'FILTER', 'tier',
-                            'is_known_cancer', 'known_in_tumor_subtype',
+                 select = c('gr_id', 'gene_id', 'gene_name', 'FILTER', 
+                            'tier', 'is_known_cancer', 
+                            'known_in_tumor_subtype', 
                             'known_cancer_biotype'))
 drivers <- unique(drivers)
 drivers <- drivers[FILTER == 'PASS' & !is.na(tier)]
+drivers <- drivers[, FILTER := NULL]
+drivers <- drivers[, tier := NULL]
 
 message('[', Sys.time(), '] Finished reading ', args$drivers)
 if (nrow(drivers) == 0) {
@@ -816,9 +836,9 @@ if (!is.null(args$inferred_biotype)) {
                    by = c('gr_id', 'gene_id', 'gene_name'))
 } else {
   message('[', Sys.time(), '] File with inferred cancer biotypes for drivers ',
-          'was not given. Known cancer biotype (if available) to locate copy ',
-          'number drivers (amplifications and losses) in driver genomic ',
-          'elements (oncogenes and TSG respectively')
+          'was not given. Known cancer biotype (if available) will be used ',
+          'to locate copy number drivers (amplifications and losses) in ',
+          'driver genomic elements (oncogenes and TSG respectively')
   setnames(drivers, 'known_cancer_biotype', 'biotype', skip_absent = T)
 }
 
