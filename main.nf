@@ -33,6 +33,7 @@ include { FILTER_TIERED_DRIVERS } from './modules/postprocessing.nf'
 include { ANNOTATE_GENOMICRANGES_WITH_CN } from './modules/biotyping_of_drivers.nf'
 include { ANNOTATE_MUTATIONS_WITH_MULTIPLICITY } from './modules/biotyping_of_drivers.nf'
 include { BIOTYPE_DRIVERS } from './modules/biotyping_of_drivers.nf'
+include { FIND_DRIVER_MUTATIONS } from './modules/find_driver_mutations.nf'
 include { RUN_DISCOVER } from './modules/run_software.nf'
 
 /* ----------------------------------------------------------------------------
@@ -211,7 +212,7 @@ workflow CALL_DE_NOVO_CANCER_DRIVERS {
     RUN_ONCODRIVEFML (PREPARE_INPUT_MUTATION_FILES.out.oncodrivefml,
                       PREPARE_INPUT_GENOMIC_REGIONS_FILES.out.oncodrivefml,
                       oncodrivefml_config)
- }
+}
 
 workflow POSTPROCESSING {
     /*
@@ -237,8 +238,12 @@ workflow POSTPROCESSING {
                                                                         params.outdir,
                                                                         params.target_genome_version)
                                }
-                               .unique()
-                               .groupTuple(by: [0, 1, 2, 3, 4], remainder: true)
+    // put chasmplus to separate inventory
+    chasm_inv    = results_inv.filter { it[5] == 'chasmplus' }
+                              .map {it -> return(tuple(it[0], it[6]))}
+                              .unique()
+    results_inv  = results_inv.filter { it[5] != 'chasmplus' }
+                              .unique()
     // load tier definition table
     tier_inventory = Channel.fromPath(params.tier_inventory, 
                                       checkIfExists: true)
@@ -257,8 +262,11 @@ workflow POSTPROCESSING {
     gtex_expression    = channel_from_params_path(params.gtex_expression)
     tcga_inventory     = channel_from_params_path(params.tcga_inventory) 
     tcga_expression    = channel_from_params_path(params.tcga_expression)
+    known_driver_muts  = channel_from_params_path(params.known_driver_mutations)
 
-    combined_pvals = COMBINE_P_VALS_AND_ANNOTATE (results_inv.combine(Channel.from(params.rawP_cap))
+    combined_pvals = COMBINE_P_VALS_AND_ANNOTATE (results_inv.groupTuple(by: [0, 1, 2, 3, 4],
+                                                                         remainder: true)
+                                                             .combine(Channel.from(params.rawP_cap))
                                                              .combine(gene_name_synonyms)
                                                              .combine(known_cancer_genes)
                                                              .combine(olfactory_genes)
@@ -270,8 +278,7 @@ workflow POSTPROCESSING {
                                                 .combine(tier_inventory)
                                                 .combine(Channel.of(params.combine_p_method))).csv
  
-    drivers        = FILTER_TIERED_DRIVERS (tiered_pvals.combine(Channel.fromPath(params.analysis_inventory,
-                                                                                  checkIfExists: true))).csv
+    drivers        = FILTER_TIERED_DRIVERS (tiered_pvals.combine(analysis_inv)).csv
     // only tumor subtypes which do have drivers detected will be processed 
     // further
     drivers        = drivers.filter { it[2]  == 'yes' }
@@ -283,7 +290,7 @@ workflow POSTPROCESSING {
     // INSERT HERE A BREAK TO STOP PROCESS FROM HAPPENING IN CASE NO CN WAS PROVIDED
     // DO IT VIA MOVING CN AND MUTATION MULTIPLICITY FILES INTO SEPARATE INVENTORY
     // THIS WILL ALSO MEAN THAT THE 1st PIPELINE WON'T BE TRIGGERED UPON CHANGE
-    // IN INVENTORY
+    // IN INVENTORY. USE WHEN directive on patients_inv
     driver_gr_annotated_with_cn = ANNOTATE_GENOMICRANGES_WITH_CN(results_inv.map { it -> return(tuple(it[0], it[4])) }
                                                                             .unique()
                                                                             .combine(drivers, by: [0])
@@ -302,13 +309,28 @@ workflow POSTPROCESSING {
     */
     drivers_biotype = BIOTYPE_DRIVERS(drivers
                                       .combine(mutsinDrives_annotated_with_mults, by: [0])
-                                      .combine(driver_gr_annotated_with_cn, by: [0]))
+                                      .combine(driver_gr_annotated_with_cn, by: [0])).csv
+
+    /* 
+        Step 5: find driver mutations
+    */
+    driver_mutations = FIND_DRIVER_MUTATIONS( results_inv.filter { it[5] == 'nbr' || it[5] == 'dndscv'}
+                                                         .map {it -> return(tuple(it[0], it[1], it[2], it[6]))}
+                                                         .groupTuple(by: [0, 2])
+                                                         .combine(drivers, by: [0])
+                                                         .join(chasm_inv, by: [0])
+                                                         .combine(mutsinDrives_annotated_with_mults, by: [0])
+                                                         .combine(drivers_biotype, by: [0])
+                                                         .combine(analysis_inv)
+                                                         .combine(patients_inv)
+                                                         .combine(known_driver_muts)).csv
 
     /* 
         Step 5: tumor subtype specificity of drivers detected in histologically
         uniform (i.e. Adenocarcinoma, but not Panlung) cohorts
     */
     // find histologically uniform tumor subtypes
+    
 
     /* 
         Step 5: mutual co-occurrence and exclusivity analysis
@@ -317,8 +339,7 @@ workflow POSTPROCESSING {
     drivers_coocc_incompat = RUN_DISCOVER(results_inv.map { it -> return(tuple(it[0], it[2]))}
                                                       .unique()
                                                       .combine(drivers, by: [0])
-                                                      .combine(Channel.fromPath(params.analysis_inventory, checkIfExists: true)
-                                                                      .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" })
+                                                      .combine(analysis_inv)
                                                       .combine(Channel.from('discover')))
 
 

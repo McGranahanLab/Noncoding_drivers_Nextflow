@@ -42,6 +42,8 @@ srcDir <- get_script_dir()
 # to spread out multiple processes accessing the same file
 Sys.sleep(sample(1:15, 1))
 source(paste0(srcDir, '/custom_functions.R'))
+Sys.sleep(sample(1:10, 1))
+source(paste0(srcDir, '/custom_functions_postprocessing.R'))
 
 # Libraries -------------------------------------------------------------------
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
@@ -562,6 +564,12 @@ driversHelp <- paste('Path to file containing de-novo detected cancer drivers')
 parser$add_argument("-d", "--drivers", required = T,
                     type = 'character', help = driversHelp)
 
+knownHelp <- paste('Path to file containing known driver mutations. Must have',
+                   'column key in the same format as keys of file submitted',
+                   'under --muts_to_gr argument')
+parser$add_argument("-k", "--known_driver_mutations", required = F,
+                    type = 'character', help = knownHelp)
+
 mutstoGrHelp <- paste('Path to files containing information about mutations',
                       'mapping to genomic regions. Usually produced by',
                       'calculate_mutation_rates.R')
@@ -831,14 +839,27 @@ if (!is.null(args$inferred_biotype)) {
                                        'inferred_biotype'))
   setnames(inferred_biotype, 'inferred_biotype', 'biotype')
   inferred_biotype <- unique(inferred_biotype)
+  inferred_biotype[, gr_id := as.character(gr_id)]
+  inferred_biotype[, gene_id := as.character(gene_id)]
+  inferred_biotype[, gene_name := as.character(gene_name)]
+  inferred_biotype[, biotype := as.character(biotype)]
   message('[', Sys.time(), '] Read ', args$inferred_biotype)
-  drivers <- merge(drivers, inferred_biotype, all.x = T,
-                   by = c('gr_id', 'gene_id', 'gene_name'))
+  
+  if (nrow(inferred_biotype) == 0) {
+    message('[', Sys.time(), '] The file was empty. Known cancer biotype (if ',
+            'available) will be used to locate copy number drivers ',
+            '(amplifications and losses) in driver genomic elements ',
+            '(oncogenes and TSG respectively)')
+    setnames(drivers, 'known_cancer_biotype', 'biotype', skip_absent = T)
+  } else {
+    drivers <- merge(drivers, inferred_biotype, all.x = T,
+                     by = c('gr_id', 'gene_id', 'gene_name'))
+  }
 } else {
   message('[', Sys.time(), '] File with inferred cancer biotypes for drivers ',
           'was not given. Known cancer biotype (if available) will be used ',
           'to locate copy number drivers (amplifications and losses) in ',
-          'driver genomic elements (oncogenes and TSG respectively')
+          'driver genomic elements (oncogenes and TSG respectively)')
   setnames(drivers, 'known_cancer_biotype', 'biotype', skip_absent = T)
 }
 
