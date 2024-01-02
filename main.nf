@@ -34,6 +34,9 @@ include { ANNOTATE_GENOMICRANGES_WITH_CN } from './modules/biotyping_of_drivers.
 include { ANNOTATE_MUTATIONS_WITH_MULTIPLICITY } from './modules/biotyping_of_drivers.nf'
 include { BIOTYPE_DRIVERS } from './modules/biotyping_of_drivers.nf'
 include { FIND_DRIVER_MUTATIONS } from './modules/find_driver_mutations.nf'
+
+include { CALCULATE_SELECTION_RATES } from './modules/subtype_specificity.nf'
+
 include { RUN_DISCOVER } from './modules/run_software.nf'
 
 /* ----------------------------------------------------------------------------
@@ -274,7 +277,8 @@ workflow POSTPROCESSING {
                                                              .combine(gtex_expression)
                                                              .combine(tcga_inventory)
                                                              .combine(tcga_expression)).csv
-    tiered_pvals   = ASSIGN_TIER (combined_pvals.groupTuple(by: [0], remainder: true)
+    tiered_pvals   = ASSIGN_TIER (combined_pvals.groupTuple(by: [0], 
+                                                            remainder: true)
                                                 .combine(tier_inventory)
                                                 .combine(Channel.of(params.combine_p_method))).csv
  
@@ -330,17 +334,32 @@ workflow POSTPROCESSING {
         uniform (i.e. Adenocarcinoma, but not Panlung) cohorts
     */
     // find histologically uniform tumor subtypes
-    
+    histUniform_subtype = patients_inv.splitCsv(header: true)
+                                      .map { row -> return(tuple(row.tumor_subtype, 
+                                                                 row.participant_tumor_subtype)) }
+                                      .unique()
+                                      .groupTuple(by: 0)
+                                      .filter { it[1].size() == 1}
+                                      .map { it -> return(it[0])}
+    drivers_uniSubtype  = histUniform_subtype.combine(drivers.combine(histUniform_subtype, by: [0]))
+                                             .groupTuple(by: [0])
+                                             .map { it -> return(tuple(it[0], it[2]))}
+
+    // calculates rates of selection
+    selection_rates = CALCULATE_SELECTION_RATES( results_inv.filter { it[5] == 'nbr' || it[5] == 'dndscv'}
+                                                            .map {it -> return(tuple(it[0], it[1], it[6])) }
+                                                            .groupTuple(by: [0])
+                                                            .combine(drivers_uniSubtype, by: [0]) )
 
     /* 
         Step 5: mutual co-occurrence and exclusivity analysis
     */
     // PATCH 
     drivers_coocc_incompat = RUN_DISCOVER(results_inv.map { it -> return(tuple(it[0], it[2]))}
-                                                      .unique()
-                                                      .combine(drivers, by: [0])
-                                                      .combine(analysis_inv)
-                                                      .combine(Channel.from('discover')))
+                                                     .unique()
+                                                     .combine(drivers, by: [0])
+                                                     .combine(analysis_inv)
+                                                     .combine(Channel.from('discover')))
 
 
     // do not forget to remove nbr from cds

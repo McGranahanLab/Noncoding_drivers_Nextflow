@@ -41,6 +41,8 @@ srcDir <- get_script_dir()
 # to spread out multiple processes accessing the same file
 Sys.sleep(sample(1:15, 1))
 source(paste0(srcDir, '/custom_functions.R'))
+Sys.sleep(sample(1:10, 1))
+source(paste0(srcDir, '/custom_functions_postprocessing.R'))
 
 # Libraries -------------------------------------------------------------------
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
@@ -132,7 +134,7 @@ resHelp <- paste('A list of file paths to results of software runs on current',
                  'should match the order of software names in --software',
                  'argument')
 parser$add_argument("-r", "--run_results", required = T, type = 'character',
-                    nargs = '+', default = NULL, help = resHelp)
+                    nargs = '+', help = resHelp)
 
 outputHelp <- paste('Path to the output file')
 parser$add_argument("-o", "--output", required = T, 
@@ -172,15 +174,15 @@ printArgs(args)
 message('[', Sys.time(), '] Started reading ', paste0(args$drivers, 
                                                       collapse = ', '))
 drivers <- lapply(args$drivers, fread, header = T, stringsAsFactors = F, 
-                 select = c('tumor_subtype', 'gr_id', 'gene_id', 'gene_name',
-                            'tier', 'FILTER', 'is_known_cancer', 
-                            'known_in_tumor_subtype'))
+                  select = c('tumor_subtype', 'gr_id', 'gene_id', 'gene_name',
+                             'tier', 'FILTER', 'is_known_cancer', 
+                             'known_in_tumor_subtype'))
 drivers <- do.call(rbind, drivers)
 drivers <- unique(drivers)
 drivers <- drivers[FILTER == 'PASS' & !is.na(tier)]
 drivers[, FILTER := NULL]
-message('[', Sys.time(), '] Finished reading ', paste0(args$drivers, 
-                                                       collapse = ', '))
+message('[', Sys.time(), '] Finished reading ',
+        paste0(args$drivers, collapse = ', '))
 
 if (nrow(drivers) == 0) {
   stop('[', Sys.time(), '] no significant (FILTER is PASS and tier is not ',
