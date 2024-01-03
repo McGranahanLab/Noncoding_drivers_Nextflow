@@ -34,9 +34,8 @@ include { ANNOTATE_GENOMICRANGES_WITH_CN } from './modules/biotyping_of_drivers.
 include { ANNOTATE_MUTATIONS_WITH_MULTIPLICITY } from './modules/biotyping_of_drivers.nf'
 include { BIOTYPE_DRIVERS } from './modules/biotyping_of_drivers.nf'
 include { FIND_DRIVER_MUTATIONS } from './modules/find_driver_mutations.nf'
-
 include { CALCULATE_SELECTION_RATES } from './modules/subtype_specificity.nf'
-
+include { DETERMINE_SUBTYPE_SPECIFICITY } from './modules/subtype_specificity.nf'
 include { RUN_DISCOVER } from './modules/run_software.nf'
 
 /* ----------------------------------------------------------------------------
@@ -349,7 +348,10 @@ workflow POSTPROCESSING {
     selection_rates = CALCULATE_SELECTION_RATES( results_inv.filter { it[5] == 'nbr' || it[5] == 'dndscv'}
                                                             .map {it -> return(tuple(it[0], it[1], it[6])) }
                                                             .groupTuple(by: [0])
-                                                            .combine(drivers_uniSubtype, by: [0]) )
+                                                            .combine(drivers_uniSubtype, by: [0]) ).csv
+    // determine tumor subtype specificity
+    subtype_specificity = DETERMINE_SUBTYPE_SPECIFICITY( selection_rates.map { it -> return(it[1]) }
+                                                                        .collect() )
 
     /* 
         Step 5: mutual co-occurrence and exclusivity analysis

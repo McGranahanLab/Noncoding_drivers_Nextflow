@@ -347,24 +347,29 @@ subtype_combs <- lapply(subtype_combs,
                                                 tumor_subtype_2 = unique(x$tumor_subtype)))
 subtype_combs <- as.data.table(do.call(rbind, subtype_combs))
 subtype_combs <- subtype_combs[tumor_subtype_1 != tumor_subtype_2]
+
 subtype_combs[, id := paste(sort(unique(c(tumor_subtype_1, tumor_subtype_2))),
-                            collapse = '-'), by = .(gr_id, gene_id, gene_name)]
+                            collapse = '-'), 
+              by = .(gr_id, gene_id, gene_name, tumor_subtype_1,
+                     tumor_subtype_2)]
+
 subtype_combs <- subtype_combs[order(gr_id, gene_id, gene_name, 
                                      tumor_subtype_1, tumor_subtype_2)]
 subtype_combs <- subtype_combs[!duplicated(subtype_combs[,.(gr_id, gene_id, 
                                                             gene_name, id)])]
 subtype_combs[, id := NULL] 
 
-# Compare selection strenth ---------------------------------------------------
-subtype_combs <- split(subtype_combs, by = c('gr_id', 'gene_id', 'gene_name'),
-                       drop = T)
+# Compare selection strength ---------------------------------------------------
+subtype_combs <- split(subtype_combs, drop = T,
+                       by = c('gr_id', 'gene_id', 'gene_name', 
+                              'tumor_subtype_1', 'tumor_subtype_2'))
 selection_rates <- lapply(subtype_combs, 
                           function(x) merge(x[,.(gr_id, gene_id, gene_name)],
                                             selection_rates[tumor_subtype %in%
                                                               unlist(x)], 
                                             by = c('gr_id', 'gene_id',
                                                    'gene_name')))
-# the test is one sides, that's why both direction should be scorred
+# the test is one sides, that's why both direction should be scored
 select_comp <- lapply(selection_rates, 
                       function(x) rbind(compare_selection(x[order(tumor_subtype)]),
                                         compare_selection(x[order(-tumor_subtype)])))
@@ -374,15 +379,15 @@ select_comp <- as.data.table(do.call(rbind.fill, select_comp))
 # add information, if gene is driver in one/two tumor subtypes
 setnames(select_comp, 'tumor_subtype_1', 'tumor_subtype')
 select_comp <- merge(select_comp, 
-                     cbind(driverInfo[,.(tumor_subtype, gr_id, gene_id,
-                                         gene_name)], is_driver_ts_1 = T),
-                     all.x = T, by = c('tumor_subtype', 'gr_id', 'gene_id'))
+                     cbind(driverInfo[,.(tumor_subtype, gr_id, gene_id)], 
+                           is_driver_ts_1 = T), all.x = T,
+                     by = c('tumor_subtype', 'gr_id', 'gene_id'))
 setnames(select_comp, 'tumor_subtype', 'tumor_subtype_1')
 select_comp[is.na(is_driver_ts_1)]$is_driver_ts_1 <- F
 setnames(select_comp, 'tumor_subtype_2', 'tumor_subtype')
 select_comp <- merge(select_comp, 
-                     cbind(driverInfo[,.(tumor_subtype, gr_id, gene_id)], 
-                           is_driver_ts_2 = T),  all.x = T,
+                     cbind(driverInfo[,.(tumor_subtype, gr_id, gene_id)],
+                           is_driver_ts_2 = T), all.x = T, 
                      by = c('tumor_subtype', 'gr_id', 'gene_id'))
 setnames(select_comp, 'tumor_subtype', 'tumor_subtype_2')
 select_comp[is.na(is_driver_ts_2)]$is_driver_ts_2 <- F
@@ -395,10 +400,17 @@ select_comp[, tumor_subtype_pair := apply(select_comp[,.(tumor_subtype_1,
                                           function(x) paste(sort(x), 
                                                             collapse = '--'))]
 select_comp <- split(select_comp, drop = T,
-                     by = c('gr_id', 'gene_id', 'gene_name',
-                            'tumor_subtype_pair'))
+                     by = c('gr_id', 'gene_id', 'tumor_subtype_pair'))
 select_comp <- lapply(select_comp, assign_specificity, args$p_val_max)
 select_comp <- do.call(rbind, select_comp)
+
+# add gene name
+select_comp <- merge(select_comp, unique(driverInfo[,.(gene_id, gene_name)]),
+                     by = 'gene_id', all.x = T)
+select_comp[, tumor_subtype_pair := NULL]
+setcolorder(select_comp, c('tumor_subtype_1', 'tumor_subtype_2', 'gr_id',
+                           'gene_id', 'gene_name', 'tumor_subtype_spec',
+                           'specificity_mode'))
 
 # Write to output -------------------------------------------------------------
 write.table(select_comp, args$output, append = F, quote = F, sep = '\t',

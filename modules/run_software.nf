@@ -282,7 +282,7 @@ process RUN_DISCOVER {
     ERR_FILE="discover-"\$RUN_CODE'.err'
     OUT_FILE="discoverResults-"\$RUN_CODE'.csv'
 
-    12_cooccurrence_and_exclusivity.R \
+    15_cooccurrence_and_exclusivity.R \
             --cancer_subtype $tumor_subtype \
             --inventory_analysis $analysis_inventory_path \
             --drivers $subtype_drivers --muts_to_gr $muts_to_gr \
