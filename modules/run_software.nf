@@ -269,7 +269,8 @@ process RUN_DISCOVER {
 
     input:
     tuple val(tumor_subtype), path(muts_to_gr), path(subtype_drivers),
-          path(analysis_inventory_path), val(software)
+          path(analysis_inventory_path), path(patients_inventory_path),
+          val(software), path(subtype_specificity)
 
     output:
     tuple val(tumor_subtype), path("discoverResults-${tumor_subtype}--${params.target_genome_version}.csv"), emit: csv
@@ -284,11 +285,14 @@ process RUN_DISCOVER {
 
     15_cooccurrence_and_exclusivity.R \
             --cancer_subtype $tumor_subtype \
+            --inventory_patients $patients_inventory_path \
             --inventory_analysis $analysis_inventory_path \
             --drivers $subtype_drivers --muts_to_gr $muts_to_gr \
             --synAcceptedClass $params.synAcceptedClass \
             --fold_splicesites_in_coding $params.fold_splicesites_in_coding \
             --min_patients_discover $params.min_patients_discover \
+            --subtype_specificity $subtype_specificity \
+            --specificity_mode $params.specificity_mode \
             --output \$OUT_FILE 1>\$MSG_FILE 2>\$ERR_FILE
     """
 }

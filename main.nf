@@ -340,7 +340,8 @@ workflow POSTPROCESSING {
                                       .groupTuple(by: 0)
                                       .filter { it[1].size() == 1}
                                       .map { it -> return(it[0])}
-    drivers_uniSubtype  = histUniform_subtype.combine(drivers.combine(histUniform_subtype, by: [0]))
+    drivers_uniSubtype  = histUniform_subtype.combine(drivers.combine(histUniform_subtype, 
+                                                                      by: [0]))
                                              .groupTuple(by: [0])
                                              .map { it -> return(tuple(it[0], it[2]))}
 
@@ -351,7 +352,7 @@ workflow POSTPROCESSING {
                                                             .combine(drivers_uniSubtype, by: [0]) ).csv
     // determine tumor subtype specificity
     subtype_specificity = DETERMINE_SUBTYPE_SPECIFICITY( selection_rates.map { it -> return(it[1]) }
-                                                                        .collect() )
+                                                                        .collect() ).csv
 
     /* 
         Step 5: mutual co-occurrence and exclusivity analysis
@@ -361,7 +362,21 @@ workflow POSTPROCESSING {
                                                      .unique()
                                                      .combine(drivers, by: [0])
                                                      .combine(analysis_inv)
-                                                     .combine(Channel.from('discover')))
+                                                     .combine(patients_inv)
+                                                     .combine(Channel.from('discover'))
+                                                     .combine(subtype_specificity))
+    histComposite_subtype = patients_inv.splitCsv(header: true)
+                                        .map { row -> return(tuple(row.tumor_subtype, 
+                                                                   row.participant_tumor_subtype)) }
+                                        .unique()
+                                        .groupTuple(by: 0)
+                                        .filter { it[1].size() > 1}
+                                        .map { it -> return(it[0])}
+    drivers_coocc_incompat_compositeSubtype = drivers_coocc_incompat.combine(histComposite_subtype,
+                                                                             by: [0])
+
+
+    drivers_coocc_incompat.combine(histUniform_subtype, by: [0])
 
 
     // do not forget to remove nbr from cds
