@@ -118,17 +118,24 @@ maxGrLenQhelp <- paste('Maximum quantile of genomic region length',
 parser$add_argument("-mglq", "--max_gr_len_q", required = F, type = 'double',
                     default = 1, help = maxGrLenQhelp)
 
-removeOlfactoryHelp <- paste('Wherther or not genomic regions associated to ',
+removeOlfactoryHelp <- paste('Whether or not genomic regions associated to ',
                              'olfactory genes whould be removed.')
 parser$add_argument("-of", "--remove_olfactory", required = F, 
                     type = 'character', default = 'T', choices = c('T', 'F'),
                     help = removeOlfactoryHelp)
+
+remove2_5Help <- paste('Whether or not genomic regions enrichened in 2-5bp ',
+                       'mutations should be removed.')
+parser$add_argument("-r2_5", "--remove_2_5bp_enrich", required = F, 
+                    type = 'character', default = 'T', choices = c('T', 'F'),
+                    help = remove2_5Help)
 
 parser$add_argument("-o", "--output", required = T, type = 'character',
                     help = "Path to the output file")
 
 args <- parser$parse_args()
 args$remove_olfactory <- as.logical(args$remove_olfactory)
+args$remove_2_5bp_enrich <- as.logical(args$remove_2_5bp_enrich)
 # check_input_arguments_postproc(args, outputType = 'file')
 
 timeStart <- Sys.time()
@@ -282,6 +289,20 @@ if (args$max_gr_mut_rate_q < 1 | args$max_gr_syn_mut_rate_q < 1) {
             'filter above for coding regions')
   }
   rm(pass)
+}
+
+# Mark by enrichment of certain structural subtype ----------------------------
+if (args$remove_2_5bp_enrich & 'var_cat_enrich' %in% colnames(tiered_pvals)) {
+  pass <- !grepl('INDEL, 2-5bp', tiered_pvals$var_cat_enrich)
+  tiered_pvals[!pass]$FILTER <- paste0(tiered_pvals[!pass]$FILTER,
+                                       '; INDEL, 2-5bp')
+  
+  message('[', Sys.time(), '] Found ', sum(!pass), '(',
+          round(100 * sum(!pass) / nrow(tiered_pvals), 2), '%) genomic ',
+          'regions which have enrichment in 2-5bp indels.')
+} else {
+  message('[', Sys.time(), '] Filtering by enrichment in 2-5bp indels will ',
+          'not be performed.')  
 }
 
 # Mark olfactory genes --------------------------------------------------------

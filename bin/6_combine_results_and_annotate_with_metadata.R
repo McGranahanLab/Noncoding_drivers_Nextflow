@@ -655,6 +655,20 @@ mutRhelp <- paste('A path to file containing mutations rates for the',
 parser$add_argument("-r", "--mut_rate", required = T, type = 'character',
                     default = NULL, help = mutRhelp)
 
+varCatHelp <- paste('A path to file containing results of running enrichment',
+                    'test(s) for various structural categories of mutations',
+                    'for selected --cancer_subtype. Usually this file is',
+                    'created by 4_calculate_mutation_rates.R script and has',
+                    'a prefix varCatEnrich-')
+parser$add_argument("-v", "--var_cat_enrich", required = F, type = 'character',
+                    default = NULL, help = varCatHelp)
+
+varCatPadjHelp <- paste('An andjusted for multiple testing p-value which test',
+                        'for enrichment for a structural variant category',
+                        'should reach in order to be considered as significant')
+parser$add_argument("-vp", "--var_cat_enrich_padj", required = F, type = 'character',
+                    default = NULL, help = varCatPadjHelp)
+
 grFileHelp <- paste('A path to BED21 file containing all scanned for this',
                     'tumor subtype genomic regions. Usually this file is',
                     'created by 3_filter_input_genomic_regions.R and has a',
@@ -682,7 +696,7 @@ capHelp <- paste('Cap on raw p-values: minimum p-value values below which',
                  'would be set to that value. I.e. if rawP_cap is 1e-8, all',
                  'p values below 1e-8 (i.e.  1e-16,  1e-15, 0) will be set',
                  'to 1e-8.')
-parser$add_argument("-t", '--rawP_cap', required = T, default = NULL,
+parser$add_argument("-t", '--rawP_cap', required = T, default = '1e-8',
                     type = 'character', help = capHelp)
 
 expIhelp <- paste('A list of paths to inventories outlining expression data',
@@ -708,6 +722,7 @@ timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 names(args[['run_results']]) <- unlist(args$software)
 args$rawP_cap <- as.numeric(args$rawP_cap)
+args$var_cat_enrich_padj <- as.numeric(args$var_cat_enrich_padj)
 printArgs(args)
 
 # Test inputs -----------------------------------------------------------------
@@ -720,11 +735,12 @@ printArgs(args)
 #                                 '../TEST/results/nbr/nbrResults-LUAD-5primeUTR-hg19.csv', 
 #                                 '../TEST/results/oncodrivefml/oncodrivefmlResults-LUAD-5primeUTR-hg19.csv'),
 #              mut_rate = '../TEST/results/mut_rates/meanMutRatePerGR-LUAD--hg19.csv',
+#              var_cat_enrich = '../TEST/results/mut_rates/varCatEnrich-LUAD--hg19.csv',
 #              scanned_gr = '../TEST/inputs/inputGR-LUAD-hg19.bed',
 #              gene_name_synonyms = '../data/assets/hgnc_complete_set_processed.csv',
 #              known_cancer_genes = '../data/assets/cgc_knownCancerGenes.csv',
 #              olfactory_genes = '../data/assets/olfactory_barnes_2020.csv',
-#              rawP_cap = 10^(-8),
+#              rawP_cap = 10^(-8), var_cat_enrich_padj = 0.05,
 #              expression_inventories = list('../data/inventory/inventory_expression_gtex.csv',
 #                                            '../data/inventory/inventory_expression_tcga.csv'),
 #              expression = list('../data/assets/GTEx_expression.csv',
@@ -746,6 +762,17 @@ message('[', Sys.time(), '] Finished reading results of de-novo driver ',
 message('[', Sys.time(), '] Started reading mutation rate table')
 mutRate <- fread(args$mut_rate, header = T, stringsAsFactors = F)
 message('[', Sys.time(), '] Finished reading mutation rate table')
+
+# Read enrichment of variants of certain structural type ----------------------
+if (!is.null(args$var_cat_enrich)) {
+  message('[', Sys.time(), '] Started reading results of enrichment ',
+          'test(s) for various structural categories of mutations')
+  varCatEnrich <- fread(args$var_cat_enrich, header = T, stringsAsFactors = F,
+                        select = c('gr_id', 'gene_id', 'gene_name', 'var_cat',
+                                   'binomPadj'))
+  message('[', Sys.time(), '] Finished reading results of enrichment ',
+          'test(s) for various structural categories of mutations')
+}
 
 # Retrieve gene name to gene id maps from genomic ranges file -----------------
 message('[', Sys.time(), '] Started reading genomic regions file')
@@ -770,11 +797,17 @@ if (!is.null(args$gene_name_synonyms)) {
 GENE_ID_TO_NAME <- rawPs[,.(gene_id, gene_name)]
 GENE_ID_TO_NAME <- GENE_ID_TO_NAME[complete.cases(GENE_ID_TO_NAME)]
 GENE_ID_TO_NAME <- rbind(GENE_ID_TO_NAME, mutRate[,.(gene_name, gene_id)],
-                         geneNameToID)
+                         varCatEnrich[,.(gene_name, gene_id)], geneNameToID)
 GENE_ID_TO_NAME <- unique(GENE_ID_TO_NAME) 
 rawPs <- fillInGeneIDs(DT = rawPs, id_To_Name_Map = GENE_ID_TO_NAME, 
                        name_syns = GENE_NAME_SYNS)
 rawPs <- fillInGeneName(rawPs, GENE_ID_TO_NAME)
+mutRate <- fillInGeneIDs(DT = mutRate, id_To_Name_Map = GENE_ID_TO_NAME,
+                         name_syns = GENE_NAME_SYNS)
+mutRate <- fillInGeneName(mutRate, GENE_ID_TO_NAME)
+varCatEnrich <- fillInGeneIDs(DT = varCatEnrich, name_syns = GENE_NAME_SYNS,
+                              id_To_Name_Map = GENE_ID_TO_NAME)
+varCatEnrich <- fillInGeneName(varCatEnrich, GENE_ID_TO_NAME)
 
 rm(GENE_ID_TO_NAME, GENE_NAME_SYNS)
 gc()
@@ -931,6 +964,29 @@ if (nrow(mismatched) > 0) {
 rm(mutRate)
 gc()
 message('[', Sys.time(), '] Annotated with mutation rate statistics')
+
+# Annotate with enrichment of variants of certain structural type -------------
+if (!is.null(args$var_cat_enrich)) {
+  varCatEnrich <- varCatEnrich[binomPadj < args$var_cat_enrich_padj]
+  if (nrow(varCatEnrich) > 0) {
+    varCatEnrich <- varCatEnrich[,.(paste0(sort(unique(var_cat)), 
+                                           collapse = ';')), 
+                                 by = .(gr_id, gene_id, gene_name)]
+    setnames(varCatEnrich, 'V1', 'var_cat_enrich')
+    
+    combinedPs <- merge(combinedPs, varCatEnrich, all.x = T,
+                        by = c('gr_id', 'gene_id', 'gene_name'))
+    message('[', Sys.time(), '] Annotated with enrichment of variants of ',
+            'certain structural type')
+  } else {
+    combinedPs[, var_cat_enrich := character()]
+    message('[', Sys.time(), '] Could not annotate with enrichment of ',
+            'variants of certain structural type due to no category passing ',
+            'p-value threshold.')
+  }
+} else {
+  combinedPs[, var_cat_enrich := character()]
+}
 
 # Annotate with expression status (True/False/NA) -----------------------------
 if (!is.null(args$expression)) {
