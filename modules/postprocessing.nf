@@ -3,7 +3,8 @@ process COMBINE_P_VALS_AND_ANNOTATE {
 
 	input:
     tuple val(tumor_subtype), val(gr_id), path(mut_map), path(mut_rate), 
-          path(scanned_gr), val(softwares), path(result_files), val(rawP_cap),
+          path(scanned_gr), path(var_cat_enr), val(softwares), 
+          path(result_files),
           path(gene_name_synonyms), path(known_cancer_genes),
           path(olfactory_genes), 
           path(inventory_gtex), path(expression_gtex),
@@ -26,14 +27,14 @@ process COMBINE_P_VALS_AND_ANNOTATE {
 
     software_parsed=`echo $softwares | sed 's/\\[//g' | sed 's/,//g' | sed 's/\\]//g'`
     result_files_parsed=`echo $result_files | sed 's/\\[//g' | sed 's/,//g' | sed 's/\\]//g'`
-    echo $result_files
-    echo \$result_files_parsed
 
     6_combine_results_and_annotate_with_metadata.R --cancer_subtype $tumor_subtype \
         --gr_id $gr_id --software \$software_parsed \
         --run_results \$result_files_parsed --mut_rate $mut_rate \
         --scanned_gr $scanned_gr \
-        --rawP_cap $rawP_cap \
+        --rawP_cap $params.rawP_cap \
+        --var_cat_enrich $var_cat_enr \
+        --var_cat_enrich_padj $params.padj_2_5bp_enrich \
         --expression_inventories $inventory_gtex $inventory_tcga \
         --expression $expression_gtex $expression_tcga \
         --output \$OUT_FILE \
@@ -100,6 +101,7 @@ process FILTER_TIERED_DRIVERS {
                               --max_gr_mut_rate_q $params.max_gr_mut_rate_q \
                               --max_gr_len_q $params.max_gr_len_q \
                               --remove_olfactory $params.remove_olfactory \
+                              --remove_2_5bp_enrich $params.remove_2_5bp_enrich \
                               --output \$OUT_FILE 1>\$MSG_FILE 2>\$ERR_FILE
 
     # check, that there are indeed drivers detected by looking at column FILTER

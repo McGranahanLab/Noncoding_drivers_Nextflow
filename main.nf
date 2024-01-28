@@ -55,7 +55,7 @@ def channel_from_params_path (staticPath) {
     return result
 }
 
-def create_result_file_tuple (inventoryRow, outputDir, genomeVersion) {
+def create_result_files_tuple (inventoryRow, outputDir, genomeVersion) {
     mutMapPath = file(outputDir + '/results/mut_rates/mutMapToGR-' + 
                       inventoryRow.tumor_subtype + '--' + genomeVersion + 
                       '.csv', checkIfExists: false)
@@ -65,13 +65,16 @@ def create_result_file_tuple (inventoryRow, outputDir, genomeVersion) {
     scannedGRpath = file(outputDir + '/inputs/inputGR-' + 
                          inventoryRow.tumor_subtype + '-' + 
                          genomeVersion + '.bed', checkIfExists: false)
+    varCatEnrPath = file(outputDir + '/results/mut_rates/varCatEnrich-' + 
+                       inventoryRow.tumor_subtype + '--' + genomeVersion + 
+                       '.csv', checkIfExists: false)
     resultsPath = file(outputDir + '/results/' + inventoryRow.software + '/' +
                        inventoryRow.software + 'Results-' + 
                        inventoryRow.tumor_subtype + '-' + inventoryRow.gr_id +
                        '-' + genomeVersion + '.csv', checkIfExists: false)
     return tuple(inventoryRow.tumor_subtype, inventoryRow.gr_id, 
-                 mutMapPath, mutRatePath, scannedGRpath, inventoryRow.software,
-                 resultsPath)
+                 mutMapPath, mutRatePath, scannedGRpath, varCatEnrPath,
+                 inventoryRow.software, resultsPath)
 }
 
 /* ----------------------------------------------------------------------------
@@ -236,15 +239,15 @@ workflow POSTPROCESSING {
     // DO NOT FORGET TO TURN checkIfExists TO true IN FUNCTION create_path_to_result_file
     results_inv  = analysis_inv.splitCsv(header: true)
                                .map { row -> 
-                                        return create_result_file_tuple(row,
-                                                                        params.outdir,
-                                                                        params.target_genome_version)
+                                        return create_result_files_tuple(row,
+                                                                         params.outdir,
+                                                                         params.target_genome_version)
                                }
     // put chasmplus to separate inventory
-    chasm_inv    = results_inv.filter { it[5] == 'chasmplus' }
-                              .map {it -> return(tuple(it[0], it[6]))}
+    chasm_inv    = results_inv.filter { it[6] == 'chasmplus' }
+                              .map {it -> return(tuple(it[0], it[7]))}
                               .unique()
-    results_inv  = results_inv.filter { it[5] != 'chasmplus' }
+    results_inv  = results_inv.filter { it[6] != 'chasmplus' }
                               .unique()
     // load tier definition table
     tier_inventory = Channel.fromPath(params.tier_inventory, 
@@ -266,9 +269,8 @@ workflow POSTPROCESSING {
     tcga_expression    = channel_from_params_path(params.tcga_expression)
     known_driver_muts  = channel_from_params_path(params.known_driver_mutations)
 
-    combined_pvals = COMBINE_P_VALS_AND_ANNOTATE (results_inv.groupTuple(by: [0, 1, 2, 3, 4],
+    combined_pvals = COMBINE_P_VALS_AND_ANNOTATE (results_inv.groupTuple(by: [0, 1, 2, 3, 4, 5],
                                                                          remainder: true)
-                                                             .combine(Channel.from(params.rawP_cap))
                                                              .combine(gene_name_synonyms)
                                                              .combine(known_cancer_genes)
                                                              .combine(olfactory_genes)
@@ -317,8 +319,8 @@ workflow POSTPROCESSING {
     /* 
         Step 5: find driver mutations
     */
-    driver_mutations = FIND_DRIVER_MUTATIONS( results_inv.filter { it[5] == 'nbr' || it[5] == 'dndscv'}
-                                                         .map {it -> return(tuple(it[0], it[1], it[2], it[6]))}
+    driver_mutations = FIND_DRIVER_MUTATIONS( results_inv.filter { it[6] == 'nbr' || it[6] == 'dndscv'}
+                                                         .map {it -> return(tuple(it[0], it[1], it[2], it[7]))}
                                                          .groupTuple(by: [0, 2])
                                                          .combine(drivers, by: [0])
                                                          .join(chasm_inv, by: [0])
@@ -346,8 +348,8 @@ workflow POSTPROCESSING {
                                              .map { it -> return(tuple(it[0], it[2]))}
 
     // calculates rates of selection
-    selection_rates = CALCULATE_SELECTION_RATES( results_inv.filter { it[5] == 'nbr' || it[5] == 'dndscv'}
-                                                            .map {it -> return(tuple(it[0], it[1], it[6])) }
+    selection_rates = CALCULATE_SELECTION_RATES( results_inv.filter { it[6] == 'nbr' || it[6] == 'dndscv'}
+                                                            .map {it -> return(tuple(it[0], it[1], it[7])) }
                                                             .groupTuple(by: [0])
                                                             .combine(drivers_uniSubtype, by: [0]) ).csv
     // determine tumor subtype specificity
@@ -364,7 +366,7 @@ workflow POSTPROCESSING {
                                                      .combine(analysis_inv)
                                                      .combine(patients_inv)
                                                      .combine(Channel.from('discover'))
-                                                     .combine(subtype_specificity))
+                                                     .combine(subtype_specificity)).csv
     histComposite_subtype = patients_inv.splitCsv(header: true)
                                         .map { row -> return(tuple(row.tumor_subtype, 
                                                                    row.participant_tumor_subtype)) }
@@ -374,8 +376,6 @@ workflow POSTPROCESSING {
                                         .map { it -> return(it[0])}
     drivers_coocc_incompat_compositeSubtype = drivers_coocc_incompat.combine(histComposite_subtype,
                                                                              by: [0])
-
-
     drivers_coocc_incompat.combine(histUniform_subtype, by: [0])
 
 
