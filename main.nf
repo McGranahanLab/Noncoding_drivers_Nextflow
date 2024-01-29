@@ -359,7 +359,6 @@ workflow POSTPROCESSING {
     /* 
         Step 5: mutual co-occurrence and exclusivity analysis
     */
-    // PATCH 
     drivers_coocc_incompat = RUN_DISCOVER(results_inv.map { it -> return(tuple(it[0], it[2]))}
                                                      .unique()
                                                      .combine(drivers, by: [0])
@@ -367,6 +366,12 @@ workflow POSTPROCESSING {
                                                      .combine(patients_inv)
                                                      .combine(Channel.from('discover'))
                                                      .combine(subtype_specificity)).csv
+    drivers_coocc_incompat_uniforSubtype = drivers_coocc_incompat.combine(histUniform_subtype, 
+                                                                          by: [0])
+
+    /* 
+        Step 5a: 
+    */
     histComposite_subtype = patients_inv.splitCsv(header: true)
                                         .map { row -> return(tuple(row.tumor_subtype, 
                                                                    row.participant_tumor_subtype)) }
@@ -376,8 +381,19 @@ workflow POSTPROCESSING {
                                         .map { it -> return(it[0])}
     drivers_coocc_incompat_compositeSubtype = drivers_coocc_incompat.combine(histComposite_subtype,
                                                                              by: [0])
-    drivers_coocc_incompat.combine(histUniform_subtype, by: [0])
+    histComposite_to_unif = patients_inv.splitCsv(header: true)
+                                        .map { row -> return(tuple(row.tumor_subtype, 
+                                                                   row.participant_tumor_subtype)) }
+                                        .unique()
 
+    drivers_coocc_incompat_compositeSubtype.combine(histComposite_to_unif, by: [0])
+                                           .map { it ->
+                                                    return(tuple(it[2], it[0], it[1])) }
+                                           .combine(drivers_coocc_incompat_uniforSubtype, by: [0])
+                                           .map { it ->
+                                                    return(tuple(it[1], it[2], it[0], it[3])) }
+                                           .groupTuple(by: [0, 1], remainder: true)
+                                           .filter { it[2].size() > 1}
 
     // do not forget to remove nbr from cds
 }
