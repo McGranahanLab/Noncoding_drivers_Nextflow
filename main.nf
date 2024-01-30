@@ -324,7 +324,7 @@ workflow POSTPROCESSING {
                                                          .groupTuple(by: [0, 2])
                                                          .combine(drivers, by: [0])
                                                          .join(chasm_inv, by: [0])
-                                                         .combine(mutsinDrives_annotated_with_mults, by: [0])
+                                                         .combine(driver_gr_annotated_with_cn, by: [0])
                                                          .combine(drivers_biotype, by: [0])
                                                          .combine(analysis_inv)
                                                          .combine(patients_inv)

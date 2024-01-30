@@ -630,25 +630,25 @@ printArgs(args)
 #              gr_id = list('CDS', '3primeUTR', '5primeUTR', 'enhancer',
 #                           'lincRNA', 'lincRNA_promoter', 'lincRNA_ss',
 #                           'miRNA', 'promoter', 'shortRNA', 'ss'),
-#              run_result = list('test_fixed_dndscv_Panlung_CDS.csv', 
-#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-3primeUTR-hg19.csv',
-#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-5primeUTR-hg19.csv',
-#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-enhancer-hg19.csv',
-#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-lincRNA-hg19.csv',
-#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-lincRNA_promoter-hg19.csv',
-#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-lincRNA_ss-hg19.csv',
-#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-miRNA-hg19.csv',
-#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-promoter-hg19.csv',
-#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-shortRNA-hg19.csv',
-#                                'completed_runs/2023-12-14/results/nbr/nbrResults-Panlung-ss-hg19.csv'),
-#              chasmplus = 'chasmplus-results-PANCAN-CDS-hg19.csv', 
-#              drivers = 'completed_runs/2023-12-14/results/tables/drivers/drivers-Panlung--hg19.csv',
+#              run_result = list('completed_runs/2023_12_25/results/dndscv/dndscvResults-Panlung-CDS-hg19.csv', 
+#                                'completed_runs/2023_12_25/results/nbr/nbrResults-Panlung-3primeUTR-hg19.csv',
+#                                'completed_runs/2023_12_25/results/nbr/nbrResults-Panlung-5primeUTR-hg19.csv',
+#                                'completed_runs/2023_12_25/results/nbr/nbrResults-Panlung-enhancer-hg19.csv',
+#                                'completed_runs/2023_12_25/results/nbr/nbrResults-Panlung-lincRNA-hg19.csv',
+#                                'completed_runs/2023_12_25/results/nbr/nbrResults-Panlung-lincRNA_promoter-hg19.csv',
+#                                'completed_runs/2023_12_25/results/nbr/nbrResults-Panlung-lincRNA_ss-hg19.csv',
+#                                'completed_runs/2023_12_25/results/nbr/nbrResults-Panlung-miRNA-hg19.csv',
+#                                'completed_runs/2023_12_25/results/nbr/nbrResults-Panlung-promoter-hg19.csv',
+#                                'completed_runs/2023_12_25/results/nbr/nbrResults-Panlung-shortRNA-hg19.csv',
+#                                'completed_runs/2023_12_25/results/nbr/nbrResults-Panlung-ss-hg19.csv'),
+#              chasmplus = 'completed_runs/2023_12_25/results/chasmplus/chasmplusResults-Panlung-CDS-hg19.csv', 
+#              drivers = 'completed_runs/2023_12_25/results/tables/drivers/drivers-Panlung--hg19.csv',
 #              known_driver_mutations = 'data/assets/CancerGenomeInterpreter_lung_hg19.tsv',
-#              muts_to_gr = 'completed_runs/2023-12-14/results/mut_rates/mutMapToGR-Panlung--hg19.csv',
+#              muts_to_gr = 'completed_runs/2023_12_25/results/mut_rates/mutMapToGR-Panlung--hg19.csv',
 #              synAcceptedClass = 'Silent', 
 #              chasm_padj = 0.05, chasm_score_min = 0.5, max_fp = 0.05,
-#              inferred_biotype = 'completed_runs/2023-12-14/results/tables/drivers_biotyped/driversBiotyped-Panlung--hg19.csv',
-#              cn_of_drivers = 'test_fixed_cn_Panlung.csv')
+#              inferred_biotype = 'completed_runs/2023_12_25/results/tables/drivers_biotyped/driversBiotyped-Panlung--hg19.csv',
+#              cn_of_drivers = 'completed_runs/2023_12_25/results/tables/drivers_cn_multiplicity/driversAnnotatedWithCN-Panlung--hg19.csv')
 # names(args$run_result) <- unlist(args$gr_id)
 
 # Read in patients inventory --------------------------------------------------
@@ -865,7 +865,7 @@ if (!is.null(args$inferred_biotype)) {
 
 # Read copy number states in identified driver elements -----------------------
 cnOfDrivers <- data.table()
-if (!is.null(args$cn_drivers) & 'biotype' %in% colnames(drivers)) {
+if (!is.null(args$cn_of_drivers) & 'biotype' %in% colnames(drivers)) {
   cnOfDrivers <- fread(args$cn_of_drivers, header = T, stringsAsFactors = F,
                        select = c('participant_id', 'gr_name', 'cn_type',
                                   'nMinor', 'nMajor'))

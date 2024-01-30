@@ -2,7 +2,7 @@ process FIND_DRIVER_MUTATIONS {
     tag "$tumor_subtype"
 
     input:
-    tuple val(tumor_subtype), val(gr_id), path(muts_to_gr), path(run_result),
+    tuple val(tumor_subtype), val(gr_ids), path(muts_to_gr), path(run_result),
           path(subtype_drivers), path(chasmplus), path(cn_of_drivers), 
           path(inferred_biotype), path(analysis_inventory_path), 
           path(patients_inventory_path), path(known_driver_mutations)
@@ -22,6 +22,7 @@ process FIND_DRIVER_MUTATIONS {
     #def chasm = 
     #def inferred_biotype =
     #def cn_of_drivers =
+    gr_parsed=`echo ${gr_ids} | sed 's/\\[//g' | sed 's/,//g' | sed 's/\\]//g'`
 
     excludeSilent=''
     if [ "$params.exclude_silent_from_biotyping" = "T" ]; then
@@ -33,7 +34,7 @@ process FIND_DRIVER_MUTATIONS {
         --inventory_patients $patients_inventory_path \
         --cancer_subtype $tumor_subtype \
         --drivers $subtype_drivers  \
-        --gr_id $gr_id \
+        --gr_id \$gr_parsed \
         --run_result $run_result \
         --muts_to_gr $muts_to_gr \
         --chasmplus $chasmplus \
