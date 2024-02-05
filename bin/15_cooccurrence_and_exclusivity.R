@@ -545,6 +545,19 @@ setcolorder(discoverRes,
                            'p.value_subtypeBiasRemoved'), 
                       colnames(discoverRes)))
 
+# Perform multiple testing correction -----------------------------------------
+discover[, discover.p.adj_subtypeBiasRemoved := p.adjust(discover.p.value_subtypeBiasRemoved,
+                                                         'BH'),
+         by = c('composite_subtype', 'tumor_subtype', 'comparison', 'mode')]
+
+# for the composite tumour subtypes support_by_indivTT will be re-assessed
+# in cooccurrence_and_exclusivity_supported_by_individual_subtypes script
+discover[, support_by_indivTT := T]
+discover[, plotLab := '']
+discover[discover.p.adj_subtypeBiasRemoved < 0.1]$plotLab <- '*'
+discover[discover.p.adj_subtypeBiasRemoved < 0.01]$plotLab <- '**'
+discover[discover.p.adj_subtypeBiasRemoved < 0.001]$plotLab <- '***'
+
 # Write tables with results of co-occurrence/exclusivity to files -------------
 write.table(discoverRes, args$output, append = F, quote = F, sep = '\t', 
             col.names = T, row.names = F)
