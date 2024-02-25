@@ -1,10 +1,11 @@
 library(data.table)
 library(ggplot2)
+library(ggpubr)
 library(plyr)
 
 source('bin/custom_functions.R')
 
-# Functions : Overview of all detected driver (Fig A) -------------------------
+# Functions : Overview of all detected driver ---------------------------------
 #' get_bar_transparency
 #' @description 
 #' @author Maria Litovchenko
@@ -412,7 +413,7 @@ barplotNpatient <- function(driversDT, xLabelCol, colorPalette = NULL,
              mapping = aes_string(x = xOrderCol, y = 'nParts', 
                                   alpha = 'transparent',
                                   fill = 'tumor_subtype_upd')) +
-    xlab('Gene') + ylab('N. participants') + 
+    xlab('genomic element') + ylab('N. participants') + 
     scale_fill_manual(values = tumorType_tier_palette, 
                       labels = gsub('--0', '', 
                                     grep('--0', names(tumorType_tier_palette),
@@ -431,11 +432,11 @@ barplotNpatient <- function(driversDT, xLabelCol, colorPalette = NULL,
   result <- result + 
     theme(panel.grid.major.x = element_blank(),
           panel.grid.minor.x = element_blank(),
-          axis.text.x = element_text(angle = 45, hjust = 1, size = 6,
+          axis.text.x = element_text(angle = 90, hjust = 1, size = 6,
                                      color = xAxisLabs$color))
   if (!is.null(Y_MAX)) {
-    result <- result + scale_y_continuous(expand = c(0, 0),
-                                          limits = c(0, Y_MAX))
+    result <- result + 
+      scale_y_continuous(expand = c(0, 0), limits = c(0, Y_MAX))
   } else {
     result <- result + scale_y_continuous(expand = c(0, 0))
   }
@@ -513,8 +514,9 @@ tilePlotPvalues <- function(pValsDT, xLabelCol, yLabelCol, colorBy,
   # areas for them
   if (any(dt$FILTER != "PASS")) {
     filteredOutShadeCoords <- get_filtered_out_gene_coords(xAxisLabs$dt, xOrderCol)
-    filteredOutShadeCoordsCut <- filteredOutShadeCoords[seq(1, nrow(filteredOutShadeCoords), 
-                                              by = 2)]
+    filteredOutShadeCoordsCut <- filteredOutShadeCoords[seq(1, 
+                                                            nrow(filteredOutShadeCoords),
+                                                            by = 2)]
     result <- result + 
       geom_rect(data = filteredOutShadeCoordsCut, fill = 'red', 
                 inherit.aes = F, alpha = 0.15,
@@ -539,14 +541,83 @@ tilePlotPvalues <- function(pValsDT, xLabelCol, yLabelCol, colorBy,
   if (!is.null(ggplot2Theme)) {
     result <- result + ggplot2Theme
   }
-  result <- result + theme(panel.grid.major.x = element_blank(),
-                           panel.grid.minor.x = element_blank(),
-                           axis.text.x = element_text(angle = 90, size = 6,
-                                                      color = xAxisLabs$color))
+  result <- result + xlab('genomic element') + ylab('') +
+    scale_y_discrete(expand = c(0, 0)) +
+    theme(panel.grid.major.x = element_blank(), 
+          panel.grid.minor.x = element_blank(),
+          panel.grid.major.y = element_blank(), 
+          panel.grid.minor.y = element_blank(),
+          axis.text.x = element_text(angle = 90, size = 6, hjust = 1, 
+                                     color = xAxisLabs$color))
   result
 }
 
-# Input arguments -------------------------------------------------------------
+#' extract_legend 
+#' @description Extracts legend from ggplot
+#' @author The internet
+#' @param my_ggp ggplot2 object
+#' @return legend as ggplot2
+extract_legend <- function(my_ggp) {
+  step1 <- ggplot_gtable(ggplot_build(my_ggp))
+  step2 <- which(sapply(step1$grobs, function(x) x$name) == "guide-box")
+  step3 <- step1$grobs[[step2]]
+  step3
+}
+
+# Visuals setup ---------------------------------------------------------------
+font_config <- list('family' = 'Helvetica', 'base' = 6, 'text' = 6, 
+                     'axis_title' = 8, 'plot_title' = 10, 'legend_text' = 6, 
+                     'legend_title' = 8)
+
+customGgplot2Theme <- list(
+  theme_classic(base_size = font_config$base, 
+                base_family = font_config$family) +
+    theme(axis.line = element_line(colour = 'black', linewidth = 0.5,
+                                   linetype = 'solid'),
+          axis.ticks = element_line(colour = 'black', linewidth = 0.5,
+                                    linetype = 'solid'),
+          axis.text = element_text(colour = 'black', 
+                                   family = font_config$family,
+                                   size = font_config$text),
+          axis.title = element_text(colour = 'black', 
+                                    family = font_config$family,
+                                    size = font_config$axis_title),
+          plot.title = element_text(colour = 'black', 
+                                    family = font_config$family,
+                                    size = font_config$plot_title),
+          legend.key.size = unit(0.25, 'cm'),
+          legend.text = element_text(colour = 'black', 
+                                     family = font_config$family,
+                                     size = font_config$legend_text), 
+          legend.title = element_text(colour = 'black', 
+                                      family = font_config$family,
+                                      size = font_config$legend_title),
+          legend.background = element_blank(), legend.direction = "vertical",
+          legend.box.background = element_blank(),
+          panel.grid.major = element_line(colour = "#CCCCCC", 
+                                          linewidth = 0.5, linetype = 2),
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank(),
+          plot.margin = unit(c(0, 0, 0, 0), "cm")))
+
+DIVIDER_COLOR <-  '#eed9c4'
+
+# color blind friendly
+tumourTypeColorPalette <- c('Adenocarcinoma' = '#CC3311',
+                            'Adenocarcinoma_met' = '#CC6677',
+                            'Adenosquamous' = '#332288',
+                            'Carcinoid' = '#882255',
+                            'Large_cell' = '#DDCC77',
+                            'Mesothelioma' = '#999933',
+                            'Neuroendocrine_carcinoma' = '#EE8866',
+                            'Small_cell' = '#44AA99', 
+                            'Small_cell_met' = '#bbe4dd', 
+                            'Squamous_cell' = '#0077BB',
+                            'Squamous_cell_met' = '#88CCEE',
+                            'Other' = '#000000',
+                            'Other_met' = '#CCCCCC') 
+
+# Test input arguments -------------------------------------------------------------
 args <- list(cancer_subtype = 'Panlung',
              drivers = "completed_runs/2023_12_25/results/tables/drivers/drivers-Panlung--hg19.csv",
              inventory_patients = 'data/inventory/inventory_patients.csv',
@@ -561,7 +632,35 @@ args <- list(cancer_subtype = 'Panlung',
                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Neuroendocrine_carcinoma--hg19.csv",
                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Small_cell--hg19.csv",
                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Squamous_cell--hg19.csv",
-                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Squamous_cell_met--hg19.csv"))
+                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Squamous_cell_met--hg19.csv"),
+             extra_studies = list("data/assets/intogene_detectedCancerGenes.csv",
+                                  "data/assets/mc3_detectedCancerGenes.csv",
+                                  "data/assets/cgc_knownCancerGenes.csv"),
+             extra_studies_names = list("intogen", "mc3", "CGC"),
+             extra_studies_tumorsubtype = list("LNET,LUAD,LUSC,NSCLC,SCLC", 
+                                               "LUAD,LUSC", "nsclc,sclc,lung"))
+
+if (is.null(args$drivers) & is.null(args$drivers_uniform_subtypes)){
+  stop()
+}
+if (!is.null(args$extra_studies) & is.null(args$extra_studies_names)) {
+  stop()
+}
+if (length(args$extra_studies) != length(args$extra_studies_names)) {
+  stop() 
+}
+if (!is.null(args$extra_studies_tumorsubtype)) {
+  if (length(args$extra_studies) != length(args$extra_studies_tumorsubtype)) {
+    stop()
+  }
+  args$extra_studies_tumorsubtype <- lapply(args$extra_studies_tumorsubtype,
+                                            function(x) unlist(strsplit(x, 
+                                                                        ',')))
+  args$extra_studies_tumorsubtype <- lapply(args$extra_studies_tumorsubtype,
+                                            function(x) gsub(' ', '', x))
+  args$extra_studies_tumorsubtype <- lapply(args$extra_studies_tumorsubtype,
+                                            paste0, collapse = '|')
+}
 
 # Read in patients inventory --------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients, 1)
@@ -570,8 +669,12 @@ message('[', Sys.time(), '] Read --inventory_patients: ',
         args$inventory_patients)
 
 # Read unfiltered drivers -----------------------------------------------------
-drivers_unfiltered <- fread(args$drivers, header = T, stringsAsFactors = F)
-message('[', Sys.time(), '] Read --drivers: ', args$drivers)
+if (!is.null(args$drivers)) {
+  drivers_unfiltered <- fread(args$drivers, header = T, stringsAsFactors = F)
+  drivers_unfiltered[, gene_name := gsub('__and__', '&', gene_name)]
+  drivers_unfiltered[, gene_id := gsub('__and__', '&', gene_id)]
+  message('[', Sys.time(), '] Read --drivers: ', args$drivers)
+}
 
 # Read drivers detected in uniform subtypes -----------------------------------
 if (!is.null(args$drivers_uniform_subtypes)) {
@@ -581,6 +684,8 @@ if (!is.null(args$drivers_uniform_subtypes)) {
           paste0(args$drivers_uniform_subtypes, collapse = ', '))
   drivers_uniform_subtypes <- do.call(rbind.fill, drivers_uniform_subtypes)
   drivers_uniform_subtypes <- as.data.table(drivers_uniform_subtypes)
+  drivers_uniform_subtypes[, gene_name := gsub('__and__', '&', gene_name)]
+  drivers_uniform_subtypes[, gene_id := gsub('__and__', '&', gene_id)]
   
   if (sum(drivers_uniform_subtypes$tumor_subtype != 
           drivers_uniform_subtypes$participant_tumor_subtype, 
@@ -593,6 +698,19 @@ if (!is.null(args$drivers_uniform_subtypes)) {
   not_in_composite <- setdiff(uniform_subtypes, part_of_composite)
   if (length(not_in_composite) > 0) {
       stop()
+  }
+}
+
+# Read extra databases --------------------------------------------------------
+if (!is.null(args$extra_studies)) {
+  extra_studies <- lapply(args$extra_studies, fread, header = T,
+                          stringsAsFactors = F, 
+                          select = c('gene_name', 'gene_id', 
+                                     'known_in_tumor_subtype'))
+  names(extra_studies) <- unlist(args$extra_studies_names)
+  for (i in 1:length(extra_studies)) {
+    extra_studies[[i]][, known_in_current_tumor_subtype := grepl(tolower(args$extra_studies_tumorsubtype[i]),
+                                                                 tolower(known_in_tumor_subtype))]
   }
 }
 
@@ -693,20 +811,125 @@ drivers[, gene_plots_id := paste(gene_name, gr_id)]
 drivers[, gene_plots_id := factor(gene_plots_id, GENE_ORDER)]
 drivers[, participant_tumor_subtype := factor(participant_tumor_subtype, 
                                               TUMOR_SUBTYPE_ORDER)]
+drivers[, tumor_subtype := factor(tumor_subtype, 
+                                  unique(c(args$cancer_subtype, 
+                                           TUMOR_SUBTYPE_ORDER)))]
+
+# Overlap data from extra databases with detected drivers ---------------------
+drivers_restricted <- drivers[!is.na(tier) & 
+                                FILTER %in% args$allowed_filter_values]
+drivers_restricted <- drivers_restricted[,.(gr_id, gene_name, gene_id, 
+                                            gene_plots_id, FILTER)]
+drivers_restricted <- unique(drivers_restricted)
+if (max(drivers_restricted[,.N, by = gene_plots_id]$N) > 1) {
+  stop()
+}
+
+for (i in 1:length(extra_studies)) {
+  keys_i <- intersect(c("gene_name", "gene_id"), colnames(extra_studies[[i]]))
+  if (!'is_known_cancer' %in% colnames(extra_studies[[i]])) {
+    extra_studies[[i]][, is_known_cancer := T]
+  }
+  
+  extra_studies[[i]] <- merge(drivers_restricted, extra_studies[[i]], 
+                              by = keys_i, all.x = T)
+  extra_studies[[i]][is.na(is_known_cancer)]$is_known_cancer <- F
+  extra_studies[[i]][is.na(known_in_current_tumor_subtype)]$known_in_current_tumor_subtype <- F
+  extra_studies[[i]] <- extra_studies[[i]][,.(gr_id, gene_name, gene_id, 
+                                              gene_plots_id, FILTER, 
+                                              is_known_cancer,
+                                              known_in_current_tumor_subtype)]
+  extra_studies[[i]] <- unique(extra_studies[[i]])
+  extra_studies[[i]] <- extra_studies[[i]][order(gr_id, gene_name, gene_id, 
+                                                 gene_plots_id, FILTER,
+                                                 -is_known_cancer,
+                                                 -known_in_current_tumor_subtype)]
+  extra_studies[[i]] <- extra_studies[[i]][,.SD[1], 
+                                           by = .(gr_id, gene_name, gene_id,
+                                                  gene_plots_id, FILTER)]
+  extra_studies[[i]][, dummy := names(extra_studies)[i]]
+}
 
 # Barplot number of patients -------------------------------------------------
+# divider color
 barNpats <- barplotNpatient(driversDT = drivers, 
                             xLabelCol = 'gene_name',
                             xOrderCol = 'gene_plots_id', 
                             annoCol = 'is_known_cancer', 
                             colorPalette = tumourTypeColorPalette, 
-                            pancanCode = 'Panlung',
+                            pancanCode = args$cancer_subtype, 
+                            divider_color = DIVIDER_COLOR,
                             ggplot2Theme = customGgplot2Theme)
+
 barNpats <- barNpats + theme(legend.position = 'bottom')
 barNpats <- barNpats + guides(fill = guide_legend(nrow = 2, byrow = T)) +
     theme(legend.box = "horizontal")
-barNpats
 
+# Plot annotation with extra databases ----------------------------------------
+if (!is.null(args$extra_studies)) {
+  extraDbPlots <- lapply(1:length(extra_studies),
+                         function(x) tilePlotPvalues(extra_studies[[x]],
+                                                     xLabelCol = 'gene_name',
+                                                     yLabelCol = 'dummy', 
+                                                     colorBy = 'is_known_cancer', 
+                                                     xOrderCol = 'gene_plots_id',
+                                                     doLog10 = F,
+                                                     annoCol = 'is_known_cancer',
+                                                     nColors = 2, 
+                                                     divider_color = DIVIDER_COLOR,
+                                                     colorPalette = c('#FFFFFF', '#8e918f'),
+                                                     ggplot2Theme = customGgplot2Theme) +
+                           geom_text(data = extra_studies[[x]][known_in_current_tumor_subtype == T], 
+                                     mapping = aes(x = gene_plots_id, y = dummy, 
+                                                   label = '*'),
+                                     vjust = 0.75) + 
+                           theme(legend.position = 'none',
+                                 axis.title = element_blank(), 
+                                 axis.ticks.y = element_blank()))
+}
 
+# Plot tile plot of p-values --------------------------------------------------
+pValMatrTiles <- tilePlotPvalues(pValsDT = drivers[!is.na(tier) & 
+                                                     FILTER %in% args$allowed_filter_values],
+                                 xLabelCol = 'gene_name', 
+                                 yLabelCol = 'tumor_subtype', 
+                                 colorBy = 'brown.bh_p', 
+                                 xOrderCol = 'gene_plots_id',
+                                 annoCol = 'is_known_cancer',
+                                 doLog10 = T,
+                                 ggplot2Theme = customGgplot2Theme)
+pValMatrTiles <- pValMatrTiles + labs(fill = '-log10(Brown p.value)') +
+  theme(legend.direction = 'horizontal')
 
+# Assemble --------------------------------------------------------------------
+extraTheme <- list(theme(legend.position = 'none',
+                         axis.title.x = element_blank(),
+                         axis.text.x = element_blank(),
+                         axis.ticks.x = element_blank(),
+                         axis.line.x = element_blank(),
+                         panel.grid.major.x = element_blank(),
+                         panel.grid.minor.x = element_blank(),
+                         panel.grid.minor.y = element_blank())) 
+ovrvFigPlotList <- list(barNpats + extraTheme)
+if (!is.null(args$extra_studies)) {
+  extraDbPlots <- lapply(extraDbPlots, function(x) x + extraTheme)
+  ovrvFigPlotList <- append(ovrvFigPlotList, extraDbPlots)
+}
+ovrvFigPlotList[[length(ovrvFigPlotList) + 1]] <- pValMatrTiles + 
+  theme(legend.position = 'none')
+
+# main plot
+plotHeights <- c(1)
+if (!is.null(args$extra_studies)) {
+  plotHeights <- c(plotHeights, rep(0.025, length(extra_studies)))
+}
+plotHeights <- c(plotHeights, 0.32)
+DRIVERS_OVERVIEW_PLOT <- ggarrange(plotlist = ovrvFigPlotList, align = 'v',
+                                   ncol = 1, heights = plotHeights)
+DRIVERS_OVERVIEW_LEGENDS <- ggarrange(extract_legend(barNpats), 
+                                      extract_legend(pValMatrTiles),
+                                      ncol = 1)
+DRIVERS_OVERVIEW_PLOT <- ggarrange(DRIVERS_OVERVIEW_PLOT, 
+                                   DRIVERS_OVERVIEW_LEGENDS, ncol = 1,
+                                   heights = c(1, 0.15))
 
