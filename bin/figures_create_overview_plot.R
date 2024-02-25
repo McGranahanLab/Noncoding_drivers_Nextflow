@@ -1,5 +1,6 @@
 library(data.table)
 library(ggplot2)
+library(plyr)
 
 source('bin/custom_functions.R')
 
@@ -242,18 +243,6 @@ get_filtered_out_gene_coords <- function(xLabsDT, xOrderCol) {
   result
 }
 
-create_break_before_filtered_out_genes <- function(plotDT, xOrderCol) {
-  plotDT <- plotDT[order(unlist(plotDT[, xOrderCol, with = F]))]
-  filteredOutIdx <- get_filtered_out_gene_coords(plotDT, xOrderCol)
-  if (nrow(filteredOutIdx) > 1) {
-    stop('[', Sys.time(), ']')
-  }
-  originalLvls <- sort(unique(unlist(plotDT[, xOrderCol, with = F])))
-  if (class(unlist(plotDT[, xOrderCol, with = F])) == 'factor') {
-    originalLvls <- levels(unlist(plotDT[, xOrderCol, with = F]))
-  }
-}
-
 #' create_plot_background
 #' @description Creates "background" for the future plots of coding and 
 #'              noncoding driver genetic elements. It creates shades to 
@@ -322,78 +311,6 @@ create_plot_background <- function(plotDT, axisLabs, xOrderCol, yCol,
   result
 }
 
-#' annotatePlotWithGRlines
-#' @description Annotates a ggplot with a lines and text deliniating groups of
-#'              the same genomic regions.
-#' @author Maria Litovchenko
-#' @param basePlot a ggplot2 object to which annotation should be added
-#' @param plotDT data table with processed data, ready to be plotted (main 
-#'        plot)
-#' @param axisLabs result of function format_xLabels
-#' @param xOrderCol column name containing order of X axis
-#' @param yCol column name containing data for Y axis
-#' @param direction string, one of "vertical" and "horizontal"
-#' @param ... other parameters to pass to geom_text
-#' @return ggplot2 object
-annotatePlotWithGRlines <- function(basePlot, plotDT, axisLabs, xOrderCol,
-                                    yCol, direction = 'vertical', ...) {
-  result <- basePlot
-  
-  if (!direction %in% c('vertical', 'horizontal')) {
-    stop('[', Sys.time(), '] direction should be vertical or horizontal')
-  }
-  
-  if (length(unique(plotDT$gr_id)) > 1) {
-    # compute coordinates for future lines showing genome region 
-    grShadeCoords <- get_gr_change_coords(plotDT, xOrderCol, yCol, axisLabs$dt)
-    nGRs <- nrow(grShadeCoords$gr_coords)
-    grShadeCoordsCut <- grShadeCoords$gr_coords[seq(2, nGRs, by = 2)]
-    
-    if (direction == 'vertical') {
-      if (is.factor(grShadeCoords$lab_coords$y)) {
-        result <- basePlot + 
-          geom_segment(data = grShadeCoords$gr_coords,  
-                       mapping = aes(x = start, xend = end, 
-                                     y = grShadeCoords$lab_coords$y,
-                                     yend = grShadeCoords$lab_coords$y)) +
-          geom_text(mapping = aes(x = x, y = y, label = gr),
-                    data = grShadeCoords$lab_coords, ...) +
-          scale_y_discrete(drop = F)
-      } else {
-        result <- basePlot + 
-          geom_segment(data = grShadeCoords$gr_coords, inherit.aes = F,
-                       mapping = aes(x = start, xend = end, 
-                                     y = grShadeCoords$lab_coords$y,
-                                     yend = grShadeCoords$lab_coords$y)) +
-          geom_text(mapping = aes(x = x, y = y, label = gr),
-                    inherit.aes = F, data = grShadeCoords$lab_coords, ...)
-      }
-      
-    } else {
-      if (is.factor(grShadeCoords$lab_coords$y)) {
-        result <- basePlot + 
-          geom_segment(data = grShadeCoords$gr_coords, 
-                       mapping = aes(y = start, yend = end, 
-                                     x = grShadeCoords$lab_coords$y,
-                                     xend = grShadeCoords$lab_coords$y)) +
-          geom_text(mapping = aes(x = y, y = x, label = gr),
-                    data = grShadeCoords$lab_coords, ...) +
-          scale_x_discrete(drop = F)
-      } else {
-        result <- basePlot + 
-          geom_segment(data = grShadeCoords$gr_coords,
-                       mapping = aes(y = start, yend = end, 
-                                     x = grShadeCoords$lab_coords$y,
-                                     xend = grShadeCoords$lab_coords$y)) +
-          geom_text(mapping = aes(x = y, y = x, label = gr),
-                    data = grShadeCoords$lab_coords, ...)
-      }
-    }
-  }
-  
-  result
-}
-
 #' barplotNpatient
 #' @description Creates stacked barplot with number of patients per gene with 
 #' histological subtypes on Y axis. In case several regions are given, they are
@@ -456,6 +373,7 @@ barplotNpatient <- function(driversDT, xLabelCol, colorPalette = NULL,
   
   # first of all, if there are several genomic regons, create shadowing
   result <- ggplot()
+  Y_MAX <- NULL
   if (length(unique(dt$gr_id)) > 1) {
     # compute coordinates for future lines showing genome region 
     grShadeCoords <- get_gr_change_coords(plotDT = dt, xLabsDT = xAxisLabs$dt,
@@ -475,6 +393,7 @@ barplotNpatient <- function(driversDT, xLabelCol, colorPalette = NULL,
       geom_text(mapping = aes(x = x, y = 1.01 * y, label = gr, angle = 90, 
                               hjust = -0.01), inherit.aes = F,
                 data = grShadeCoords$lab_coords, size = 2)
+    Y_MAX <- 1.03 * unique(grShadeCoords$lab_coords$y)
   }
   # and if there are some filtered out drivers needed to be shown - shadowed 
   # areas for them
@@ -503,150 +422,24 @@ barplotNpatient <- function(driversDT, xLabelCol, colorPalette = NULL,
     scale_alpha_continuous(breaks = alphaVals, range = alphaVals, 
                            labels = names(alphaVals)) + 
     scale_x_discrete(labels = xAxisLabs$label, expand = c(0, 0)) +
-    scale_y_continuous(expand = c(0, 0)) +
     labs(fill = 'Histological\nsubtype', alpha = 'Found as driver')
   
   if (!is.null(ggplot2Theme)) {
     result <- result + ggplot2Theme
   }
-  result <- result + theme(panel.grid.major.x = element_blank(),
-                           panel.grid.minor.x = element_blank(),
-                           axis.text.x = element_text(angle = 45, hjust = 1,
-                                                      size = 6,
-                                                      color = xAxisLabs$color))
-  result
-}
 
-#' barplotVarStructType
-#' @description Creates stacked barplot with structural composition of variants
-#' Only tumor types in which gene is significant are used.
-#' @author Maria Litovchenko
-#' @param varCount data table with columns 
-#' @param xLabelCol column name containing label to be on X axis
-#' @param percCol column name containing percentage composition
-#' @param colorPalette named vector of color for different tumour type
-#' @param xOrderCol column name containing order of X axis
-#' @param annoCol column containing annotation, i.e. COSMIC
-#' @param annoColors named vector of colors (in hex) in which X axis labels 
-#'                   will be colored
-#' @param divider_color hex color which should be used for separating different
-#'        genomic regions
-#' @param keep_region_labels boolean, whatever or not labels of regions on the
-#'        top of the plot should be kept.
-#' @param ggplot2Theme ggplot2 custom theme
-#' @return ggplot2: barplot with number of patients per gene with histological
-#' subtypes on Y axis
-barplotVarStructType <- function(varCount, xLabelCol, percCol, 
-                                 colorPalette = NULL, pancanCode = 'PANCAN', 
-                                 xOrderCol = NULL, annoCol = NULL, 
-                                 annoColors = 'red', keep_region_labels = F, 
-                                 divider_color = '#eed9c4',
-                                 ggplot2Theme = NULL) {
-  if (is.null(xOrderCol)) {
-    xOrderCol <- xLabelCol
-  }
-  colsToGet <- c('tumor_subtype', 'gr_id', 'gene_id', 'gene_name', 'tier', 
-                 'FILTER', xOrderCol, xLabelCol, annoCol, 'var_cat', 'N', 
-                 percCol, 'binomPadj')
-  colsToGet <- intersect(unique(colsToGet), colnames(varCount))
-  dt <- varCount[, colsToGet, with = F]
-  dt <- dt[!is.na(var_cat) & !is.na(N) & !is.na(tier)]
-  
-  # x axis labels & color
-  xAxisLabs <- format_xLabels(dt, xOrderCol, xLabelCol, annoCol, 
-                              highlightColor = annoColors)
-  # variant category palette
-  if (is.null(colorPalette)) {
-    var_cat_lvl <- as.character(unique(dt$var_cat))
-    colorPalette <- palette(rainbow(length(var_cat_lvl)))
-    names(colorPalette) <- var_cat_lvl
-    rm(var_cat_lvl)
-  }
-  colorPaletteCut <- colorPalette[names(colorPalette) %in% dt$var_cat]
-  
-  # first of all, if there are several genomic regons, create shadowing
-  result <- ggplot()
-  if (length(unique(dt$gr_id)) > 1) {
-    # compute coordinates for future lines showing genome region 
-    grShadeCoords <- get_gr_change_coords(plotDT = dt, xLabsDT = xAxisLabs$dt,
-                                          xOrderCol = xOrderCol, 
-                                          yCol = percCol)
-    grShadeCoordsCut <- grShadeCoords$gr_coords[seq(2, 
-                                                    nrow(grShadeCoords$gr_coords),
-                                                    by = 2)]
-    result <- result + 
-      geom_rect(data = grShadeCoordsCut, fill = divider_color, inherit.aes = F,
-                aes(xmin = start - 0.5, xmax = end + 0.5, ymin = -Inf, 
-                    ymax = Inf), alpha = 0.5)
-    if (keep_region_labels) {
-      result <- result + 
-        geom_segment(data = grShadeCoords$gr_coords, inherit.aes = F,
-                     aes(x = start, xend = end, 
-                         y =  grShadeCoords$lab_coords$y,
-                         yend = grShadeCoords$lab_coords$y)) +
-        geom_text(mapping = aes(x = x, y = 1.01 * y, label = gr), size = 2,
-                  inherit.aes = F, data = grShadeCoords$lab_coords)
-    }
-  }
-  # and if there are some filtered out drivers needed to be shown - shadowed 
-  # areas for them
-  if (any(dt$FILTER != 'PASS')) {
-    filteredOutShadeCoords <- get_filtered_out_gene_coords(xAxisLabs$dt, xOrderCol)
-    filteredOutShadeCoordsCut <- filteredOutShadeCoords[seq(1, nrow(filteredOutShadeCoords), 
-                                              by = 2)]
-    result <- result + 
-      geom_rect(data = filteredOutShadeCoordsCut, fill = 'red', inherit.aes = F, 
-                aes(xmin = start - 0.5, xmax = end + 0.5, ymin = -Inf, 
-                    ymax = Inf), alpha = 0.15)
-  }
-  
   result <- result + 
-    geom_bar(data = dt, position = "stack", stat = "identity",
-             mapping = aes_string(x = xOrderCol, y = percCol, 
-                                  fill = 'var_cat', color = 'var_cat')) + 
-    xlab('Gene') + ylab('% of mutations') 
-  
-  # label significant enrichment
-  if ('binomPadj' %in% colnames(dt)) {
-    binomSignDT <- dt[, c(xOrderCol, 'var_cat', 'binomPadj'), with = F]
-    binomSignDT <- binomSignDT[binomPadj < 0.05]
-    binomSignDT[, lab := '*']
-    
-    if (nrow(binomSignDT[grepl('INDEL', var_cat), ]) != 0) {
-      result <- result +
-        geom_text(data = binomSignDT[grepl('INDEL', var_cat), ], size = 10,
-                  mapping = aes_string(x = xOrderCol, y = 1.01, 
-                                       color = 'var_cat', label = 'lab'))
-    }
-    if (nrow(binomSignDT[grepl('SNP', var_cat), ]) != 0) {
-      result <- result +
-        geom_text(data = binomSignDT[grepl('SNP', var_cat), ], size = 10,
-                  mapping = aes_string(x = xOrderCol, y = 1.02,
-                                       color = 'var_cat', label = 'lab'))
-    }
-    if (nrow(binomSignDT[grepl('MNP', var_cat), ]) != 0) {
-      result <- result +
-        geom_text(data = binomSignDT[grepl('MNP', var_cat), ], size = 10,
-                  mapping = aes_string(x = xOrderCol, y = 1.03,
-                                       color = 'var_cat', label = 'lab'))
-    }
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1, size = 6,
+                                     color = xAxisLabs$color))
+  if (!is.null(Y_MAX)) {
+    result <- result + scale_y_continuous(expand = c(0, 0),
+                                          limits = c(0, Y_MAX))
+  } else {
+    result <- result + scale_y_continuous(expand = c(0, 0))
   }
   
-  result <- result + scale_fill_manual(values = colorPaletteCut) + 
-    scale_color_manual(values = colorPaletteCut) + 
-    scale_x_discrete(labels = xAxisLabs$label) + guides(color = 'none') +
-    labs(fill = 'Mutation structural type') + ylim(c(0, 1.05))
-  
-  if (!is.null(ggplot2Theme)) {
-    result <- result + ggplot2Theme
-  }
-  result <- result + theme(panel.grid.major.x = element_blank(),
-                           panel.grid.minor.x = element_blank(),
-                           panel.grid.major.y = element_blank(),
-                           panel.grid.minor.y = element_blank(),
-                           axis.text.x = element_text(angle = 45, hjust = 1, 
-                                                      size = 6,
-                                                      color = xAxisLabs$color))
   result
 }
 
@@ -723,9 +516,10 @@ tilePlotPvalues <- function(pValsDT, xLabelCol, yLabelCol, colorBy,
     filteredOutShadeCoordsCut <- filteredOutShadeCoords[seq(1, nrow(filteredOutShadeCoords), 
                                               by = 2)]
     result <- result + 
-      geom_rect(data = filteredOutShadeCoordsCut, fill = 'red', inherit.aes = F, 
-                aes(xmin = start - 0.5, xmax = end + 0.5, ymin = -Inf, 
-                    ymax = Inf), alpha = 0.15)
+      geom_rect(data = filteredOutShadeCoordsCut, fill = 'red', 
+                inherit.aes = F, alpha = 0.15,
+                aes(xmin = start - 0.5, xmax = end + 0.5, 
+                    ymin = -Inf, ymax = Inf))
   } 
   
   result <- result + 
@@ -757,7 +551,17 @@ args <- list(cancer_subtype = 'Panlung',
              drivers = "completed_runs/2023_12_25/results/tables/drivers/drivers-Panlung--hg19.csv",
              inventory_patients = 'data/inventory/inventory_patients.csv',
              excluded_patients = "", 
-             allowed_filter_values = list("PASS", "INDEL, 2-5bp"))
+             allowed_filter_values = list("PASS", "INDEL, 2-5bp"),
+             drivers_uniform_subtypes = list("completed_runs/2023_12_25/results/tables/drivers/drivers-Adenocarcinoma--hg19.csv",
+                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Adenocarcinoma_met--hg19.csv",
+                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Adenosquamous--hg19.csv",
+                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Carcinoid--hg19.csv",
+                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Large_cell--hg19.csv",
+                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Mesothelioma--hg19.csv",
+                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Neuroendocrine_carcinoma--hg19.csv",
+                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Small_cell--hg19.csv",
+                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Squamous_cell--hg19.csv",
+                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Squamous_cell_met--hg19.csv"))
 
 # Read in patients inventory --------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients, 1)
@@ -765,10 +569,67 @@ patientsInv <- patientsInv[tumor_subtype %in% args$cancer_subtype]
 message('[', Sys.time(), '] Read --inventory_patients: ', 
         args$inventory_patients)
 
-# Read drivers ----------------------------------------------------------------
-drivers <- fread(args$drivers, header = T, stringsAsFactors = F)
-drivers <- drivers[!is.na(tier)]
-drivers <- drivers[FILTER %in% args$allowed_filter_values]
+# Read unfiltered drivers -----------------------------------------------------
+drivers_unfiltered <- fread(args$drivers, header = T, stringsAsFactors = F)
+message('[', Sys.time(), '] Read --drivers: ', args$drivers)
+
+# Read drivers detected in uniform subtypes -----------------------------------
+if (!is.null(args$drivers_uniform_subtypes)) {
+  drivers_uniform_subtypes <- lapply(args$drivers_uniform_subtypes, fread, 
+                                     header = T, stringsAsFactors = F)
+  message('[', Sys.time(), '] Read --drivers_uniform_subtypes: ',
+          paste0(args$drivers_uniform_subtypes, collapse = ', '))
+  drivers_uniform_subtypes <- do.call(rbind.fill, drivers_uniform_subtypes)
+  drivers_uniform_subtypes <- as.data.table(drivers_uniform_subtypes)
+  
+  if (sum(drivers_uniform_subtypes$tumor_subtype != 
+          drivers_uniform_subtypes$participant_tumor_subtype, 
+          na.rm = T) > 1) {
+    stop()
+  }
+  
+  uniform_subtypes <- unique(drivers_uniform_subtypes$tumor_subtype)
+  part_of_composite <- unique(drivers_unfiltered$participant_tumor_subtype)
+  not_in_composite <- setdiff(uniform_subtypes, part_of_composite)
+  if (length(not_in_composite) > 0) {
+      stop()
+  }
+}
+
+# Select genes - drivers in args$tumor_subtype or in uniform subtypes ---------
+drivers <- drivers_unfiltered[!is.na(tier) &
+                                FILTER %in% args$allowed_filter_values]
+drivers <- drivers[,.(gr_id, gene_id, gene_name)]
+drivers <- unique(drivers)
+
+if (!is.null(args$drivers_uniform_subtypes)) {
+  drivers_uniform_subtypes_ids <- drivers_uniform_subtypes[!is.na(tier) & 
+                                                             FILTER %in%
+                                                             args$allowed_filter_values]
+  drivers_uniform_subtypes_ids <- drivers_uniform_subtypes_ids[,.(tumor_subtype,
+                                                                  gr_id, 
+                                                                  gene_id,
+                                                                  gene_name)]
+  drivers_uniform_subtypes_ids <- unique(drivers_uniform_subtypes_ids)
+  drivers_uniform_subtypes <- merge(drivers_uniform_subtypes,
+                                    drivers_uniform_subtypes_ids,
+                                    by = c("tumor_subtype", "gr_id",
+                                           "gene_id", "gene_name"))
+  
+  drivers_uniform_subtypes_ids <- drivers_uniform_subtypes_ids[,.(gr_id, 
+                                                                  gene_id,
+                                                                  gene_name)]
+  drivers_uniform_subtypes_ids <- unique(drivers_uniform_subtypes_ids)
+  drivers <- rbind(drivers, drivers_uniform_subtypes_ids)
+  drivers <- unique(drivers)
+}
+
+drivers <- merge(drivers_unfiltered, drivers, 
+                 by = c("gr_id", "gene_id", "gene_name"))
+if (!is.null(args$drivers_uniform_subtypes)) {
+  drivers <- as.data.table(rbind.fill(drivers, drivers_uniform_subtypes))
+}
+
 if (nrow(drivers) == 0) {
   stop()
 }
@@ -803,6 +664,8 @@ GENE_ORDER <- unique(GENE_ORDER)
 GENE_ORDER[, gr_id := factor(gr_id, GR_ORDER)]
 GENE_ORDER <- GENE_ORDER[order(gr_id, -nParts_total, -gene_name)]
 GENE_ORDER <- GENE_ORDER[,.(gr_id, gene_id, gene_name)]
+# to handle multiple tumour subtypes
+GENE_ORDER <- unique(GENE_ORDER)
 
 # in case plotting of 2-5bp filtered out drivers is requested too
 GENE_FILTERED_OUT_ORDER <- NULL
@@ -818,6 +681,8 @@ if (nrow(drivers[FILTER != "PASS"]) > 0) {
                                                            -gene_name)]
   GENE_FILTERED_OUT_ORDER <- GENE_FILTERED_OUT_ORDER[,.(gr_id, gene_id, 
                                                         gene_name)]
+  # to handle multiple tumour subtypes
+  GENE_FILTERED_OUT_ORDER <- unique(GENE_FILTERED_OUT_ORDER)
 }
 
 GENE_ORDER <- rbind(GENE_ORDER, GENE_FILTERED_OUT_ORDER)
@@ -826,6 +691,8 @@ GENE_ORDER <- GENE_ORDER$gene_plots_id
 
 drivers[, gene_plots_id := paste(gene_name, gr_id)] 
 drivers[, gene_plots_id := factor(gene_plots_id, GENE_ORDER)]
+drivers[, participant_tumor_subtype := factor(participant_tumor_subtype, 
+                                              TUMOR_SUBTYPE_ORDER)]
 
 # Barplot number of patients -------------------------------------------------
 barNpats <- barplotNpatient(driversDT = drivers, 
@@ -833,7 +700,7 @@ barNpats <- barplotNpatient(driversDT = drivers,
                             xOrderCol = 'gene_plots_id', 
                             annoCol = 'is_known_cancer', 
                             colorPalette = tumourTypeColorPalette, 
-                            pancanCode = 'Pan-lung',
+                            pancanCode = 'Panlung',
                             ggplot2Theme = customGgplot2Theme)
 barNpats <- barNpats + theme(legend.position = 'bottom')
 barNpats <- barNpats + guides(fill = guide_legend(nrow = 2, byrow = T)) +
