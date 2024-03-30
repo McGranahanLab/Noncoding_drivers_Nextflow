@@ -513,6 +513,134 @@ display_driverMut_update_msg <- function(patientsInvDT, driveMutsDT, confLvl) {
           100 * round(nExplained_total/total_nParticip, 4), '%)')
 }
 
+# Functions : number of tumors with a driver mutation(s) ----------------------
+#' generateMutCombsWithMinMaxNtums
+#' @description Generates mutation combinations which will correspond to 
+#' minimum number of patients with driver mutation and to the maximum number of
+#' patients with driver mutations.
+#' @author Maria Litovchenko
+#' @param data.table with columns key, n_tumors, where key is the unique ID of
+#' a mutation and n_tumors is number of tumors in which it is found.
+#' @param n_drivers integer, number of driver mutations.
+#' @return data table with 2 columns: 1st column gives indices of mutations 
+#' which in combination give the least number of patients with driver mutations
+#' 2nd column the biggest number of patients with driver mutations
+generateMutCombsWithMinMaxNtums <- function(tums_per_mut, n_drivers) {
+  result <- copy(tums_per_mut)
+  result[, idx_orig := 1:nrow(result)]
+  result <- result[order(n_tumors)]
+  result <- cbind(head(result, n_drivers)$idx_orig, 
+                  tail(result, n_drivers)$idx_orig)
+  result
+}
+
+#' generateAllMutCombs
+#' @description Generates all possible combinations of mutations 
+#' @param data.table with columns key, n_tumors, where key is the unique ID of
+#' a mutation and n_tumors is number of tumors in which it is found.
+#' @param n_drivers integer, number of driver mutations.
+#' @return data table with number of columns equal 
+generateAllMutCombs <- function(tums_per_mut, n_drivers) {
+  result <- tryCatch({
+    combn(1:nrow(tums_per_mut), n_drivers)
+  }, error = function(cond) {
+    message('[', Sys.time(), '] Can not compute all combinations of ',
+            n_drivers, ' from ', nrow(tums_per_mut), '. Will return 2 ',
+            'combinations: with maximum and minimum number of patients with ',
+            'driver mutations.')
+    generateMutCombsWithMinMaxNtums(tums_per_mut, n_drivers)
+  })
+  result
+}
+
+#' estimateNtumorsWithDriverMut
+#' @description Estimates number of patients with driver mutations (using 
+#' analytical solution!)
+#' @author Maria Litovchenko
+#' @param muts_in_gene data table with columns gr_id, gene_id,
+#' gene_name, var_type, key, prob_is_driver_mle, participant_id, where key is
+#' a unique mutations identifier, prob_is_driver_mle is essentially percentage
+#' of driver mutations in gene estimated by dNdScv/NBR. The data table should
+#' contains mutations of only one structural type, i.e. mis/non/sub/indels.
+#' @return data table with columns gr_id, gene_id, gene_name, var_type and
+#' n_tums_w_driver_mut - numerical, estimation of number of patients with
+#' driver mutations.
+#' @note description of analytical solution:
+#' Let's say we have n mutations in a gene and we also know that k of them are 
+#' drivers. However, we do not know which of mutations are drivers. Also, one
+#' mutation of the set is present in 2 patients. Therefore, number of patients
+#' with driver mutations can range from k to k+1. But this is just the range,
+#' we don't know yet how many times it is possible that number of patients will
+#' be k and how many k+1. So,
+#' 1. number of mutations' combinations which will produce k patients with 
+#' driver mutations:
+#'    \binom{n}{k}
+#' 2. number of mutations' combinations which will produce k+1 patients with 
+#' driver mutations:
+#'    \binom{n-1}{k-1} (because we essentially need to select k mutations from
+#'    n - 1 set, as we already fixed mutation present in 2 patients to be in
+#'    our set)
+#' 3. Then % of all possible mutations' combinations which will produce k+1
+#' patient is:
+#'    \binom{n}{k}/\binom{n-1}{k-1} = k/n
+#' 4. Therefore, mean number of patients with driver mutation can be computed
+#' as:
+#'    (k/n)*(k+1) + (1 - k/n)*k
+#' This is an analytical solution for the case then there is just 1 mutation
+#' present in > 1 patient is in the set. If there are more mutations like this,
+#' then it all gets more complicated, especially if one mutation is present in,
+#' for example 3 patients and the other one in 2 patients. Therefore, we 
+#' address such cases by solving them programmatically. 
+estimateNtumorsWithDriverMut <- function(muts_in_gene) {
+  # number of estimated driver mutations
+  n_driver_muts <- unique(muts_in_gene$prob_is_driver_mle)
+  n_driver_muts <- round(n_driver_muts * length(unique(muts_in_gene$key)))
+  if (n_driver_muts > 0) {
+    # number of tumors in which each mutation is present
+    n_tumors_per_mut <- unique(muts_in_gene[,.(key, participant_id)])
+    n_tumors_per_mut <- data.table(table(n_tumors_per_mut$key))
+    setnames(n_tumors_per_mut, c('V1', 'N'), c('key', 'n_tumors'))
+    
+    if (max(n_tumors_per_mut$n_tumors) != 1) {
+      if (nrow(n_tumors_per_mut[n_tumors > 1]) == 1) {
+        # analytical solution to preserve memory and CPU
+        # percentage of mutations combinations which will have mutation present
+        # in > 1 patient. This result is easy to prove by dividing C(n-1)(k-1)
+        # by C(n)(k)
+        perc_mut_more1 <- n_driver_muts/nrow(n_tumors_per_mut)
+        # minimal and maximum n patients:
+        mut_combs <- generateMutCombsWithMinMaxNtums(n_tumors_per_mut, 
+                                                     n_driver_muts)
+        n_tumors_per_mut_v <- n_tumors_per_mut$n_tumors
+        result <- apply(mut_combs, 2, function(x) sum(n_tumors_per_mut_v[x]))
+        rm(mut_combs)
+        result <- perc_mut_more1*result[1] + (1 - perc_mut_more1)*result[2]
+      } else {
+        # all possible combinations of n_driver_muts number of mutations from 
+        # all mutation in the gene
+        mut_combs <- generateAllMutCombs(n_tumors_per_mut, n_driver_muts)
+        if (!is.vector(mut_combs)) {
+          n_tumors_per_mut_v <- n_tumors_per_mut$n_tumors
+          # all possible numbers of patients with driver mutations
+          result <- apply(mut_combs, 2, function(x) sum(n_tumors_per_mut_v[x]))
+          rm(mut_combs)
+          result <- median(result)
+        } else {
+          result <- n_driver_muts
+        }
+      }
+    } else {
+      result <- n_driver_muts
+    }
+  } else {
+    result <- 0
+  }
+  result <- cbind(unique(muts_in_gene[,.(gr_id, gene_id,
+                                         gene_name, var_type)]), 
+                  'n_tums_w_driver_mut' = result)
+  result
+}
+
 # Parse input arguments -------------------------------------------------------
 # create parser object
 parser <- ArgumentParser(prog = 'find_driver_mutations.R')
@@ -657,21 +785,6 @@ patientsInv <- patientsInv[tumor_subtype %in% args$cancer_subtype]
 message('[', Sys.time(), '] Read --inventory_patients: ', 
         args$inventory_patients)
 
-# Read in analysis inventory --------------------------------------------------
-analysisInv <- readAnalysisInventory(args$inventory_analysis)
-message('[', Sys.time(), '] Read --inventory_analysis: ', 
-        args$inventory_analysis)
-analysisInv <- analysisInv[tumor_subtype == args$cancer_subtype]
-# assign coding genomic regions - anything which contains CDS as gr_code
-coding_gr_id <- unique(analysisInv[gr_code == 'CDS']$gr_id)
-if (length(coding_gr_id) != 0) {
-  message('[', Sys.time(), '] Following genomic regions: ', 
-          paste0(coding_gr_id, collapse = ', '), ', will be considered as ',
-          'coding.')
-}
-rm(analysisInv)
-gc()
-
 # Read driver genes -----------------------------------------------------------
 message('[', Sys.time(), '] Started reading ', args$drivers)
 drivers <- fread(args$drivers, header = T, stringsAsFactors = F, 
@@ -690,6 +803,21 @@ if (nrow(drivers) == 0) {
        'NA) driver genes is found in ', args$drivers, ' table.')
 }
 
+# Read in analysis inventory --------------------------------------------------
+analysisInv <- readAnalysisInventory(args$inventory_analysis)
+message('[', Sys.time(), '] Read --inventory_analysis: ', 
+        args$inventory_analysis)
+analysisInv <- analysisInv[tumor_subtype == args$cancer_subtype]
+# assign coding genomic regions - anything which contains CDS as gr_code
+coding_gr_id <- unique(analysisInv[gr_code == 'CDS']$gr_id)
+if (length(coding_gr_id) != 0) {
+  message('[', Sys.time(), '] Following genomic regions: ', 
+          paste0(coding_gr_id, collapse = ', '), ', will be considered as ',
+          'coding.')
+}
+rm(analysisInv)
+gc()
+
 # Read in observed and estimated number of driver mutations - dNdScv, NBR -----
 message('[', Sys.time(), '] Started reading ',
         paste(args$run_result, collapse = ','))
@@ -706,9 +834,6 @@ mleDriveMuts <- lapply(mleDriveMuts, estimatePercOfDriverMuts)
 mleDriveMuts <- do.call(rbind, mleDriveMuts)
 message('[', Sys.time(), '] Finished estimating number of driver mutations')
 mleDriveMuts[, tumor_subtype := NULL]
-# restrict to drivers
-mleDriveMuts <- merge(mleDriveMuts, drivers[,.(gr_id, gene_id)], 
-                      by = c('gr_id', 'gene_id'))
 
 # Read mutation map to genomic regions & restrict to driver genes -------------
 varsToGRmap <- fread(args$muts_to_gr, header = T, stringsAsFactors = F, 
@@ -716,12 +841,6 @@ varsToGRmap <- fread(args$muts_to_gr, header = T, stringsAsFactors = F,
                                 'gene_name', 'key', 'key_orig', 'var_class',
                                 'struct_type'))
 message('[', Sys.time(), '] Read ', args$muts_to_gr)
-
-# restrict to driver genes
-varsToGRmap <- merge(varsToGRmap, drivers[,.(gr_id, gene_id, gene_name)],
-                     by = c('gr_id', 'gene_id', 'gene_name'))
-message('[', Sys.time(), '] Mutations were restricted to mutations ',
-        'which belong to identified driver genomic regions.')
 
 # remove silent mutations, if requested
 if (!is.null(args$synAcceptedClass)) {
@@ -928,6 +1047,35 @@ if (nrow(cnOfDrivers) != 0) {
   display_driverMut_update_msg(patientsInv, driverMutations, 'hom.del.')
   display_driverMut_update_msg(patientsInv, driverMutations, 'NC,hom.del.')
 }
+
+# Calculate N. patients which have a driver mutation in a driver gene ---------
+drivers <- drivers[,.(gr_id, gene_id, gene_name)]
+drivers[, is_driver := T]
+driverMutations <- merge(driverMutations, drivers, all = T,
+                         by = c("gr_id", "gene_id", "gene_name"))
+driverMutations[is.na(is_driver)]$is_driver <- F
+
+
+patients_with_driverMut_count <- patients_with_driverMut_count[is_driver == T]
+patients_with_driverMut_count <- patients_with_driverMut_count[,.(gr_id, 
+                                                                  gene_id,
+                                                                  gene_name, 
+                                                                  var_type, 
+                                                                  key, 
+                                                                  prob_is_driver_mle, 
+                                                                  participant_id)]
+gc()
+patients_with_driverMut_count <- split(patients_with_driverMut_count,
+                                       drop = T,
+                                       by = c('gr_id', 'gene_id', 'gene_name',
+                                              'var_type'))
+patients_with_driverMut_count <- lapply(patients_with_driverMut_count,
+                                        estimateNtumorsWithDriverMut)
+patients_with_driverMut_count <- do.call(rbind, patients_with_driverMut_count)
+driverMutations <- merge(driverMutations, patients_with_driverMut_count, 
+                         by = c('gr_id', 'gene_id', 'gene_name', 'var_type'),
+                         all = T)
+driverMutations[is.na(n_tums_w_driver_mut)]$n_tums_w_driver_mut <- 0
 
 # Output to table -------------------------------------------------------------
 write.table(driverMutations, args$output, append = F, quote = F, sep = '\t', 
