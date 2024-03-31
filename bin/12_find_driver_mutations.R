@@ -1056,25 +1056,24 @@ driverMutations <- merge(driverMutations, drivers, all = T,
 driverMutations[is.na(is_driver)]$is_driver <- F
 
 
-patients_with_driverMut_count <- patients_with_driverMut_count[is_driver == T]
-patients_with_driverMut_count <- patients_with_driverMut_count[,.(gr_id, 
-                                                                  gene_id,
-                                                                  gene_name, 
-                                                                  var_type, 
-                                                                  key, 
-                                                                  prob_is_driver_mle, 
-                                                                  participant_id)]
+patients_with_driverMut_N <- driverMutations[is_driver == T & 
+                                               var_type %in% c("subs", "mis",
+                                                               "non", 
+                                                               "indels")]
+patients_with_driverMut_N <- patients_with_driverMut_N[,.(gr_id, gene_id,
+                                                          gene_name, var_type, 
+                                                          key, 
+                                                          prob_is_driver_mle,
+                                                          participant_id)]
 gc()
-patients_with_driverMut_count <- split(patients_with_driverMut_count,
-                                       drop = T,
-                                       by = c('gr_id', 'gene_id', 'gene_name',
-                                              'var_type'))
-patients_with_driverMut_count <- lapply(patients_with_driverMut_count,
-                                        estimateNtumorsWithDriverMut)
-patients_with_driverMut_count <- do.call(rbind, patients_with_driverMut_count)
-driverMutations <- merge(driverMutations, patients_with_driverMut_count, 
-                         by = c('gr_id', 'gene_id', 'gene_name', 'var_type'),
-                         all = T)
+patients_with_driverMut_N <- split(patients_with_driverMut_N, drop = T,
+                                   by = c('gr_id', 'gene_id', 'gene_name',
+                                          'var_type'))
+patients_with_driverMut_N <- lapply(patients_with_driverMut_N,
+                                    estimateNtumorsWithDriverMut)
+patients_with_driverMut_N <- do.call(rbind, patients_with_driverMut_N)
+driverMutations <- merge(driverMutations, patients_with_driverMut_N, all = T,
+                         by = c('gr_id', 'gene_id', 'gene_name', 'var_type'))
 driverMutations[is.na(n_tums_w_driver_mut)]$n_tums_w_driver_mut <- 0
 
 # Output to table -------------------------------------------------------------
