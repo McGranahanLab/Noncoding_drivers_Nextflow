@@ -5,113 +5,7 @@ library(plyr)
 
 source('bin/custom_functions.R')
 
-# Functions : Overview of all detected driver ---------------------------------
-#' get_bar_transparency
-#' @description 
-#' @author Maria Litovchenko
-#' @param plotDT data table which holds data for plotting. Have to have columns
-#'        tumor_subtype, tier, participant_tumor_subtype and a column with the 
-#'        name identical to xOrderCol
-#' @param pancanCode string encoding tumor subtype code for pancancer analysis
-#' @param xOrderCol name of the column which contains IDs of genes to plot and
-#'        by which they will be ordered on the plot
-#' @note Driver status of the gene will control the opacity of the bars. 
-#'       1) If gene is a driver in a particular tumor type(s), but not in 
-#'       pancancer analysis, the bar for it (them) should be opaque and for the
-#'       rest of the tumor types - transparent.
-#'       2) If gene is a driver in pancancer analysis, all bars should be 
-#'       opaque. However, in the plotDT table now we do not have a breakdown of 
-#'       number of patients per tumor type in case gene is a driver in the 
-#'       pancancer analysis. Let's add the breakdown by retrieving number of 
-#'       patients from plotDT They will be lines which may not have significant
-#'       p-values in case a gene was found significant only!) in pancancer 
-#'       analysis.
-get_bar_transparency <- function(plotDT, pancanCode, xOrderCol) {
-  result <- copy(plotDT)
-  # transparent, if significant in individual tumor subtypes
-  result[, transparent := ifelse(tier == 0, 1, 0)]
-  # all tumor_subtypes opaque, if significant in pancan analysis
-  signPancan <- result[tumor_subtype == pancanCode & tier == 1]
-  signPancan <- unlist(signPancan[, xOrderCol, with = F])
-  signPancan <- unlist(result[, xOrderCol, with = F]) %in% signPancan
-  result[signPancan]$transparent <- 0
-  # no need to keep pancan in the table anymore
-  result <- split(result, by = xOrderCol, drop = T)
-  result <- lapply(result, 
-                   function(x) x[tumor_subtype != pancanCode | 
-                                   (tumor_subtype == pancanCode & 
-                                      !participant_tumor_subtype %in% tumor_subtype)])
-  result <- do.call(rbind, result)
-  result[, tumor_subtype := NULL]
-  setnames(result, 'participant_tumor_subtype', 'tumor_subtype')
-  if (class(plotDT$tumor_subtype) == 'factor') {
-    result[, tumor_subtype := factor(tumor_subtype, 
-                                     levels = levels(plotDT$tumor_subtype))]
-  }
-  
-  result
-}
-
-#' create_tumortype_colorpalette
-#' @description Creates color palette for tumor subtypes
-#' @author Maria Litovchenko
-#' @param plotDT data table with data for plotting. Have to have columns 
-#'        tumor_subtype
-#' @param colorpalette character vector, color palette submitted by user
-#' @return named character vector with colors for tumor types. Colors are 
-#'.        repeated for the case then driver is significant in that tumor type
-#'         (--0) and not (--1)
-create_tumortype_colorpalette <- function(plotDT, colorpalette) {
-  if (is.null(colorpalette)) {
-    if (is.null(levels(plotDT$tumor_subtype))) {
-      tumor_types_lvl <- as.character(unique(plotDT$tumor_subtype))
-    } else {
-      tumor_types_lvl <- levels(plotDT$tumor_subtype)
-    }
-    colorpalette <- palette(rainbow(length(tumor_types_lvl)))
-    names(colorpalette) <- tumor_types_lvl
-  }
-  
-  colorsToUse <- colorpalette[names(colorpalette) %in% plotDT$tumor_subtype]
-  result <- rep(colorsToUse, 2)
-  names(result) <- c(paste0(names(colorsToUse), '--0'), 
-                     paste0(names(colorsToUse), '--1'))
-  result
-}
-
-#' create_pvalue_colorpalette
-#' @description Creates binned color palette for p-values
-#' @author Maria Litovchenko
-#' @param plotDT data table with columns colorByLog10
-#' @param doLog10 whatever -log10 operation on colorBy column should be 
-#'                performed
-#' @param scaleLims limits of the scale
-#' @param nColors number of colors to use in the color palette 
-#' @param colorPalette character vector of colors
-#' @return list with members colorPalette and colorBreaks
-create_pvalue_colorpalette <- function(plotDT, doLog10, scaleLims, nColors,
-                                       colorPalette) {
-  # color breaks
-  colorBreaks <- round(seq(0, max(plotDT$colorByLog10, na.rm = T), 
-                           length.out = nColors + 1), 2)
-  if (!is.null(scaleLims)) {
-    colorBreaks <- round(seq(scaleLims[1], scaleLims[2],
-                             length.out = nColors + 1), 2)
-  }
-  if (doLog10 == T) {
-    colorBreaks <- round(colorBreaks)
-  }
-  # actual colors
-  if (is.null(colorPalette)) {
-    colorPalette <- colorRampPalette(c("grey0", "grey80"))(nColors)
-    if (doLog10 == T) {
-      colorPalette <- rev(colorPalette)
-    }
-  }
-  result <- list('palette' = colorPalette, 'colorBreaks' = colorBreaks)
-  result
-}
-
+# Functions : genomic regions coloring ----------------------------------------
 #' format_xLabels
 #' @description Formats labels for x Axis, i.e. color and actual string to use
 #'              as label
@@ -247,7 +141,7 @@ get_filtered_out_gene_coords <- function(xLabsDT, xOrderCol) {
 #' create_plot_background
 #' @description Creates "background" for the future plots of coding and 
 #'              noncoding driver genetic elements. It creates shades to 
-#'              distingush between different types of genetic elements (i.e.
+#'              distinguish between different types of genetic elements (i.e.
 #'              CDS and promoters) as well as creates a separate shade for the
 #'              filtered out genetic elements.
 #' @author Maria Litovchenko
@@ -312,6 +206,126 @@ create_plot_background <- function(plotDT, axisLabs, xOrderCol, yCol,
   result
 }
 
+# Function: dealing with legends ----------------------------------------------
+#' extract_legend 
+#' @description Extracts legend from ggplot
+#' @author The internet
+#' @param my_ggp ggplot2 object
+#' @return legend as ggplot2
+extract_legend <- function(my_ggp) {
+  step1 <- ggplot_gtable(ggplot_build(my_ggp))
+  step2 <- which(sapply(step1$grobs, function(x) x$name) == "guide-box")
+  step3 <- step1$grobs[[step2]]
+  step3
+}
+
+# Functions : Overview of all detected driver ---------------------------------
+#' get_bar_transparency
+#' @description 
+#' @author Maria Litovchenko
+#' @param plotDT data table which holds data for plotting. Have to have columns
+#'        tumor_subtype, tier, participant_tumor_subtype and a column with the 
+#'        name identical to xOrderCol
+#' @param pancanCode string encoding tumor subtype code for pancancer analysis
+#' @param xOrderCol name of the column which contains IDs of genes to plot and
+#'        by which they will be ordered on the plot
+#' @note Driver status of the gene will control the opacity of the bars. 
+#'       1) If gene is a driver in a particular tumor type(s), but not in 
+#'       pancancer analysis, the bar for it (them) should be opaque and for the
+#'       rest of the tumor types - transparent.
+#'       2) If gene is a driver in pancancer analysis, all bars should be 
+#'       opaque. However, in the plotDT table now we do not have a breakdown of 
+#'       number of patients per tumor type in case gene is a driver in the 
+#'       pancancer analysis. Let's add the breakdown by retrieving number of 
+#'       patients from plotDT They will be lines which may not have significant
+#'       p-values in case a gene was found significant only!) in pancancer 
+#'       analysis.
+get_bar_transparency <- function(plotDT, pancanCode, xOrderCol) {
+  result <- copy(plotDT)
+  # transparent, if significant in individual tumor subtypes
+  result[, transparent := ifelse(tier == 0, 1, 0)]
+  # all tumor_subtypes opaque, if significant in pancan analysis
+  signPancan <- result[tumor_subtype == pancanCode & tier == 1]
+  signPancan <- unlist(signPancan[, xOrderCol, with = F])
+  signPancan <- unlist(result[, xOrderCol, with = F]) %in% signPancan
+  result[signPancan]$transparent <- 0
+  # no need to keep pancan in the table anymore
+  result <- split(result, by = xOrderCol, drop = T)
+  result <- lapply(result, 
+                   function(x) x[tumor_subtype != pancanCode | 
+                                   (tumor_subtype == pancanCode & 
+                                      !participant_tumor_subtype %in% tumor_subtype)])
+  result <- do.call(rbind, result)
+  result[, tumor_subtype := NULL]
+  setnames(result, 'participant_tumor_subtype', 'tumor_subtype')
+  if (class(plotDT$tumor_subtype) == 'factor') {
+    result[, tumor_subtype := factor(tumor_subtype, 
+                                     levels = levels(plotDT$tumor_subtype))]
+  }
+  
+  result
+}
+
+#' create_tumortype_colorpalette
+#' @description Creates color palette for tumor subtypes
+#' @author Maria Litovchenko
+#' @param plotDT data table with data for plotting. Have to have columns 
+#'        tumor_subtype
+#' @param colorpalette character vector, color palette submitted by user
+#' @return named character vector with colors for tumor types. Colors are 
+#'.        repeated for the case then driver is significant in that tumor type
+#'         (--0) and not (--1)
+create_tumortype_colorpalette <- function(plotDT, colorpalette) {
+  if (is.null(colorpalette)) {
+    if (is.null(levels(plotDT$tumor_subtype))) {
+      tumor_types_lvl <- as.character(unique(plotDT$tumor_subtype))
+    } else {
+      tumor_types_lvl <- levels(plotDT$tumor_subtype)
+    }
+    colorpalette <- palette(rainbow(length(tumor_types_lvl)))
+    names(colorpalette) <- tumor_types_lvl
+  }
+  
+  colorsToUse <- colorpalette[names(colorpalette) %in% plotDT$tumor_subtype]
+  result <- rep(colorsToUse, 2)
+  names(result) <- c(paste0(names(colorsToUse), '--0'), 
+                     paste0(names(colorsToUse), '--1'))
+  result
+}
+
+#' create_pvalue_colorpalette
+#' @description Creates binned color palette for p-values
+#' @author Maria Litovchenko
+#' @param plotDT data table with columns colorByLog10
+#' @param doLog10 whatever -log10 operation on colorBy column should be 
+#'                performed
+#' @param scaleLims limits of the scale
+#' @param nColors number of colors to use in the color palette 
+#' @param colorPalette character vector of colors
+#' @return list with members colorPalette and colorBreaks
+create_pvalue_colorpalette <- function(plotDT, doLog10, scaleLims, nColors,
+                                       colorPalette) {
+  # color breaks
+  colorBreaks <- round(seq(0, max(plotDT$colorByLog10, na.rm = T), 
+                           length.out = nColors + 1), 2)
+  if (!is.null(scaleLims)) {
+    colorBreaks <- round(seq(scaleLims[1], scaleLims[2],
+                             length.out = nColors + 1), 2)
+  }
+  if (doLog10 == T) {
+    colorBreaks <- round(colorBreaks)
+  }
+  # actual colors
+  if (is.null(colorPalette)) {
+    colorPalette <- colorRampPalette(c("grey0", "grey80"))(nColors)
+    if (doLog10 == T) {
+      colorPalette <- rev(colorPalette)
+    }
+  }
+  result <- list('palette' = colorPalette, 'colorBreaks' = colorBreaks)
+  result
+}
+
 #' barplotNpatient
 #' @description Creates stacked barplot with number of patients per gene with 
 #' histological subtypes on Y axis. In case several regions are given, they are
@@ -372,7 +386,7 @@ barplotNpatient <- function(driversDT, xLabelCol, colorPalette = NULL,
     alphaVals <- c('yes' = 1)
   }
   
-  # first of all, if there are several genomic regons, create shadowing
+  # first of all, if there are several genomic regions, create shadowing
   result <- ggplot()
   Y_MAX <- NULL
   if (length(unique(dt$gr_id)) > 1) {
@@ -550,18 +564,6 @@ tilePlotPvalues <- function(pValsDT, xLabelCol, yLabelCol, colorBy,
           axis.text.x = element_text(angle = 90, size = 6, hjust = 1, 
                                      color = xAxisLabs$color))
   result
-}
-
-#' extract_legend 
-#' @description Extracts legend from ggplot
-#' @author The internet
-#' @param my_ggp ggplot2 object
-#' @return legend as ggplot2
-extract_legend <- function(my_ggp) {
-  step1 <- ggplot_gtable(ggplot_build(my_ggp))
-  step2 <- which(sapply(step1$grobs, function(x) x$name) == "guide-box")
-  step3 <- step1$grobs[[step2]]
-  step3
 }
 
 # Visuals setup ---------------------------------------------------------------
@@ -755,7 +757,6 @@ if (nrow(drivers) == 0) {
 # Calculate cohort sizes ------------------------------------------------------
 cohort_sizes <- patientsInv[,.(length(unique(participant_id))), 
                             by = participant_tumor_subtype]
-
 setnames(cohort_sizes, c("participant_tumor_subtype", 'V1'), 
          c("tumor_subtype", 'cohort_size'))
 cohort_sizes <- cohort_sizes[order(cohort_size, decreasing = T)]
