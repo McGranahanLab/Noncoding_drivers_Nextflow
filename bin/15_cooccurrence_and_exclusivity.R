@@ -201,6 +201,17 @@ timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
+emptyTable <- data.table(tumor_subtype = character(), 
+                         comparison = character(), mode = character(), 
+                         gr_id_1 = character(), gene_id_1 = character(),
+                         gene_name_1 = character(), gr_id_2 = character(), 
+                         gene_id_2 = character(), 
+                         gene_name_2 = character(), 
+                         p.value = numeric(), 
+                         affected_by_subtype = character(),
+                         p.value_subtypeBiasRemoved = character(),
+                         p.adj_subtypeBiasRemoved = character())
+
 # Test arguments --------------------------------------------------------------
 # args <- list(cancer_subtype = 'Adenocarcinoma',
 #              inventory_patients = 'data/inventory/inventory_patients.csv',
@@ -340,13 +351,6 @@ if (any(nTumors$V1 < args$min_patients_discover)) {
   }
   
   if (nrow(varsToGRmap) == 0) {
-    emptyTable <- data.table(tumor_subtype = character(), 
-                             comparison = character(), mode = character(), 
-                             gr_id_1 = character(), gene_id_1 = character(),
-                             gene_name_1 = character(), gr_id_2 = character(), 
-                             gene_id_2 = character(), 
-                             gene_name_2 = character(), 
-                             p.value = numeric())
     write.table(emptyTable, args$output, append = F, quote = F, sep = '\t', 
                 col.names = T, row.names = F)
     message('[', Sys.time(), '] No driver genomic regions passed requested ',
@@ -368,13 +372,6 @@ varsToGRmap[, gr_name := apply(varsToGRmap[,.(gr_id, gene_id, gene_name)], 1,
 varsToGRmap[, gr_name := gsub(' ', '', gr_name)]
 
 if (length(unique(varsToGRmap$gr_name)) == 1) {
-  emptyTable <- data.table(tumor_subtype = character(), 
-                           comparison = character(), mode = character(), 
-                           gr_id_1 = character(), gene_id_1 = character(),
-                           gene_name_1 = character(), gr_id_2 = character(), 
-                           gene_id_2 = character(), 
-                           gene_name_2 = character(), 
-                           p.value = numeric())
   write.table(emptyTable, args$output, append = F, quote = F, sep = '\t', 
               col.names = T, row.names = F)
   message('[', Sys.time(), '] Only one driver genomic region passed all the ',
@@ -383,22 +380,15 @@ if (length(unique(varsToGRmap$gr_name)) == 1) {
 }
 
 # perform co-occurrence & exclusivity analysis
-discoverRes <- lapply(gr_ids_list, 
-                      function(x) coocurOrExclWithDiscover(varsToGRmap[gr_id %in% x],
-                                                           args$min_patients_discover,
-                                                           c('gr_name', 
-                                                             'participant_id')))
-discoverRes <- lapply(names(gr_ids_list), 
-                      function(x) discoverRes[[x]][, comparison := x])
-discoverRes <- do.call(rbind, discoverRes)
-if (nrow(discoverRes) == 0) {
-  emptyTable <- data.table(tumor_subtype = character(), 
-                           comparison = character(), mode = character(), 
-                           gr_id_1 = character(), gene_id_1 = character(),
-                           gene_name_1 = character(), gr_id_2 = character(), 
-                           gene_id_2 = character(), 
-                           gene_name_2 = character(), 
-                           p.value = numeric())
+discover <- lapply(gr_ids_list, 
+                   function(x) coocurOrExclWithDiscover(varsToGRmap[gr_id %in% x],
+                                                        args$min_patients_discover,
+                                                        c('gr_name', 
+                                                          'participant_id')))
+discover <- lapply(names(gr_ids_list),  
+                   function(x) discover[[x]][, comparison := x])
+discover <- do.call(rbind, discover)
+if (nrow(discover) == 0) {
   write.table(emptyTable, args$output, append = F, quote = F, sep = '\t', 
               col.names = T, row.names = F)
   message('[', Sys.time(), '] DISCOVER run returned back empty.')
@@ -406,23 +396,23 @@ if (nrow(discoverRes) == 0) {
 }
 
 # get back the gene and region names
-discoverRes[, Gene_1 := as.character(Gene_1)]
-discoverRes[, Gene_2 := as.character(Gene_2)]
-discoverRes <- cbind(do.call(rbind, 
-                             lapply(discoverRes$Gene_1,
-                                    function(x) unlist(strsplit(x, '--')))),
-                     do.call(rbind, 
-                             lapply(discoverRes$Gene_2,
-                                    function(x) unlist(strsplit(x, '--')))),
-                     discoverRes)
-colnames(discoverRes)[1:6] <- c('gr_id_1', 'gene_id_1', 'gene_name_1',
-                                'gr_id_2', 'gene_id_2', 'gene_name_2')
-discoverRes[, tumor_subtype := args$cancer_subtype]
-discoverRes[, Gene_1 := NULL]
-discoverRes[, Gene_2 := NULL]
-setcolorder(discoverRes, c('tumor_subtype', 'comparison', 'mode', 
-                           'gr_id_1', 'gene_id_1', 'gene_name_1',
-                           'gr_id_2', 'gene_id_2', 'gene_name_2', 'p.value'))
+discover[, Gene_1 := as.character(Gene_1)]
+discover[, Gene_2 := as.character(Gene_2)]
+discover <- cbind(do.call(rbind, 
+                          lapply(discover$Gene_1,
+                                 function(x) unlist(strsplit(x, '--')))),
+                  do.call(rbind, 
+                          lapply(discover$Gene_2,
+                                 function(x) unlist(strsplit(x, '--')))),
+                  discover)
+colnames(discover)[1:6] <- c('gr_id_1', 'gene_id_1', 'gene_name_1',
+                             'gr_id_2', 'gene_id_2', 'gene_name_2')
+discover[, tumor_subtype := args$cancer_subtype]
+discover[, Gene_1 := NULL]
+discover[, Gene_2 := NULL]
+setcolorder(discover, c('tumor_subtype', 'comparison', 'mode', 
+                        'gr_id_1', 'gene_id_1', 'gene_name_1',
+                        'gr_id_2', 'gene_id_2', 'gene_name_2', 'p.value'))
 
 # Read tumor subtype specificity of drivers -----------------------------------
 subtypeSpecificity <- data.table()
@@ -526,40 +516,35 @@ if (nrow(subtypeSpecificity) != 0) {
 # Mark driver pairs which can be incompatible due to their subtype specs ------
 if (nrow(pairsToRm) != 0) {
   pairsToRm[, affected_by_subtype := T]
-  discoverRes <- merge(discoverRes, pairsToRm, all.x = T, 
-                       by = c('gr_id_1', 'gene_id_1', 'gene_name_1',
-                              'gr_id_2', 'gene_id_2', 'gene_name_2'))
-  discoverRes[is.na(affected_by_subtype)]$affected_by_subtype <- F
+  discover <- merge(discover, pairsToRm, all.x = T, 
+                    by = c('gr_id_1', 'gene_id_1', 'gene_name_1',
+                           'gr_id_2', 'gene_id_2', 'gene_name_2'))
+  discover[is.na(affected_by_subtype)]$affected_by_subtype <- F
 } else {
-  discoverRes[, affected_by_subtype := F]
+  discover[, affected_by_subtype := F]
 }
 # add column which will contain adjusted for tumor subtype specificity p value
-discoverRes[, p.value_subtypeBiasRemoved := p.value]
-discoverRes[affected_by_subtype == T]$p.value_subtypeBiasRemoved <- NA
+discover[, p.value_subtypeBiasRemoved := p.value]
+discover[affected_by_subtype == T]$p.value_subtypeBiasRemoved <- NA
 
-setcolorder(discoverRes, 
+setcolorder(discover, 
             intersect(c('tumor_subtype', 'comparison', 'mode', 
-                           'gr_id_1', 'gene_id_1', 'gene_name_1',
-                           'gr_id_2', 'gene_id_2', 'gene_name_2', 
-                           'p.value', 'affected_by_tumSubtype',
-                           'p.value_subtypeBiasRemoved'), 
-                      colnames(discoverRes)))
+                        'gr_id_1', 'gene_id_1', 'gene_name_1',
+                        'gr_id_2', 'gene_id_2', 'gene_name_2', 
+                        'p.value', 'affected_by_subtype',
+                        'p.value_subtypeBiasRemoved'), 
+                      colnames(discover)))
 
 # Perform multiple testing correction -----------------------------------------
-discover[, discover.p.adj_subtypeBiasRemoved := p.adjust(discover.p.value_subtypeBiasRemoved,
-                                                         'BH'),
-         by = c('composite_subtype', 'tumor_subtype', 'comparison', 'mode')]
+discover[, p.adj_subtypeBiasRemoved := p.adjust(p.value_subtypeBiasRemoved, 
+                                                'BH'), by = 'mode']
 
-# for the composite tumour subtypes support_by_indivTT will be re-assessed
-# in cooccurrence_and_exclusivity_supported_by_individual_subtypes script
-discover[, support_by_indivTT := T]
-discover[, plotLab := '']
-discover[discover.p.adj_subtypeBiasRemoved < 0.1]$plotLab <- '*'
-discover[discover.p.adj_subtypeBiasRemoved < 0.01]$plotLab <- '**'
-discover[discover.p.adj_subtypeBiasRemoved < 0.001]$plotLab <- '***'
+# for the composite tumour subtypes p.value_subtypeBiasRemoved will be 
+# re-assessed in cooccurrence_and_exclusivity_supported_by_individual_subtypes 
+# script
 
 # Write tables with results of co-occurrence/exclusivity to files -------------
-write.table(discoverRes, args$output, append = F, quote = F, sep = '\t', 
+write.table(discover, args$output, append = F, quote = F, sep = '\t', 
             col.names = T, row.names = F)
 message('[', Sys.time(), '] Wrote results of DISCOVER (co-occurrence & ',
         'exclusivity analysis) run to ', args$output)
