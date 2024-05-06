@@ -717,11 +717,15 @@ if (!is.null(args$extra_studies)) {
 }
 
 # Select genes - drivers in args$tumor_subtype or in uniform subtypes ---------
-drivers <- drivers_unfiltered[!is.na(tier) &
-                                FILTER %in% args$allowed_filter_values]
-drivers <- drivers[,.(gr_id, gene_id, gene_name)]
-drivers <- unique(drivers)
+if (!is.null(args$drivers)) {
+  drivers <- drivers_unfiltered[!is.na(tier) & 
+                                  FILTER %in% args$allowed_filter_values]
+  drivers <- drivers[,.(gr_id, gene_id, gene_name)]
+  drivers <- unique(drivers)
+}
 
+BUUUUUGGGGG!
+RENAME format_xLabels to format_Labels
 if (!is.null(args$drivers_uniform_subtypes)) {
   drivers_uniform_subtypes_ids <- drivers_uniform_subtypes[!is.na(tier) & 
                                                              FILTER %in%

@@ -37,6 +37,7 @@ include { FIND_DRIVER_MUTATIONS } from './modules/find_driver_mutations.nf'
 include { CALCULATE_SELECTION_RATES } from './modules/subtype_specificity.nf'
 include { DETERMINE_SUBTYPE_SPECIFICITY } from './modules/subtype_specificity.nf'
 include { RUN_DISCOVER } from './modules/run_software.nf'
+include { CHECK_DISCOVER_ON_COMPOSITE_SUBTYPES } from './modules/discover_on_composite_subtypes_postprocessing.nf'
 
 /* ----------------------------------------------------------------------------
 * Custom functions
@@ -386,14 +387,14 @@ workflow POSTPROCESSING {
                                                                    row.participant_tumor_subtype)) }
                                         .unique()
 
-    drivers_coocc_incompat_compositeSubtype.combine(histComposite_to_unif, by: [0])
-                                           .map { it ->
-                                                    return(tuple(it[2], it[0], it[1])) }
-                                           .combine(drivers_coocc_incompat_uniforSubtype, by: [0])
-                                           .map { it ->
-                                                    return(tuple(it[1], it[2], it[0], it[3])) }
-                                           .groupTuple(by: [0, 1], remainder: true)
-                                           .filter { it[2].size() > 1}
+    CHECK_DISCOVER_ON_COMPOSITE_SUBTYPES(drivers_coocc_incompat_compositeSubtype.combine(histComposite_to_unif, by: [0])
+                                                                                .map { it ->
+                                                                                        return(tuple(it[2], it[0], it[1])) }
+                                                                                .combine(drivers_coocc_incompat_uniforSubtype, by: [0])
+                                                                                .map { it ->
+                                                                                        return(tuple(it[1], it[2], it[0], it[3])) }
+                                                                                .groupTuple(by: [0, 1], remainder: true)
+                                                                                .filter { it[2].size() > 1})
 
     // do not forget to remove nbr from cds
 }
