@@ -5,27 +5,6 @@ library(plyr)
 
 source('bin/custom_functions.R')
 
-# Functions -------------------------------------------------------------------
-summarizeDriverMutationsPerPatient <- function(filePath, exclude_cnv = F) {
-  colsToKeep <- c("is_driver", "gr_id", "gene_id", "gene_name", "var_type",
-                  "participant_id", "n_driverMut_mle")
-  driverMuts <- fread(filePath, header = T, select = colsToKeep,
-                      stringsAsFactors = F)
-  driverMuts <- unique(driverMuts)
-  driverMuts <- driverMuts[is_driver == T]
-  
-  if (exclude_cnv) {
-    driverMuts <- driverMuts[!var_type %in% c('amp', 'hom.del.')]
-    message('[', Sys.time(), '] Removed amplifications and homozygous ',
-            'deletions from number of driver mutations per patient.')
-  }
-  
-  nDriverMuts <- driverMuts[,.(sum(n_driverMut_mle)), 
-                            by = .(participant_id, gr_id)]
-  setnames(nDriverMuts, 'V1', 'n_driver_muts')
-  nDriverMuts
-}
-
 # Visuals setup ---------------------------------------------------------------
 font_config <- list('family' = 'Helvetica', 'base' = 6, 'text' = 6, 
                     'axis_title' = 8, 'plot_title' = 10, 'legend_text' = 6, 
@@ -67,12 +46,20 @@ N_PATIENTS_COLOR_SCHEME <- c('#90C987', '#CAE0AB', '#F7F056', '#F6C141',
                              '#F1932D','#E8601C', '#DC050C', '#42150A')
 
 # Test input arguments --------------------------------------------------------
-args <- list(driver_mutations = "completed_runs/2023_12_25/results/tables/driver_mutations/driverMutations-Panlung--hg19.csv",
-             exclude_cnv = T, fold_splice_sites_into_coding = T)
+args <- list(inventory_analysis = 'data/inventory/inventory_analysis.csv',
+             inventory_patients = 'data/inventory/inventory_patients.csv',
+             driver_mutations = "completed_runs/2023_12_25/results/tables/driver_mutations/driverMutations-Panlung--hg19.csv",
+             cancer_subtype = 'Panlung', exclude_cnv = T, 
+             fold_splicesites_in_coding = T)
 
-CODING_GR <- c("CDS", "ss")
 CNV_VAR_TYPES <- c('amp', 'hom.del.')
 LOW_CONFIDENCE <- c('only n. driver mutations')
+
+# Read in patients inventory --------------------------------------------------
+patientsInv <- readParticipantInventory(args$inventory_patients, 1)
+patientsInv <- patientsInv[tumor_subtype %in% args$cancer_subtype]
+message('[', Sys.time(), '] Read --inventory_patients: ', 
+        args$inventory_patients)
 
 # Read driver mutations -------------------------------------------------------
 colsToKeep <- c("is_driver", "gr_id", "gene_id", "gene_name", "key", 
@@ -84,16 +71,86 @@ driverMuts <- unique(driverMuts)
 driverMuts <- driverMuts[is_driver == T]
 driverMuts[, is_driver := NULL]
 
+# Read in analysis inventory --------------------------------------------------
+analysisInv <- readAnalysisInventory(args$inventory_analysis)
+message('[', Sys.time(), '] Read --inventory_analysis: ', 
+        args$inventory_analysis)
+analysisInv <- analysisInv[tumor_subtype == args$cancer_subtype]
+
+# Fold splice sites into coding regions, if requested -------------------------
+# coding genomic regions - anything which contains CDS as gr_code
+coding_gr_id <- unique(analysisInv[gr_code == 'CDS']$gr_id)
+message('[', Sys.time(), '] Following genomic regions: ', 
+        paste0(coding_gr_id, collapse = ', '), ', will be considered as ',
+       'coding.')
+
+if (args$fold_splicesites_in_coding) {
+  message('[', Sys.time(), '] Will fold splice sites into corresponding ',
+          'coding driver genetic elements.')
+  # splice site genomic regions - anything which contains ss as gr_code.
+  ss_gr_id <- setdiff(unique(analysisInv[gr_code == 'ss']$gr_id),
+                      coding_gr_id)
+  message('[', Sys.time(), '] Following genomic regions: ', 
+          paste0(ss_gr_id, collapse = ', '), ', will be considered as ',
+          'containing splice sites.')
+  if (length(ss_gr_id) != 0 & length(coding_gr_id) != 0) {
+    drivers <- unique(driverMuts[,.(gene_id, gene_name, gr_id)])
+    drivers[, n_coding_gr_id := sum(unique(gr_id) %in% coding_gr_id), 
+            by = .(gene_id, gene_name)]
+    drivers[, n_ss_gr_id := sum(unique(gr_id) %in% ss_gr_id), 
+            by = .(gene_id, gene_name)]
+    
+    if (any(drivers$n_coding_gr_id) > 1) {
+      drivers <- drivers[n_coding_gr_id > 1]
+      stop('[', Sys.time(), '] Found genes for which > 1 gr_id can be ',
+           'considered as coding:\n', 
+           paste0(colnames(drivers), collapse = '\t'), 
+           '\n', paste0(apply(drivers, 1, paste0, collapse = '\t'),
+                        collapse = '\n'), '. Can not process such ',
+           'situation.')
+    }
+    
+    genes_to_fold <- drivers[n_coding_gr_id >= 1 & n_ss_gr_id >= 1]
+    if (nrow(genes_to_fold) > 0) {
+      message('[', Sys.time(), '] Will fold splice sites drivers detected in ',
+              paste(unique(genes_to_fold$gene_name), collapse = ', '),
+              ' into corresponding coding drivers.')
+      genes_to_fold <- split(genes_to_fold, by = c('gene_name', 'gene_id'),
+                             drop = T)
+      for (gene_to_fold in genes_to_fold) {
+        gene_to_fold_idx <- which(driverMuts$gene_id %in% gene_to_fold$gene_id & 
+                                    driverMuts$gene_name %in% gene_to_fold$gene_name &
+                                    driverMuts$gr_id %in% ss_gr_id)
+        gene_to_fold_coding_gr <- gene_to_fold[gr_id %in% coding_gr_id]$gr_id
+        driverMuts[gene_to_fold_idx]$gr_id <- gene_to_fold_coding_gr
+      }
+    }
+  } else {
+    message('[', Sys.time(), '] No coding or splice site genomic regions ',
+            'were detected. Will not perform folding of splice sites into ',
+            'corresponding coding driver genetic elements.')
+  }
+}
+
+noncoding_gr_id <- setdiff(unique(analysisInv$gr_id), coding_gr_id)
+msg <- paste('[', Sys.time(), '] Following genomic regions:', 
+             paste0(noncoding_gr_id, collapse = ', '), ', will be considered',
+             'as noncoding.')
+if (args$fold_splicesites_in_coding) {
+  msg <- paste(msg, "Driver genomic elements considered as containing splice",
+               "sites will be treated as noncoding for genes which do not",
+               "have coding part detected as driver.")
+}
+message(msg)
+
+# Set driver genomic element type (coding vs noncoding) -----------------------
+driverMuts[, gr_type := ifelse(gr_id %in% coding_gr_id, 'coding', 'non-coding')]
+
 # Count number of SNV/small indel driver mutations per patient ----------------
 # count how many RESOLVED driver SNVs/small indels per patient
 nDriverSNVresolved <- driverMuts[!var_type %in% CNV_VAR_TYPES]
 nDriverSNVresolved <- nDriverSNVresolved[!confidenceLvl %in% LOW_CONFIDENCE & 
                                            confidenceLvl != 'passenger']
-nDriverSNVresolved[, gr_type := ifelse(gr_id == 'CDS', 'coding', 'non-coding')]
-# THIS NEEDS TO BE FIXED
-if (args$fold_splice_sites_into_coding) {
-  nDriverSNVresolved[gr_id == 'ss']$gr_type <- 'coding'
-}
 nDriverSNVresolved <- nDriverSNVresolved[,.(length(unique(key))), 
                                          by = .(participant_id, gr_type)]
 setnames(nDriverSNVresolved, 'V1', 'n_resolved')
@@ -104,14 +161,8 @@ nDriverSNVunresolved <- driverMuts[!var_type %in% CNV_VAR_TYPES]
 nDriverSNVunresolved <- nDriverSNVunresolved[confidenceLvl == LOW_CONFIDENCE]
 nDriverSNVunresolved <- nDriverSNVunresolved[,.(participant_id, gr_id, 
                                                 gene_name, gene_id, key,
-                                                prob_is_driver_mle)]
+                                                prob_is_driver_mle, gr_type)]
 nDriverSNVunresolved <- nDriverSNVunresolved[!is.na(prob_is_driver_mle)]
-nDriverSNVunresolved[, gr_type := ifelse(gr_id == 'CDS', 'coding', 
-                                         'non-coding')]
-# THIS NEEDS TO BE FIXED
-if (args$fold_splice_sites_into_coding) {
-  nDriverSNVunresolved[gr_id == 'ss']$gr_type <- 'coding'
-}
 nDriverSNVunresolved <- nDriverSNVunresolved[,.(sum(prob_is_driver_mle)),
                                              by = .(participant_id, gr_type)]
 nDriverSNVunresolved[, V1 := round(V1)]
@@ -133,16 +184,16 @@ nDriverMuts <- copy(nDriverSNV)
 nDriverMuts[, N := n_resolved + n_unresolved]
 
 # Add patients where no driver mutations were found --------------------------
-patientsWithoutDrivers <- setdiff(unique(mleMuts$participant_id),
+patientsWithoutDrivers <- setdiff(unique(patientsInv$participant_id),
                                   unique(nDriverMuts$participant_id))
 
 if (length(patientsWithoutDrivers) > 0) {
   patientsWithoutDrivers <- expand.grid(participant_id = patientsWithoutDrivers,
                                         gr_type = c('coding', 'non-coding'),
-                                        struct_type = unique(n_driver_muts$struct_type))
+                                        struct_type = unique(nDriverMuts$struct_type))
   patientsWithoutDrivers <- as.data.table(patientsWithoutDrivers)
   patientsWithoutDrivers <- cbind(patientsWithoutDrivers,
-                                  n_resolved = 0, n_unresolved = 0)
+                                  n_resolved = 0, n_unresolved = 0, N = 0)
   nDriverMuts <- rbind(nDriverMuts, patientsWithoutDrivers)
 }
 
@@ -174,7 +225,7 @@ nCodVsNC_PLOT <- ggplot(nDriverMutsPlotDT,
                         aes(x = coding, y = `non-coding`, size = N_bin, 
                             color = N_bin)) +
   geom_text(data = nDriverMutsPlotDT[N >= 5], 
-            inherit.aes = F, vjust = -1, size = 5, 
+            inherit.aes = F, vjust = -1, size = 3, 
             mapping = aes(x = coding, y = `non-coding`, label = N)) +
   geom_point() + coord_fixed() +
   scale_x_continuous('N. coding driver mutations', 
