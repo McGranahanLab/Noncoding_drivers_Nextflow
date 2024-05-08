@@ -5,6 +5,65 @@ library(plyr)
 
 source('bin/custom_functions.R')
 
+# Functions -------------------------------------------------------------------
+#' foldSplicSiteDriversIntoCodingDrivers
+#' @description Replaces gr_id of splice site driver genomic elements with 
+#' gr_id corresponding to coding driver genomic elements if a genomic element
+#' was detected as a driver both in a splice site region and in a coding region
+#' @author Maria Litovchenko
+#' @param codingGrIds vector of characters. gr_ids considered as coding genomic
+#' elements
+#' @param ssGrIds vector of characters. gr_ids considered as splice site 
+#' genomic elements
+#' @param driversDT data table with driver genomic elements. Must have columns:
+#' gene_id, gene_name, gr_id
+#' @return data table, updated driversDT
+foldSplicSiteDriversIntoCodingDrivers <- function(codingGrIds, ssGrIds, 
+                                                  driversDT) {
+  if (length(codingGrIds) == 0 | length(ssGrIds) == 0) {
+    message('[', Sys.time(), '] Either no coding or no splice site genomic ',
+            'regions were detected. Will not perform folding of splice sites ',
+            'into corresponding coding driver genetic elements.')
+    return(driversDT)
+  }
+  
+  # GE = genomic element
+  driverGEs <- unique(driversDT[,.(gene_id, gene_name, gr_id)])
+  driverGEs[, nCodingGrId := sum(unique(gr_id) %in% codingGrIds),
+            by = .(gene_id, gene_name)]
+  driverGEs[, nSsGrId := sum(unique(gr_id) %in% ssGrIds), 
+            by = .(gene_id, gene_name)]
+  
+  driversToFold <- driverGEs[nCodingGrId >= 1 & nSsGrId >= 1]
+  if (nrow(driversToFold) > 0) {
+    message('[', Sys.time(), '] Will fold splice sites drivers detected in ',
+            paste(unique(driversToFold$gene_name), collapse = ', '),
+            ' into corresponding coding drivers.')
+    
+    if (any(driversToFold$nCodingGrId) > 1) {
+      driversToFold <- driversToFold[nCodingGrId > 1]
+      stop('[', Sys.time(), '] Found genes for which > 1 gr_id can be ',
+           'considered as coding:\n', 
+           paste0(colnames(driversToFold), collapse = '\t'), '\n', 
+           paste0(apply(driversToFold, 1, paste0, collapse = '\t'), 
+                  collapse = '\n'), '. Can not process such  situation.')
+    }
+    
+    driversToFold <- driversToFold[,.(gene_name, gene_id, gr_id)]
+    driversToFold <- split(driversToFold, by = c('gene_name', 'gene_id'),
+                           drop = T)
+    for (geneToFold in driversToFold) {
+      geneToFoldIdx <- which(driversDT$gene_id %in% geneToFold$gene_id & 
+                               driversDT$gene_name %in% geneToFold$gene_name &
+                               driversDT$gr_id %in% ssGrIds)
+      geneToFoldCodingGr <- geneToFold[gr_id %in% codingGrIds]$gr_id
+      driversDT[geneToFoldIdx]$gr_id <- geneToFoldCodingGr
+    }
+  }
+  
+  driversDT
+}
+
 # Visuals setup ---------------------------------------------------------------
 font_config <- list('family' = 'Helvetica', 'base' = 6, 'text' = 6, 
                     'axis_title' = 8, 'plot_title' = 10, 'legend_text' = 6, 
@@ -78,57 +137,26 @@ message('[', Sys.time(), '] Read --inventory_analysis: ',
 analysisInv <- analysisInv[tumor_subtype == args$cancer_subtype]
 
 # Fold splice sites into coding regions, if requested -------------------------
-# coding genomic regions - anything which contains CDS as gr_code
+# assign coding genomic regions - anything which contains CDS as gr_code
 coding_gr_id <- unique(analysisInv[gr_code == 'CDS']$gr_id)
 message('[', Sys.time(), '] Following genomic regions: ', 
         paste0(coding_gr_id, collapse = ', '), ', will be considered as ',
-       'coding.')
+        'coding.')
 
 if (args$fold_splicesites_in_coding) {
   message('[', Sys.time(), '] Will fold splice sites into corresponding ',
           'coding driver genetic elements.')
-  # splice site genomic regions - anything which contains ss as gr_code.
-  ss_gr_id <- setdiff(unique(analysisInv[gr_code == 'ss']$gr_id),
-                      coding_gr_id)
-  message('[', Sys.time(), '] Following genomic regions: ', 
-          paste0(ss_gr_id, collapse = ', '), ', will be considered as ',
-          'containing splice sites.')
-  if (length(ss_gr_id) != 0 & length(coding_gr_id) != 0) {
-    drivers <- unique(driverMuts[,.(gene_id, gene_name, gr_id)])
-    drivers[, n_coding_gr_id := sum(unique(gr_id) %in% coding_gr_id), 
-            by = .(gene_id, gene_name)]
-    drivers[, n_ss_gr_id := sum(unique(gr_id) %in% ss_gr_id), 
-            by = .(gene_id, gene_name)]
-    
-    if (any(drivers$n_coding_gr_id) > 1) {
-      drivers <- drivers[n_coding_gr_id > 1]
-      stop('[', Sys.time(), '] Found genes for which > 1 gr_id can be ',
-           'considered as coding:\n', 
-           paste0(colnames(drivers), collapse = '\t'), 
-           '\n', paste0(apply(drivers, 1, paste0, collapse = '\t'),
-                        collapse = '\n'), '. Can not process such ',
-           'situation.')
-    }
-    
-    genes_to_fold <- drivers[n_coding_gr_id >= 1 & n_ss_gr_id >= 1]
-    if (nrow(genes_to_fold) > 0) {
-      message('[', Sys.time(), '] Will fold splice sites drivers detected in ',
-              paste(unique(genes_to_fold$gene_name), collapse = ', '),
-              ' into corresponding coding drivers.')
-      genes_to_fold <- split(genes_to_fold, by = c('gene_name', 'gene_id'),
-                             drop = T)
-      for (gene_to_fold in genes_to_fold) {
-        gene_to_fold_idx <- which(driverMuts$gene_id %in% gene_to_fold$gene_id & 
-                                    driverMuts$gene_name %in% gene_to_fold$gene_name &
-                                    driverMuts$gr_id %in% ss_gr_id)
-        gene_to_fold_coding_gr <- gene_to_fold[gr_id %in% coding_gr_id]$gr_id
-        driverMuts[gene_to_fold_idx]$gr_id <- gene_to_fold_coding_gr
-      }
-    }
+  # assign splice site genomic regions - anything which contains ss as gr_code
+  ss_gr_id <- unique(analysisInv[gr_code == 'ss']$gr_id)
+  if (length(coding_gr_id) != 0 & length(ss_gr_id) != 0) {
+    message('[', Sys.time(), '] Following genomic regions: ', 
+            paste0(ss_gr_id, collapse = ', '), ', will be considered as ',
+            'containing splice sites.')
+    driverMuts <- foldSplicSiteDriversIntoCodingDrivers(coding_gr_id, ss_gr_id,
+                                                        driverMuts)
   } else {
-    message('[', Sys.time(), '] No coding or splice site genomic regions ',
-            'were detected. Will not perform folding of splice sites into ',
-            'corresponding coding driver genetic elements.')
+    message('[', Sys.time(), '] Did not find either coding or splice site ',
+            'regions. Can not fold splice site drivers into coding ones.')
   }
 }
 
