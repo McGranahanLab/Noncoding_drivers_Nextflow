@@ -170,20 +170,65 @@ neutralColor <- '#EEEEEE'
 # Test input arguments --------------------------------------------------------
 args <- list(cancer_subtype = 'Panlung',
              comparison = 'all', #all, coding, noncoding
-             discover_table = "completed_runs/2023_12_25/results/discover/discoverResults-Panlung--hg19.csv")
+             drivers = 'completed_runs/2023_12_25/results/tables/drivers/drivers-Panlung--hg19.csv',
+             discover_table = "completed_runs/2023_12_25/results/discover/discoverResults-Panlung--hg19.csv",
+             p_value_min = 0.05)
+
+COLUMN_WITH_RAW_P <- 'p.value_subtypeBiasRemoved'
+COLUMN_WITH_ADJ_P <- 'p.adj_subtypeBiasRemoved'
+
+# Read unfiltered drivers -----------------------------------------------------
+drivers <- fread(args$drivers, header = T, stringsAsFactors = F)
+drivers <- drivers[!is.na(tier) & FILTER %in% 'PASS']
+drivers <- drivers[,.(gr_id, gene_id, gene_name, is_known_cancer)]
+drivers[, gene_name := gsub('__and__', '&', gene_name)]
+drivers[, gene_id := gsub('__and__', '&', gene_id)]
+drivers <- unique(drivers)
+
+message('[', Sys.time(), '] Read --drivers: ', args$drivers)
 
 # Read discover table ---------------------------------------------------------
 discover <- fread(args$discover_table, header = T, stringsAsFactors = F)
 discover <- discover[comparison == args$comparison]
+discover[, gene_name_1 := gsub('__and__', '&', gene_name_1)]
+discover[, gene_name_2 := gsub('__and__', '&', gene_name_2)]
+discover[, gene_id_1 := gsub('__and__', '&', gene_id_1)]
+discover[, gene_id_2 := gsub('__and__', '&', gene_id_2)]
+message('[', Sys.time(), '] Read --discover_table: ', args$discover_table)
+
+# add info about if gene is known to be related to cancer
+setnames(discover, c('gr_id_1', 'gene_name_1', 'gene_id_1'),
+         c('gr_id', 'gene_name', 'gene_id'))
+discover <- merge(discover, drivers, by = c('gr_id', 'gene_name', 'gene_id'),
+                  all.x = T)
+setnames(discover, c('gr_id', 'gene_name', 'gene_id', 'is_known_cancer'),
+         c('gr_id_1', 'gene_name_1', 'gene_id_1', 'is_known_cancer_1'))
+setnames(discover, c('gr_id_2', 'gene_name_2', 'gene_id_2'),
+         c('gr_id', 'gene_name', 'gene_id'))
+discover <- merge(discover, drivers, by = c('gr_id', 'gene_name', 'gene_id'),
+                  all.x = T)
+setnames(discover, c('gr_id', 'gene_name', 'gene_id', 'is_known_cancer'),
+         c('gr_id_2', 'gene_name_2', 'gene_id_2', 'is_known_cancer_2'))
 
 discover[, Gene_1 := paste0(gr_id_1, ', ', gene_name_1)]
 discover[, Gene_2 := paste0(gr_id_2, ', ', gene_name_2)]
-discover <- prepCompatibilityForPlotting(discover, 'p.value_subtypeBiasRemoved')
+discover <- prepCompatibilityForPlotting(discover, COLUMN_WITH_RAW_P)
 discover[, gr_id_1 := factor(gr_id_1, rev(unique(gr_id_1)))]
 discover[, gr_id_2 := factor(gr_id_2, unique(gr_id_2))]
 
-# Set up p-values categories --------------------------------------------------
+# Assign plot labels ----------------------------------------------------------
+discover[, cell_label := character()]
+p_levels <- c(args$p_value_min, args$p_value_min/10, args$p_value_min/100)
+for (p_level in p_levels) {
+  labels_to_update_idx <- which(discover[, COLUMN_WITH_ADJ_P, 
+                                         with = F] <= p_level)
+  discover[labels_to_update_idx]$cell_label <- paste('<', p_level)
+}
+discover[, cell_label := factor(cell_label, levels = paste('<', p_levels))]
 
+support_by_indivTT
+
+# Create plot -----------------------------------------------------------------
 # x axis labels & color
 xAxisLabs <- format_xLabels(discover, 'Gene_1', 'gene_name_1', 
                             'is_known_cancer_1') 
@@ -191,24 +236,23 @@ xAxisLabs <- format_xLabels(discover, 'Gene_1', 'gene_name_1',
 yAxisLabs <- format_xLabels(discover, 'Gene_2', 'gene_name_2', 
                             'is_known_cancer_2')
 
+color_scale_limit <- 10
 COMPAT_PLOT <- ggplot() + 
   geom_tile(data = discover, 
-            mapping = aes(x = Gene_2, y = Gene_1, 
-                          fill = log10.p.value_subtypeBiasRemoved, 
-                          color = affected_by_subtype)) +
-  geom_text(data = discover[!is.na(plotLab) & plotLab != ''], 
-            size = 2,inherit.aes = F,
-            mapping = aes(x = Gene_2, y = Gene_1, label = plotLab,
-                          color = !support_by_indivTT)) +
+            mapping = aes_string(x = 'Gene_2', y = 'Gene_1', 
+                                 fill = paste0("log10.", COLUMN_WITH_RAW_P))) +
+  geom_point(data = discover[!is.na(cell_label)], size = 2,inherit.aes = F,
+             mapping = aes(x = Gene_2, y = Gene_1, shape = cell_label)) +
   facet_grid(cols = vars(gr_id_2), rows = vars(gr_id_1), scales = 'free',
              space = 'free', switch = 'y') +
-  scale_fill_gradientn(colours = gradientColors, na.value = '#FFFFFF', 
-                       limits = c(-color_scale_limit, color_scale_limit)) + 
-  scale_color_manual(values = c('FALSE' = 'white', 'TRUE' = '#E923F4')) + 
+  scale_fill_gradientn(colours = c(tealPalette, neutralColor,
+                                   orangePalette),
+                       na.value = '#FFFFFF', 
+                       limits = c(-color_scale_limit, color_scale_limit)) +
   scale_x_discrete(position = "top", labels = xAxisLabs$label) + 
   scale_y_discrete(position = "left", labels = yAxisLabs$label) + 
   xlab('') + ylab('') + customGgplot2Theme + 
-  theme(axis.text.x = element_text(angle = 90, hjust = 0, size = 6),
+  theme(axis.text.x = element_text(angle = 90, hjust = 0, vjust = -1, size = 6),
         axis.text.y = element_text(size = 6),
         panel.background = element_blank(),
         panel.grid.major = element_blank(), 
@@ -219,5 +263,5 @@ COMPAT_PLOT <- ggplot() +
         legend.key.height = unit(0.25, 'cm'), 
         legend.key.width = unit(2, 'cm')) + 
   labs(fill = '-log10(raw p.value)') + guides(color = F) +
-  ggtitle(paste('Co-occurence and exclusivity in', 
-                unique(discover$tumor_subtype), ',', comp))
+  ggtitle(paste0('Co-occurence and exclusivity in ', 
+                 unique(discover$tumor_subtype), ', ', args$comparison))
