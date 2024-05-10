@@ -44,35 +44,6 @@ suppressWarnings(suppressPackageStartupMessages(library(argparse)))
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
 
 # Functions -------------------------------------------------------------------
-#' areSpecificToDifferentSubtypes
-#' Checks if two driver genomic elements are specific to different tumor 
-#' subtypes
-#' @param gr_id_1 gr_id of the first driver
-#' @param gene_id_1 gene_id of the first driver
-#' @param gene_name_1 gene_name of the first driver
-#' @param gr_id_2 gr_id of the second driver
-#' @param gene_id_2 gene_id of the second driver
-#' @param gene_name_2 gene_name of the second driver
-#' @param specificityDT data table containing information about specificity of
-#' drivers. Must have columns gr_id, gene_id, gene_name and tumor_subtype_spec
-areSpecificToDifferentSubtypes <- function(gr_id_1, gene_id_1, gene_name_1,
-                                           gr_id_2, gene_id_2, gene_name_2, 
-                                           specificityDT) {
-  result <- F
-  setkey(specificityDT, gr_id, gene_id, gene_name)
-  specificity_1 <- unique(specificityDT[.(gr_id_1, gene_id_1, 
-                                          gene_name_1)]$tumor_subtype_spec)
-  specificity_2 <- unique(specificityDT[.(gr_id_2, gene_id_2, 
-                                          gene_name_2)]$tumor_subtype_spec)
-  
-  if ((length(setdiff(specificity_1, specificity_2)) > 0 | 
-       length(setdiff(specificity_1, specificity_2)) > 0) & 
-    !is.na(specificity_1) & !is.na(specificity_2)) {
-    result <- T
-  }
-  result
-}
-
 #' check_significance_in_uniform_subtype
 #' @description Checks if ONE gene pair was found significant (based on the raw
 #' p-value) in the runs of DISCOVER made on histologically uniform tumor 
@@ -170,10 +141,6 @@ printArgs(args)
 args <- list(cancer_subtype = 'Panlung', 
              discover_composite_subtype = 'completed_runs/2023_12_25/results/discover/discoverResults-Panlung--hg19.csv', 
              discover_uniformal_subtypes = list('completed_runs/2023_12_25/results/discover/discoverResults-Adenocarcinoma--hg19.csv',
-                                                'completed_runs/2023_12_25/results/discover/discoverResults-Adenocarcinoma_met--hg19.csv',
-                                                'completed_runs/2023_12_25/results/discover/discoverResults-Adenosquamous--hg19.csv',
-                                                'completed_runs/2023_12_25/results/discover/discoverResults-Large_cell--hg19.csv',
-                                                'completed_runs/2023_12_25/results/discover/discoverResults-Small_cell--hg19.csv',
                                                 'completed_runs/2023_12_25/results/discover/discoverResults-Squamous_cell--hg19.csv'),
              p_max_unif_subtype = 0.05,
              subtype_specificity = 'completed_runs/2023_12_25/results/tables/subtype_specificity/subtypeSpecificity---hg19.csv',
@@ -237,7 +204,12 @@ message('[', Sys.time(), '] Updated DISCOVER results for ',
 subtypeSpecificity <- data.table()
 if (!is.null(args$subtype_specificity)) {
   subtypeSpecificity <- fread(args$subtype_specificity, header = T, 
-                              stringsAsFactors = F)
+                              stringsAsFactors = F,
+                              select = c("tumor_subtype_1", "tumor_subtype_2",
+                                         "gr_id", "gene_id", "gene_name",
+                                         "tumor_subtype_spec",
+                                         "specificity_mode"))
+  subtypeSpecificity <- unique(subtypeSpecificity)
   message('[', Sys.time(), '] Read ', args$subtype_specificity)
   
   # select only histologically uniformal subtypes which composite subtype is
@@ -246,9 +218,21 @@ if (!is.null(args$subtype_specificity)) {
                                              tumor_subtype_2 %in% uniformal_tumor_subtypes]
   subtypeSpecificity <- subtypeSpecificity[specificity_mode %in%
                                              args$specificity_mode]
+  subtypeSpecificity <- subtypeSpecificity[,.(gr_id, gene_id, gene_name,
+                                              tumor_subtype_spec)]
+  subtypeSpecificity <- unique(subtypeSpecificity)
+  
   if (nrow(subtypeSpecificity) == 0) {
     message('[', Sys.time(), '] No tumor subtype specific driver genomic ',
             'regions is found.')
+  } else {
+    idCols <- c('gr_id', 'gene_id', 'gene_name')
+    subtypeSpecificity <- split(subtypeSpecificity, drop = T, by = idCols)
+    subtypeSpecificity <- lapply(subtypeSpecificity, 
+                                 function(x) cbind(unique(x[, idCols, 
+                                                            with = F]),
+                                                   tumor_subtype_spec = list(x$tumor_subtype_spec)))
+    subtypeSpecificity <- do.call(rbind, subtypeSpecificity)
   }
 } else {
   message('[', Sys.time(), '] --subtype_specificity is not given. Will not ',
@@ -258,15 +242,34 @@ if (!is.null(args$subtype_specificity)) {
 
 # Mark driver pairs which can be incompatible due to their subtype specs ------
 if (nrow(subtypeSpecificity) != 0) {
-  incompatibleDueToSubtype <- apply(discover, 1,
-                                    function(x) areSpecificToDifferentSubtypes(x['gr_id_1'], 
-                                                                               x['gene_id_1'],
-                                                                               x['gene_name_1'],
-                                                                               x['gr_id_2'],
-                                                                               x['gene_id_2'],
-                                                                               x['gene_name_2'], 
-                                                                               subtypeSpecificity))
+  setnames(subtypeSpecificity, 
+           c('gr_id', 'gene_id', 'gene_name', 'tumor_subtype_spec'), 
+           c('gr_id_1', 'gene_id_1', 'gene_name_1', 'tumor_subtype_spec_1'))
+  discover <- merge(discover, subtypeSpecificity, all.x= T,
+                    by = c('gr_id_1', 'gene_id_1', 'gene_name_1'))
+  setnames(subtypeSpecificity, 
+           c('gr_id_1', 'gene_id_1', 'gene_name_1', 'tumor_subtype_spec_1'), 
+           c('gr_id_2', 'gene_id_2', 'gene_name_2', 'tumor_subtype_spec_2'))
+  discover <- merge(discover, subtypeSpecificity, all.x= T,
+                    by = c('gr_id_2', 'gene_id_2', 'gene_name_2'))
+  incompatibleDueToSubtype <- apply(discover[,.(tumor_subtype_spec_1, 
+                                                tumor_subtype_spec_2)], 1,
+                                    function(x) length(intersect(x[1][[1]],
+                                                                 x[2][[1]])) == 0 &
+                                      !is.na(x[1][[1]]) & !is.na(x[2][[1]]))
+  incompatibleDueToSubtype <- sapply(incompatibleDueToSubtype, 
+                                     function(x) if(length(x) == 0) {
+                                       return(F)
+                                     } else {
+                                       return(x)
+                                     })
   discover[, incompatible_due_subtype_specificity := incompatibleDueToSubtype]
+  discover[, tumor_subtype_spec_1 := sapply(tumor_subtype_spec_1, paste,
+                                           collapse = ',')]
+  discover[tumor_subtype_spec_1 == '']$tumor_subtype_spec_1 <- NA
+  discover[, tumor_subtype_spec_2 := sapply(tumor_subtype_spec_2, paste,
+                                           collapse = ',')]
+  discover[tumor_subtype_spec_2 == '']$tumor_subtype_spec_2 <- NA
   message('[', Sys.time(), '] Updated DISCOVER results for ', 
           args$cancer_subtype, ' by adding column ',
           'incompatible_due_subtype_specificity.')
