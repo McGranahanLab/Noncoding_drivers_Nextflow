@@ -246,7 +246,7 @@ barplotNpatient <- function(driversDT, xLabelCol, colorPalette = NULL,
   result <- result + 
     theme(panel.grid.major.x = element_blank(),
           panel.grid.minor.x = element_blank(),
-          axis.text.x = element_text(angle = 90, hjust = 1, size = 6,
+          axis.text.x = element_text(angle = 90, size = 6,
                                      color = xAxisLabs$color))
   if (!is.null(Y_MAX)) {
     result <- result + 
@@ -490,7 +490,8 @@ driverIDs <- data.table(gr_id = character(), gene_id = character(),
 
 if (!is.null(args$drivers)) {
   driversCompositeSubtypes <- driversCompositeSubtypesUnfiltered[!is.na(tier) & 
-                                                                   FILTER %in% args$allowed_filter_values]
+                                                                   FILTER %in% 
+                                                                   args$allowed_filter_values]
   if (nrow(driversCompositeSubtypes) == 0) {
     stop()
   }
@@ -526,14 +527,34 @@ if (!is.null(args$drivers_uniform_subtypes)) {
 }
 drivers <- as.data.table(drivers)
 
-# Situations when certain drivers are only found in uniform subtype(s), but
-# not in the composite one, may occur. In such case those drivers will not 
-# have an appropriate FILTER value in composite subtype. Therefore, extra 
-# application of selection on FILTER column is needed.
-drivers <- drivers[FILTER %in% args$allowed_filter_values]
-# We don't want to keep results of uniformal subtypes where a genomic element
-# is not found as drivers
-drivers <- drivers[tumor_subtype == args$cancer_subtype | !is.na(tier)]
+if (!is.null(args$drivers)) {
+  # Situations when certain drivers are only found in uniform subtype(s), but
+  # not in the composite one, may occur. In such case those drivers will not 
+  # have an appropriate FILTER value in composite subtype. Therefore, extra 
+  # application of selection on FILTER column is needed.
+  drivers <- drivers[FILTER %in% args$allowed_filter_values]
+  # We don't want to keep results of uniformal subtypes where a genomic element
+  # is not found as drivers
+  drivers <- drivers[tumor_subtype == args$cancer_subtype | !is.na(tier)]
+} else {
+  # in case no composite sybtype was submitted, some modifications to drivers
+  # data table are needed to be done in order to be displayed properly. 
+  # first, nParts_total needs to reflect total number of patients a driver is
+  # mutated in across tumor subtypes
+  drivers[, nParts_total := sum(nParts_total), 
+          by = .(gr_id, gene_id, gene_name)]
+  # second, if a driver is not shared across all subtypes, it will have values
+  # which differ from the accepted values in the FILTER column. Therefore, to
+  # preserve such entries (we need them to see in how many patients a driver is
+  # mutated) we need to force FILTER value to the same filter value as in the 
+  # subtype where genomic element is found significant.
+  drivers <- split(drivers, by = c('gr_id', 'gene_id', 'gene_name'), drop = T)
+  for (i in 1:length(drivers)) {
+    drivers[[i]]$FILTER <- intersect(drivers[[i]]$FILTER, 
+                                     args$allowed_filter_values)[1]
+  }
+  drivers <- do.call(rbind, drivers)
+}
 
 # Read extra databases --------------------------------------------------------
 if (!is.null(args$extra_studies)) {
@@ -724,7 +745,8 @@ plotHeights <- c(1)
 if (!is.null(args$extra_studies)) {
   plotHeights <- c(plotHeights, rep(0.025, length(extra_studies)))
 }
-plotHeights <- c(plotHeights, 0.32)
+nTumorSubtypes <- length(unique(drivers[!is.na(tier)]$tumor_subtype))
+plotHeights <- c(plotHeights, 0.03 * (nTumorSubtypes + 5))
 DRIVERS_OVERVIEW_PLOT <- ggarrange(plotlist = ovrvFigPlotList, align = 'v',
                                    ncol = 1, heights = plotHeights)
 DRIVERS_OVERVIEW_LEGENDS <- ggarrange(extract_legend(barNpats), 
