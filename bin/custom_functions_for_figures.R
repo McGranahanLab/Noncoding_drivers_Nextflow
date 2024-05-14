@@ -119,7 +119,8 @@ get_gr_change_coords <- function(plotDT, axisOrderCol, yCol, labsDT) {
   } else {
     if (class(yVals) %in% c('integer', 'numberic', 'double')) {
       plotDT[, toSumUp := yVals]
-      yMax <- 1.01 * max(plotDT[,.(sum(toSumUp)), by = eval(axisOrderCol)]$V1)
+      yMax <- 1.01 * max(plotDT[,.(sum(toSumUp, na.rm = T)),
+                                by = eval(axisOrderCol)]$V1)
       plotDT[, toSumUp := NULL]
     } else {
       yMax <- 1.01
