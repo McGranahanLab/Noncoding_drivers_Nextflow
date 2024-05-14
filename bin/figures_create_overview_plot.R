@@ -301,14 +301,17 @@ tilePlotPvalues <- function(pValsDT, xLabelCol, yLabelCol, colorBy,
   if (doLog10 == T) {
     dt[, colorByLog10 := -log10(colorByLog10 + 10^(-16))]
   }
-  
   # p value palette
-  pval_palette <- create_pvalue_colorpalette(dt, doLog10, scaleLims, nColors,
-                                             colorPalette)
+  if (class(dt$colorByLog10) %in% c('numeric', 'integer', 'double')) {
+    pval_palette <- create_pvalue_colorpalette(dt, doLog10, scaleLims, nColors,
+                                               colorPalette)
+  } else {
+    pval_palette <- list(palette = colorPalette)
+  }
   # x axis labels & color
   xAxisLabs <- formatAxisLabels(dt, xOrderCol, xLabelCol, annoCol, 
                                 highlightColor = annoColors)
-  
+
   # first of all, if there are several genomic regons, create shadowing
   result <- ggplot()
   if (length(unique(dt$gr_id)) > 1) {
@@ -343,8 +346,7 @@ tilePlotPvalues <- function(pValsDT, xLabelCol, yLabelCol, colorBy,
               mapping = aes_string(x = xOrderCol, y = yOrderCol,
                                    fill = 'colorByLog10')) + 
     scale_x_discrete(labels = xAxisLabs$label)
-  if (class(unlist(dt[, c('colorByLog10'), with = F])) %in% 
-      c('numeric', 'integer', 'double')) {
+  if (class(dt$colorByLog10) %in% c('numeric', 'integer', 'double')) {
     result <- result + scale_fill_stepsn(na.value = '#FFFFFF',
                                          breaks = pval_palette$colorBreaks, 
                                          colours = pval_palette$palette)
@@ -352,7 +354,6 @@ tilePlotPvalues <- function(pValsDT, xLabelCol, yLabelCol, colorBy,
     result <- result + scale_fill_manual(na.value = '#FFFFFF', 
                                          values = pval_palette$palette)
   }
-  
   if (!is.null(ggplot2Theme)) {
     result <- result + ggplot2Theme
   }
@@ -367,9 +368,161 @@ tilePlotPvalues <- function(pValsDT, xLabelCol, yLabelCol, colorBy,
   result
 }
 
-# Test input arguments -------------------------------------------------------------
-args <- list(cancer_subtype = 'Panlung',
-             drivers = "completed_runs/2023_12_25/results/tables/drivers/drivers-Panlung--hg19.csv",
+# Parse input arguments -------------------------------------------------------
+# create parser object
+parser <- ArgumentParser(prog = 'figures_create_overview_plot.R')
+
+compositeSubtypeHelp <- paste('A name of composite cancer subtype in which',
+                              'de-novo drivers given in',
+                              '--drivers_composite_subtype were detected.')
+parser$add_argument("-c", "--composite_cancer_subtype", required = F, 
+                    type = 'character', help = compositeSubtypeHelp)
+
+compositeDriversHelp <- paste('Path to file containing de-novo detected',
+                              'cancer drivers of composite subtype.')
+parser$add_argument("-dcs", "--drivers_composite_subtype", required = F,  
+                    type = 'character', default = NULL,
+                    help = compositeDriversHelp)
+
+patientsHelp <- paste('Path to patientsInv table listing information about',
+                      'patients, their cancer types and mutation files.',
+                      'Minimal columns: participant_id, tumor_subtype,',
+                      'participant_tumor_subtype, somatic_path,',
+                      'somatic_genome, cohort_name')
+parser$add_argument("-p", "--inventory_patients", required = T, 
+                    type = 'character', help = patientsHelp)
+
+excludedHelp <- paste('Path to file containing IDs of excluded patients.')
+parser$add_argument("-ep", "--excluded_patients", required = F, 
+                    type = 'character', default = NULL, help = excludedHelp)
+
+filterHelp <- paste("Values of FILTER column which are accepted to be plotted")
+parser$add_argument("-afv", "--allowed_filter_values", required = F, 
+                    type = 'character', default = list('PASS'), nargs = '+',
+                    help = filterHelp)
+
+uniformDriversHelp <- paste('Path to files containing de-novo detected',
+                            'cancer drivers in uniform subtypes. In case',
+                            '--drivers_composite_subtype is given the',
+                            'uniform subtypes should be part of composite',
+                            'subtype.')
+parser$add_argument("-dus", "--drivers_uniform_subtypes", required = F, 
+                    type = 'character', default = NULL, nargs = '+',
+                    help = uniformDriversHelp)
+
+extraNamesHelp <- paste('Name(s) of extra studies to annotate drivers on the',
+                        'plot with. One name per file given in',
+                        '--extra_studies.')
+parser$add_argument("-esn", "--extra_studies_names", required = F, 
+                    type = 'character', default = NULL, nargs = '+',
+                    help = , )
+
+extraSubtypesHelp <- paste('Tumor subtype to be used from the extra studies',
+                           'to annotate drivers on the plot with. Multiple',
+                           'tumor subtypes can be used per study if given',
+                           'as string separated by comma, i.e. LUAD,LUSC. In',
+                           'case several studies are given, provide several',
+                           'such strings.')
+parser$add_argument("-est", "--extra_studies_tumorsubtype", required = F, 
+                    type = 'character', default = NULL, nargs = '+', 
+                    help = extraSubtypesHelp)
+
+extraHelp <- paste('Path to file(s) with extra studies. Must have columns:',
+                   'gene_name, gene_id, known_in_tumor_subtype')
+parser$add_argument("-es", "--extra_studies", required = F, 
+                    type = 'character', default = NULL, nargs = '+',
+                    help = extraHelp)
+
+jsonHelp <- paste('Path to a JSON file containing visual parameters to be',
+                  'used in the plot.')
+parser$add_argument("-v", "--visuals_json", required = T, 
+                    type = 'character', help = jsonHelp)
+
+outputTypeHelp <- paste('Type of image to create: pdf or png')
+parser$add_argument("-ot", "--output_type", required = F, 
+                    type = 'character', default = 'pdf',  
+                    choices = c('pdf', 'png'), help = outputTypeHelp)
+
+parser$add_argument("-o", "--output", required = T, type = 'character',
+                    help = "Path to the output file")
+
+args <- parser$parse_args()
+
+if (!is.null(args$drivers_composite_subtype)) {
+  if (!file.exists(args$drivers_composite_subtype)) {
+    stop('[', Sys.time(), '] ', args$drivers_composite_subtype, ' does not ',
+         'exist.')
+  }
+}
+
+if (!is.null(args$drivers_composite_subtype) & 
+    is.null(args$composite_cancer_subtype)) {
+  stop('[', Sys.time(), '] --drivers_composite_subtype is given, but ',
+       '--composite_cancer_subtype is not.')
+}
+
+if (!is.null(args$composite_cancer_subtype) & 
+    is.null(args$drivers_composite_subtype)) {
+  stop('[', Sys.time(), '] --composite_cancer_subtype is given, but ',
+       '--drivers_composite_subtype is not.')
+}
+
+if (!file.exists(args$inventory_patients)) {
+  stop('[', Sys.time(), '] ', args$inventory_patients, ' does not exist.')
+}
+
+if (!is.null(args$excluded_patients)) {
+  if (!file.exists(args$excluded_patients)) {
+    stop('[', Sys.time(), '] ', args$excluded_patients, ' does not exist.')
+  }
+}
+
+if (!is.null(args$drivers_uniform_subtypes)) {
+  if (!all(sapply(args$drivers_uniform_subtypes, file.exists))) {
+    stop('[', Sys.time(), '] some of the files submitted to ',
+         '--drivers_uniform_subtypes do not exist.')
+  }
+}
+
+if (is.null(args$drivers_composite_subtype) & 
+    is.null(args$drivers_uniform_subtypes)) {
+  stop('[', Sys.time(), '] Please submit file to --drivers_composite_subtype,',
+       ' --drivers_uniform_subtypes or both')
+}
+
+if (!is.null(args$extra_studies)) {
+  if (length(args$extra_studies) != length(args$extra_studies_names)) {
+    stop('[', Sys.time(), '] Number of items submitted to --extra_studies and',
+         ' --extra_studies_names does not match.')
+  }
+  if (length(args$extra_studies) != length(args$extra_studies_tumorsubtype)) {
+    stop('[', Sys.time(), '] Number of items submitted to --extra_studies and',
+         ' --extra_studies_tumorsubtype does not match.')
+  }
+  args$extra_studies_tumorsubtype <- lapply(args$extra_studies_tumorsubtype,
+                                            function(x) unlist(strsplit(x, 
+                                                                        ',')))
+  args$extra_studies_tumorsubtype <- lapply(args$extra_studies_tumorsubtype,
+                                            function(x) gsub(' ', '', x))
+  args$extra_studies_tumorsubtype <- lapply(args$extra_studies_tumorsubtype,
+                                            paste0, collapse = '|')
+} else {
+  if (!is.null(args$extra_studies_names)) {
+    stop('[', Sys.time(), '] no --extra_studies_names is given')
+  }
+  if (!is.null(args$extra_studies_tumorsubtype)) {
+    stop('[', Sys.time(), '] no --extra_studies_tumorsubtype is given.')
+  }
+}
+# create directory for plots
+
+timeStart <- Sys.time()
+message('[', Sys.time(), '] Start time of run')
+printArgs(args)
+
+# Test input arguments --------------------------------------------------------
+args <- list(composite_cancer_subtype = 'Panlung',
+             drivers_composite_subtype = "completed_runs/2023_12_25/results/tables/drivers/drivers-Panlung--hg19.csv",
              inventory_patients = 'data/inventory/inventory_patients.csv',
              excluded_patients = "", 
              allowed_filter_values = list("PASS", "INDEL, 2-5bp"),
@@ -391,7 +544,7 @@ args <- list(cancer_subtype = 'Panlung',
                                                "LUAD,LUSC", "nsclc,sclc,lung"),
              visuals_json = 'visual_parameters.json')
 
-# args <- list(cancer_subtype = NULL, drivers = NULL,
+# args <- list(cancer_subtype = NULL, drivers_composite_subtype = NULL,
 #              inventory_patients = 'data/inventory/inventory_patients.csv',
 #              excluded_patients = "", 
 #              allowed_filter_values = list("PASS", "INDEL, 2-5bp"),
@@ -405,53 +558,26 @@ args <- list(cancer_subtype = 'Panlung',
 #                                                "LUAD,LUSC", "nsclc,sclc,lung"),
 #              visuals_json = 'visual_parameters.json')
 
-# allowed_filter_values default is PASS
-if (!is.null(args$cancer_subtype) & is.null(args$drivers)) {
-  stop()
-}
-
-if (!is.null(args$extra_studies) & is.null(args$extra_studies_names)) {
-  stop()
-}
-if (length(args$extra_studies) != length(args$extra_studies_names)) {
-  stop() 
-}
-if (!is.null(args$extra_studies_tumorsubtype)) {
-  if (length(args$extra_studies) != length(args$extra_studies_tumorsubtype)) {
-    stop()
-  }
-  args$extra_studies_tumorsubtype <- lapply(args$extra_studies_tumorsubtype,
-                                            function(x) unlist(strsplit(x, 
-                                                                        ',')))
-  args$extra_studies_tumorsubtype <- lapply(args$extra_studies_tumorsubtype,
-                                            function(x) gsub(' ', '', x))
-  args$extra_studies_tumorsubtype <- lapply(args$extra_studies_tumorsubtype,
-                                            paste0, collapse = '|')
-}
-
-PASS_FILTER <- c('PASS')
-
 # Read visuals JSON -----------------------------------------------------------
 visualParams <- readJsonWithVisualParameters(args$visuals_json)
 message('[', Sys.time(), '] Read --visuals_json: ', args$visuals_json)
 
 # Read in patients inventory --------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients, 1)
-if (!is.null(args$cancer_subtype)) {
-  patientsInv <- patientsInv[tumor_subtype %in% args$cancer_subtype]
-}
 message('[', Sys.time(), '] Read --inventory_patients: ', 
         args$inventory_patients)
 
 # Read unfiltered drivers -----------------------------------------------------
-if (!is.null(args$drivers)) {
-  driversCompositeSubtypesUnfiltered <- fread(args$drivers, header = T, 
+if (!is.null(args$drivers_composite_subtype)) {
+  driversCompositeSubtypesUnfiltered <- fread(args$drivers_composite_subtype, 
+                                              header = T, 
                                               stringsAsFactors = F)
   driversCompositeSubtypesUnfiltered[, gene_name := gsub('__and__', '&', 
                                                          gene_name)]
   driversCompositeSubtypesUnfiltered[, gene_id := gsub('__and__', '&',
                                                        gene_id)]
-  message('[', Sys.time(), '] Read --drivers: ', args$drivers)
+  message('[', Sys.time(), '] Read --drivers: ', 
+          args$drivers_composite_subtype)
 }
 
 # Read drivers detected in uniform subtypes -----------------------------------
@@ -474,12 +600,15 @@ if (!is.null(args$drivers_uniform_subtypes)) {
     stop() #exclusion of pan-lung mets here
   }
   
-  if (!is.null(args$drivers)) {
+  if (!is.null(args$drivers_composite_subtype)) {
     uniformSubtypes <- unique(driversUniformSubtypesUnfiltered$tumor_subtype)
     partOfComposite <- unique(driversCompositeSubtypesUnfiltered$participant_tumor_subtype)
     notInComposite <- setdiff(uniformSubtypes, partOfComposite)
     if (length(notInComposite) > 0) {
-      stop()
+      stop('[', Sys.time(), '] drivers for ', 
+           paste(notInComposite, collapse = ', '), ' submitted via ',
+           '--drivers_uniform_subtypes is not part of ',
+           args$composite_cancer_subtype)
     }
   }
 }
@@ -488,14 +617,13 @@ if (!is.null(args$drivers_uniform_subtypes)) {
 driverIDs <- data.table(gr_id = character(), gene_id = character(),
                         gene_name = character())
 
-if (!is.null(args$drivers)) {
+if (!is.null(args$drivers_composite_subtype)) {
   driversCompositeSubtypes <- driversCompositeSubtypesUnfiltered[!is.na(tier) & 
                                                                    FILTER %in% 
                                                                    args$allowed_filter_values]
   if (nrow(driversCompositeSubtypes) == 0) {
     stop()
   }
-  
   driverIDs <- rbind(driverIDs, 
                      driversCompositeSubtypes[,.(gr_id, gene_id, gene_name)])
 }
@@ -504,10 +632,9 @@ if (!is.null(args$drivers_uniform_subtypes)) {
   driversUniformSubtypes <- driversUniformSubtypesUnfiltered[!is.na(tier) & 
                                                                FILTER %in%
                                                                args$allowed_filter_values]
-  if (is.null(args$drivers) & nrow(driversUniformSubtypes) == 0) {
+  if (is.null(args$drivers_composite_subtype) & nrow(driversUniformSubtypes) == 0) {
     stop()
   }
-  
   driverIDs <- rbind(driverIDs, 
                      driversUniformSubtypes[,.(gr_id, gene_id, gene_name)])
 }
@@ -515,7 +642,7 @@ if (!is.null(args$drivers_uniform_subtypes)) {
 driverIDs <- unique(driverIDs)
 
 drivers <- data.table()
-if (!is.null(args$drivers)) {
+if (!is.null(args$drivers_composite_subtype)) {
   drivers <- rbind.fill(drivers,
                         merge(driversCompositeSubtypesUnfiltered, driverIDs,
                               by = c("gr_id", "gene_id", "gene_name")))
@@ -527,7 +654,7 @@ if (!is.null(args$drivers_uniform_subtypes)) {
 }
 drivers <- as.data.table(drivers)
 
-if (!is.null(args$drivers)) {
+if (!is.null(args$drivers_composite_subtype)) {
   # Situations when certain drivers are only found in uniform subtype(s), but
   # not in the composite one, may occur. In such case those drivers will not 
   # have an appropriate FILTER value in composite subtype. Therefore, extra 
@@ -535,13 +662,13 @@ if (!is.null(args$drivers)) {
   drivers <- drivers[FILTER %in% args$allowed_filter_values]
   # We don't want to keep results of uniformal subtypes where a genomic element
   # is not found as drivers
-  drivers <- drivers[tumor_subtype == args$cancer_subtype | !is.na(tier)]
+  drivers <- drivers[tumor_subtype == args$composite_cancer_subtype | !is.na(tier)]
 } else {
   # in case no composite sybtype was submitted, some modifications to drivers
   # data table are needed to be done in order to be displayed properly. 
   # first, nParts_total needs to reflect total number of patients a driver is
   # mutated in across tumor subtypes
-  drivers[, nParts_total := sum(nParts_total), 
+  drivers[, nParts_total := sum(nParts_total, na.rm = T), 
           by = .(gr_id, gene_id, gene_name)]
   # second, if a driver is not shared across all subtypes, it will have values
   # which differ from the accepted values in the FILTER column. Therefore, to
@@ -631,7 +758,7 @@ drivers[, gene_plots_id := factor(gene_plots_id, GENE_ORDER)]
 drivers[, participant_tumor_subtype := factor(participant_tumor_subtype, 
                                               TUMOR_SUBTYPE_ORDER)]
 drivers[, tumor_subtype := factor(tumor_subtype, 
-                                  unique(c(args$cancer_subtype, 
+                                  unique(c(args$composite_cancer_subtype, 
                                            TUMOR_SUBTYPE_ORDER)))]
 
 # Overlap data from extra databases with detected drivers ---------------------
@@ -679,7 +806,7 @@ barNpats <- barplotNpatient(driversDT = drivers,
                             xOrderCol = 'gene_plots_id', 
                             annoCol = 'is_known_cancer', 
                             colorPalette = visualParams$colors_tumor_type, 
-                            pancanCode = args$cancer_subtype, 
+                            pancanCode = args$composite_cancer_subtype, 
                             divider_color = visualParams$color_divider,
                             ggplot2Theme = visualParams$ggplot2_theme)
 
@@ -699,7 +826,8 @@ if (!is.null(args$extra_studies)) {
                                                      annoCol = 'is_known_cancer',
                                                      nColors = 2, 
                                                      divider_color = visualParams$color_divider,
-                                                     colorPalette = c('white', '#8e918f'),
+                                                     colorPalette = c('FALSE' = 'white', 
+                                                                      'TRUE' = '#8e918f'),
                                                      ggplot2Theme = visualParams$ggplot2_theme) +
                            geom_text(data = extra_studies[[x]][known_in_current_tumor_subtype == T], 
                                      mapping = aes(x = gene_plots_id, y = dummy, 
@@ -756,3 +884,9 @@ DRIVERS_OVERVIEW_PLOT <- ggarrange(DRIVERS_OVERVIEW_PLOT,
                                    DRIVERS_OVERVIEW_LEGENDS, ncol = 1,
                                    heights = c(1, 0.15))
 
+# Output to file --------------------------------------------------------------
+
+message("End time of run: ", Sys.time())
+message('Total execution time: ', 
+        difftime(Sys.time(), timeStart, units = 'mins'), ' mins.')
+message('Finished!')
