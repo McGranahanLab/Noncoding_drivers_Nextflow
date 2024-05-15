@@ -1,10 +1,53 @@
-library(data.table)
-library(ggplot2)
-library(ggpubr)
-library(plyr)
+#!/usr/bin/env Rscript
+# FILE: figures_create_overview_plot.R ----------------------------------------
+#
+# DESCRIPTION: An R script which creates an overview plot of detected de-novo
+# drivers.
+# USAGE: 
+# OPTIONS: Run 
+#          Rscript --vanilla figures_create_overview_plot.R -h
+#          to see the full list of options and their descriptions.
+#
+# REQUIREMENTS: R v4.1.0, data.table, ggplot2, ggpubr, plyr
+# BUGS: --
+# NOTES:  
+# AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk
+# COMPANY:  UCL, Cancer Institute, London, the UK
+# VERSION:  1
+# CREATED:  01.02.2023
+# REVISION: 15.05.2024
 
-source('bin/custom_functions.R')
-source('bin/custom_functions_for_figures.R')
+# Source custom functions -----------------------------------------------------
+#' get_script_dir
+#' @description Returns parent directory of the currently executing script
+#' @author https://stackoverflow.com/questions/47044068/get-the-path-of-current-script
+#' @return string, absolute path
+#' @note this functions has to be present in all R scripts sourcing any other
+#' script. Sourcing R scripts with use of box library is unstable then multiple
+#' processes try to execute the source at the same time.
+get_script_dir <- function() {
+  cArgs <- tibble::enframe(commandArgs(), name = NULL)
+  cArgsSplit <- tidyr::separate(cArgs, col = value, into = c("key", "value"),
+                                sep = "=", fill = "right")
+  cArgsFltr <- dplyr::filter(cArgsSplit, key == "--file")
+  
+  result <- dplyr::pull(cArgsFltr, value)
+  result <- tools::file_path_as_absolute(dirname(result))
+  result
+}
+
+srcDir <- get_script_dir()
+# to spread out multiple processes accessing the same file
+Sys.sleep(sample(1:15, 1))
+source(paste0(srcDir, '/custom_functions.R'))
+Sys.sleep(sample(1:15, 1))
+source(paste0(srcDir, '/custom_functions_for_figures.R'))
+
+# Libraries -------------------------------------------------------------------
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(library(ggpubr)))
+suppressWarnings(suppressPackageStartupMessages(library(plyr)))
 
 # Functions : overview of all detected drivers --------------------------------
 #' get_bar_transparency
@@ -368,6 +411,45 @@ tilePlotPvalues <- function(pValsDT, xLabelCol, yLabelCol, colorBy,
   result
 }
 
+# Test input arguments --------------------------------------------------------
+# args <- list(composite_cancer_subtype = 'Panlung',
+#              drivers_composite_subtype = "completed_runs/2023_12_25/results/tables/drivers/drivers-Panlung--hg19.csv",
+#              inventory_patients = 'data/inventory/inventory_patients.csv',
+#              excluded_patients = list("completed_runs/2023_12_25/inputs/hypermutated-Panlung.csv"), 
+#              allowed_filter_values = list("PASS", "INDEL, 2-5bp"),
+#              drivers_uniform_subtypes = list("completed_runs/2023_12_25/results/tables/drivers/drivers-Adenocarcinoma--hg19.csv",
+#                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Adenocarcinoma_met--hg19.csv",
+#                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Adenosquamous--hg19.csv",
+#                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Carcinoid--hg19.csv",
+#                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Large_cell--hg19.csv",
+#                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Mesothelioma--hg19.csv",
+#                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Neuroendocrine_carcinoma--hg19.csv",
+#                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Small_cell--hg19.csv",
+#                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Squamous_cell--hg19.csv",
+#                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Squamous_cell_met--hg19.csv"),
+#              extra_studies = list("data/assets/intogene_detectedCancerGenes.csv",
+#                                   "data/assets/mc3_detectedCancerGenes.csv",
+#                                   "data/assets/cgc_knownCancerGenes.csv"),
+#              extra_studies_names = list("intogen", "mc3", "CGC"),
+#              extra_studies_tumorsubtype = list("LNET,LUAD,LUSC,NSCLC,SCLC", 
+#                                                "LUAD,LUSC", "nsclc,sclc,lung"),
+#              visuals_json = 'visual_parameters.json')
+
+# args <- list(cancer_subtype = NULL, drivers_composite_subtype = NULL,
+#              inventory_patients = 'data/inventory/inventory_patients.csv',
+#              excluded_patients = list("completed_runs/2023_12_25/inputs/hypermutated-Adenocarcinoma.csv",
+#                                       "completed_runs/2023_12_25/inputs/hypermutated-Squamous_cell.csv"), 
+#              allowed_filter_values = list("PASS", "INDEL, 2-5bp"),
+#              drivers_uniform_subtypes = list("completed_runs/2023_12_25/results/tables/drivers/drivers-Adenocarcinoma--hg19.csv",
+#                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Squamous_cell--hg19.csv"),
+#              extra_studies = list("data/assets/intogene_detectedCancerGenes.csv",
+#                                   "data/assets/mc3_detectedCancerGenes.csv",
+#                                   "data/assets/cgc_knownCancerGenes.csv"),
+#              extra_studies_names = list("intogen", "mc3", "CGC"),
+#              extra_studies_tumorsubtype = list("LNET,LUAD,LUSC,NSCLC,SCLC", 
+#                                                "LUAD,LUSC", "nsclc,sclc,lung"),
+#              visuals_json = 'visual_parameters.json')
+
 # Parse input arguments -------------------------------------------------------
 # create parser object
 parser <- ArgumentParser(prog = 'figures_create_overview_plot.R')
@@ -392,9 +474,10 @@ patientsHelp <- paste('Path to patientsInv table listing information about',
 parser$add_argument("-p", "--inventory_patients", required = T, 
                     type = 'character', help = patientsHelp)
 
-excludedHelp <- paste('Path to file containing IDs of excluded patients.')
+excludedHelp <- paste('Path to file(s) containing IDs of excluded patients.')
 parser$add_argument("-ep", "--excluded_patients", required = F, 
-                    type = 'character', default = NULL, help = excludedHelp)
+                    type = 'character',  nargs = '+', default = NULL, 
+                    help = excludedHelp)
 
 filterHelp <- paste("Values of FILTER column which are accepted to be plotted")
 parser$add_argument("-afv", "--allowed_filter_values", required = F, 
@@ -415,7 +498,7 @@ extraNamesHelp <- paste('Name(s) of extra studies to annotate drivers on the',
                         '--extra_studies.')
 parser$add_argument("-esn", "--extra_studies_names", required = F, 
                     type = 'character', default = NULL, nargs = '+',
-                    help = , )
+                    help = extraNamesHelp)
 
 extraSubtypesHelp <- paste('Tumor subtype to be used from the extra studies',
                            'to annotate drivers on the plot with. Multiple',
@@ -472,8 +555,9 @@ if (!file.exists(args$inventory_patients)) {
 }
 
 if (!is.null(args$excluded_patients)) {
-  if (!file.exists(args$excluded_patients)) {
-    stop('[', Sys.time(), '] ', args$excluded_patients, ' does not exist.')
+  if (!all(sapply(args$excluded_patients, file.exists))) {
+    stop('[', Sys.time(), '] some of the files submitted to ',
+         '--excluded_patients do not exist.')
   }
 }
 
@@ -520,54 +604,38 @@ timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
-# Test input arguments --------------------------------------------------------
-args <- list(composite_cancer_subtype = 'Panlung',
-             drivers_composite_subtype = "completed_runs/2023_12_25/results/tables/drivers/drivers-Panlung--hg19.csv",
-             inventory_patients = 'data/inventory/inventory_patients.csv',
-             excluded_patients = "", 
-             allowed_filter_values = list("PASS", "INDEL, 2-5bp"),
-             drivers_uniform_subtypes = list("completed_runs/2023_12_25/results/tables/drivers/drivers-Adenocarcinoma--hg19.csv",
-                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Adenocarcinoma_met--hg19.csv",
-                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Adenosquamous--hg19.csv",
-                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Carcinoid--hg19.csv",
-                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Large_cell--hg19.csv",
-                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Mesothelioma--hg19.csv",
-                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Neuroendocrine_carcinoma--hg19.csv",
-                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Small_cell--hg19.csv",
-                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Squamous_cell--hg19.csv",
-                                             "completed_runs/2023_12_25/results/tables/drivers/drivers-Squamous_cell_met--hg19.csv"),
-             extra_studies = list("data/assets/intogene_detectedCancerGenes.csv",
-                                  "data/assets/mc3_detectedCancerGenes.csv",
-                                  "data/assets/cgc_knownCancerGenes.csv"),
-             extra_studies_names = list("intogen", "mc3", "CGC"),
-             extra_studies_tumorsubtype = list("LNET,LUAD,LUSC,NSCLC,SCLC", 
-                                               "LUAD,LUSC", "nsclc,sclc,lung"),
-             visuals_json = 'visual_parameters.json')
-
-# args <- list(cancer_subtype = NULL, drivers_composite_subtype = NULL,
-#              inventory_patients = 'data/inventory/inventory_patients.csv',
-#              excluded_patients = "", 
-#              allowed_filter_values = list("PASS", "INDEL, 2-5bp"),
-#              drivers_uniform_subtypes = list("completed_runs/2023_12_25/results/tables/drivers/drivers-Adenocarcinoma--hg19.csv",
-#                                              "completed_runs/2023_12_25/results/tables/drivers/drivers-Squamous_cell--hg19.csv"),
-#              extra_studies = list("data/assets/intogene_detectedCancerGenes.csv",
-#                                   "data/assets/mc3_detectedCancerGenes.csv",
-#                                   "data/assets/cgc_knownCancerGenes.csv"),
-#              extra_studies_names = list("intogen", "mc3", "CGC"),
-#              extra_studies_tumorsubtype = list("LNET,LUAD,LUSC,NSCLC,SCLC", 
-#                                                "LUAD,LUSC", "nsclc,sclc,lung"),
-#              visuals_json = 'visual_parameters.json')
-
 # Read visuals JSON -----------------------------------------------------------
+ESSENTIAL_VISUAL_NAMES <- c('ggplot2_theme', 'color_divider', 
+                            'colors_tumor_type', 'overview_plot_width', 
+                            'overview_plot_heigth')
+
 visualParams <- readJsonWithVisualParameters(args$visuals_json)
 message('[', Sys.time(), '] Read --visuals_json: ', args$visuals_json)
+
+notFoundVisuals <- setdiff(ESSENTIAL_VISUAL_NAMES, names(visualParams))
+if (length(notFoundVisuals)) {
+  stop('[', Sys.time(), '] Following visuals: ', 
+       paste(notFoundVisuals, collapse = ', '), ' not found in JSON.')
+}
 
 # Read in patients inventory --------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients, 1)
 message('[', Sys.time(), '] Read --inventory_patients: ', 
         args$inventory_patients)
 
-# Read unfiltered drivers -----------------------------------------------------
+# Read in file with hypermutated patients IDs ---------------------------------
+if (!is.null(args$excluded_patients)) {
+  hypermutated <- lapply(args$excluded_patients, fread, header = T, 
+                         stringsAsFactors = F,
+                         select = c('tumor_subtype', 'participant_id'))
+  message('[', Sys.time(), '] Read --excluded_patients: ', 
+          paste(args$excluded_patients, collapse = ', '))
+  hypermutated <- do.call(rbind, hypermutated)
+  patientsInv <- patientsInv[!participant_id %in% hypermutated$participant_id]
+  message('[', Sys.time(), '] Excluded hypermutated participants ids')
+}
+
+# Read composite subtype drivers ----------------------------------------------
 if (!is.null(args$drivers_composite_subtype)) {
   driversCompositeSubtypesUnfiltered <- fread(args$drivers_composite_subtype, 
                                               header = T, 
@@ -885,6 +953,15 @@ DRIVERS_OVERVIEW_PLOT <- ggarrange(DRIVERS_OVERVIEW_PLOT,
                                    heights = c(1, 0.15))
 
 # Output to file --------------------------------------------------------------
+if (args$output_type == 'pdf') {
+  pdf(args$output, width = visualParams$overview_plot_width, 
+      height = visualParams$overview_plot_heigth)
+} else {
+  png(args$output, width = visualParams$overview_plot_width, 
+      height = visualParams$overview_plot_heigth)
+}
+DRIVERS_OVERVIEW_PLOT
+dev.off()
 
 message("End time of run: ", Sys.time())
 message('Total execution time: ', 
