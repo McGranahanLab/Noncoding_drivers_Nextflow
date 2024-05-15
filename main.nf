@@ -38,6 +38,7 @@ include { CALCULATE_SELECTION_RATES } from './modules/subtype_specificity.nf'
 include { DETERMINE_SUBTYPE_SPECIFICITY } from './modules/subtype_specificity.nf'
 include { RUN_DISCOVER } from './modules/run_software.nf'
 include { CHECK_DISCOVER_ON_COMPOSITE_SUBTYPES } from './modules/discover_on_composite_subtypes_postprocessing.nf'
+include { PLOT_OVERVIEW_OF_DRIVERS } from './modules/plotting.nf'
 
 /* ----------------------------------------------------------------------------
 * Custom functions
@@ -47,12 +48,13 @@ def channel_from_params_path (staticPath) {
     def no_file = new File(".NO_FILE")
     no_file.createNewFile()
 
-    if (staticPath == '') {
-        result = Channel.fromPath(".NO_FILE")
-    } else {
+    result = Channel.fromPath(".NO_FILE")
+
+    if (staticPath != '' && staticPath.size() > 0)) {
         result = Channel.fromPath(staticPath, checkIfExists: true)
                         .ifEmpty { exit 1, "[ERROR]: " + staticPath + "file not found"}
-    } 
+    }
+
     return result
 }
 
@@ -76,6 +78,14 @@ def create_result_files_tuple (inventoryRow, outputDir, genomeVersion) {
     return tuple(inventoryRow.tumor_subtype, inventoryRow.gr_id, 
                  mutMapPath, mutRatePath, scannedGRpath, varCatEnrPath,
                  inventoryRow.software, resultsPath)
+}
+
+def create_postprocessed_result_files_tuple (inventoryRow, outputDir, 
+                                             genomeVersion) {
+    driversPath = file(outputDir + '/results/tables/drivers-' + 
+                       inventoryRow.tumor_subtype + '--' + genomeVersion + 
+                       '.csv', checkIfExists: false)
+    return tuple(inventoryRow.tumor_subtype, driversPath)
 }
 
 /* ----------------------------------------------------------------------------
@@ -373,20 +383,20 @@ workflow POSTPROCESSING {
     /* 
         Step 5a: 
     */
-    histComposite_subtype = patients_inv.splitCsv(header: true)
-                                        .map { row -> return(tuple(row.tumor_subtype, 
-                                                                   row.participant_tumor_subtype)) }
-                                        .unique()
-                                        .groupTuple(by: 0)
-                                        .filter { it[1].size() > 1}
-                                        .map { it -> return(it[0])}
-    drivers_coocc_incompat_compositeSubtype = drivers_coocc_incompat.combine(histComposite_subtype,
-                                                                             by: [0])
-    histComposite_to_unif = patients_inv.splitCsv(header: true)
-                                        .map { row -> return(tuple(row.tumor_subtype, 
-                                                                   row.participant_tumor_subtype)) }
-                                        .unique()
+    composite_tumor_subtypes = patients_inv.splitCsv(header: true)
+                                           .map { row -> return(tuple(row.tumor_subtype, 
+                                                                      row.participant_tumor_subtype)) }
+                                           .unique()
+                                           .groupTuple(by: 0)
+                                           .filter { it[1].size() > 1}
+                                           .map { it -> return(it[0])}
+    composite_to_uniform_subtypes_map = patients_inv.splitCsv(header: true)
+                                                    .map { row -> return(tuple(row.tumor_subtype, 
+                                                                                 row.participant_tumor_subtype)) }
+                                                    .unique()
 
+    drivers_coocc_incompat_compositeSubtype = drivers_coocc_incompat.combine(composite_tumor_subtypes,
+                                                                             by: [0])
     CHECK_DISCOVER_ON_COMPOSITE_SUBTYPES(drivers_coocc_incompat_compositeSubtype.combine(histComposite_to_unif, by: [0])
                                                                                 .map { it ->
                                                                                         return(tuple(it[2], it[0], it[1])) }
@@ -399,6 +409,71 @@ workflow POSTPROCESSING {
     // do not forget to remove nbr from cds
 }
 
+workflow PLOTTING {
+    /*
+        Step 1: check inventory which defines tiers, inventories with 
+                expression data and check rawP cap
+    */
+
+    /*
+        Step 2: load analyis & patients inventory & check that all software run
+        & produced result files
+    */
+    // load patients inventory
+    patients_inv = Channel.fromPath(params.patients_inventory,
+                                    checkIfExists: true)
+                          .ifEmpty { exit 1, "[ERROR]: patients inventory file not found" }
+    analysis_inv = Channel.fromPath(params.analysis_inventory,
+                                    checkIfExists: true)
+                          .ifEmpty { exit 1, "[ERROR]: analysis inventory file not found" }
+    // DO NOT FORGET TO TURN checkIfExists TO true IN FUNCTION create_path_to_result_file
+    results_inv  = analysis_inv.splitCsv(header: true)
+                               .map { row -> 
+                                        return create_postprocessed_result_files_tuple(row, 
+                                                                                       params.outdir,
+                                                                                       params.target_genome_version)
+                               }
+                               .unique()
+
+    Channel.from(extra_studies).map{it -> return(channel_from_params_path(it[0]))}.view()
+
+
+
+    uniform_tumor_subtypes   = patients_inv.splitCsv(header: true)
+                                           .map { row -> return(tuple(row.tumor_subtype, 
+                                                                      row.participant_tumor_subtype)) }
+                                           .unique()
+                                           .groupTuple(by: 0)
+                                           .filter { it[1].size() == 1}
+                                           .map { it -> return(it[0])}
+    composite_tumor_subtypes = patients_inv.splitCsv(header: true)
+                                           .map { row -> return(tuple(row.tumor_subtype, 
+                                                                      row.participant_tumor_subtype)) }
+                                           .unique()
+                                           .groupTuple(by: 0)
+                                           .filter { it[1].size() > 1}
+                                           .map { it -> return(it[0])}
+    composite_to_uniform_subtypes_map = patients_inv.splitCsv(header: true)
+                                                    .map { row -> return(tuple(row.tumor_subtype, 
+                                                                                 row.participant_tumor_subtype)) }
+                                                    .unique()
+
+    PLOT_OVERVIEW_OF_DRIVERS(uniform_tumor_subtypes.combine(patients_inv)
+                                                   .combine(channel_from_params_path(""))
+                                                   .combine(results_inv, by: [0]))
+
+    extra_studies = channel_from_params_path(params.extra_studies).collect()
+    extra_studies_names = Channel.from(params.extra_studies_names).collect()
+    extra_studies_tumorsubtype = Channel.from(params.extra_studies_tumorsubtype).collect()
+
+    uniform_tumor_subtypes.combine(patients_inv)
+                                                   .combine(channel_from_params_path(""))
+                                                   .combine(results_inv, by: [0])
+                                                   .combine(extra_studies)
+                                                   .combine(extra_studies_names)
+                                                   .combine(extra_studies_tumorsubtype)
+    
+}
 
 // inform about completition
 workflow.onComplete {
