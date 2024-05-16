@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y git autoconf gcc git make ssh \
     && cd ../ \
     && apt-get install -y r-cran-devtools \
     && Rscript -e "install.packages('devtools', repos = 'http://cran.us.r-project.org')" \
+    && Rscript -e "devtools::install_version('ggpubr', version = '0.6.0', repos = 'http://cran.us.r-project.org')"  \
     && Rscript -e "devtools::install_version('devtools', version = '2.4.5', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('argparse', version = '2.2.2', repos = 'http://cran.us.r-project.org')" \
     && Rscript -e "devtools::install_version('BiocManager', version = '1.30.18', repos = 'http://cran.us.r-project.org')" \
