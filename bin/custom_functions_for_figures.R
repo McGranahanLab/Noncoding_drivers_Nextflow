@@ -88,7 +88,9 @@ readJsonWithVisualParameters <- function(jsonPath) {
                  'colors_biotype' = colors_biotype, 
                  'colors_subtype_specificity' = colors_subtype_specificity, 
                  'colors_perc_tumors_with_driver_mut' = colors_perc_tumors_with_driver_mut,
-                 'colors_divergent_palette' = colors_divergent_palette)
+                 'colors_divergent_palette' = colors_divergent_palette,
+                 'overview_plot_width' = json$overview_plot_width,
+                 'overview_plot_heigth' = json$overview_plot_heigth)
   result
 }
 
