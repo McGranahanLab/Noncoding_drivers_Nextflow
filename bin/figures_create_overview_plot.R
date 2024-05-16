@@ -476,12 +476,12 @@ parser$add_argument("-p", "--inventory_patients", required = T,
 
 excludedHelp <- paste('Path to file(s) containing IDs of excluded patients.')
 parser$add_argument("-ep", "--excluded_patients", required = F, 
-                    type = 'character',  nargs = '+', default = NULL, 
+                    type = 'character', nargs = '*', default = NULL, 
                     help = excludedHelp)
 
 filterHelp <- paste("Values of FILTER column which are accepted to be plotted")
 parser$add_argument("-afv", "--allowed_filter_values", required = F, 
-                    type = 'character', default = list('PASS'), nargs = '+',
+                    type = 'character', default = NULL, nargs = '+',
                     help = filterHelp)
 
 uniformDriversHelp <- paste('Path to files containing de-novo detected',
@@ -559,6 +559,10 @@ if (!is.null(args$excluded_patients)) {
     stop('[', Sys.time(), '] some of the files submitted to ',
          '--excluded_patients do not exist.')
   }
+}
+
+if (!is.null(args$allowed_filter_values)) {
+  args$allowed_filter_values <- list('PASS')
 }
 
 if (!is.null(args$drivers_uniform_subtypes)) {
@@ -690,7 +694,9 @@ if (!is.null(args$drivers_composite_subtype)) {
                                                                    FILTER %in% 
                                                                    args$allowed_filter_values]
   if (nrow(driversCompositeSubtypes) == 0) {
-    stop()
+    message('[', Sys.time(), '] Did not produce plot because no drivers ',
+            'in the composite subtype were detected.')
+    stop_quietly()
   }
   driverIDs <- rbind(driverIDs, 
                      driversCompositeSubtypes[,.(gr_id, gene_id, gene_name)])
@@ -701,7 +707,9 @@ if (!is.null(args$drivers_uniform_subtypes)) {
                                                                FILTER %in%
                                                                args$allowed_filter_values]
   if (is.null(args$drivers_composite_subtype) & nrow(driversUniformSubtypes) == 0) {
-    stop()
+    message('[', Sys.time(), '] Did not produce plot because no drivers ',
+            'in uniform subtypes were detected.')
+    stop_quietly()
   }
   driverIDs <- rbind(driverIDs, 
                      driversUniformSubtypes[,.(gr_id, gene_id, gene_name)])
