@@ -477,17 +477,31 @@ workflow VISUALISATION {
                                            .map { it -> return(it[0])}
     composite_to_uniform_subtypes_map = patients_inv.splitCsv(header: true)
                                                     .map { row -> return(tuple(row.tumor_subtype, 
-                                                                                 row.participant_tumor_subtype)) }
+                                                                               row.participant_tumor_subtype)) }
+                                                    .unique()
+                                                    .combine(composite_tumor_subtypes, by: [0])
+                                                    .map { row -> return(tuple(it[1], it[0]))}
+                                                    .combine(results_inv, by: [0])
+                                                    .map { row -> return(tuple(it[1], it[2]))}
                                                     .unique()
 
+    uniform_tumor_subtypes_overviewplot   = uniform_tumor_subtypes.combine(patients_inv)
+                                                                  .combine(channel_from_params_path(""))
+                                                                  .combine(results_inv, by: [0])
+                                                                  .combine(visual_json)
+                                                                  .combine(extra_studies)
+                                                                  .groupTuple(by: [0, 1, 2, 3, 4, 5])
+
+    composite_tumor_subtypes_overviewplot = composite_tumor_subtypes.combine(patients_inv)
+                                                                    .combine(results_inv.map{it -> return(tuple(it[0], it[1]))}, by: [0])
+                                                                    .combine(composite_to_uniform_subtypes_map, by: [0])
+                                                                    .groupTuple(by: [0, 1, 2])
+                                                                    .combine(results_inv.map{it -> return(tuple(it[0], it[2]))}, by: [0])
+                                                                    .combine(visual_json)
+                                                                    .combine(extra_studies)
     
-    // plot drivers detected in uniform subtypes
-    PLOT_OVERVIEW_OF_DRIVERS(uniform_tumor_subtypes.combine(patients_inv)
-                                                   .combine(channel_from_params_path(""))
-                                                   .combine(results_inv, by: [0])
-                                                   .combine(visual_json)
-                                                   .combine(extra_studies)
-                                                   .groupTuple(by: [0, 1, 2, 3, 4, 5]))
+    // overview plot of detected drivers
+    PLOT_OVERVIEW_OF_DRIVERS(composite_tumor_subtypes_overviewplot.concat(uniform_tumor_subtypes_overviewplot)) 
     
 }
 
