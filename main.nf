@@ -82,10 +82,21 @@ def create_result_files_tuple (inventoryRow, outputDir, genomeVersion) {
 
 def create_postprocessed_result_files_tuple (inventoryRow, outputDir, 
                                              genomeVersion) {
-    driversPath = file(outputDir + '/results/tables/drivers-' + 
+    driversPath = file(outputDir + '/results/tables/drivers/drivers-' + 
                        inventoryRow.tumor_subtype + '--' + genomeVersion + 
                        '.csv', checkIfExists: false)
-    return tuple(inventoryRow.tumor_subtype, driversPath)
+    
+    hypermutatedPathStr = outputDir + '/inputs/hypermutated-' +
+                          inventoryRow.tumor_subtype + '.csv'
+    File hypermutared = new File(hypermutatedPathStr)
+    if (!hypermutared.exists()) {
+        def no_file = new File(".NO_FILE")
+        no_file.createNewFile()
+        hypermutatedPathStr = ".NO_FILE"
+    }
+    hypermutatedPath = file(hypermutatedPathStr, checkIfExists: false)
+
+    return tuple(inventoryRow.tumor_subtype, driversPath, hypermutatedPath)
 }
 
 /* ----------------------------------------------------------------------------
@@ -435,7 +446,9 @@ workflow PLOTTING {
                                }
                                .unique()
 
-    Channel.from(extra_studies).map{it -> return(channel_from_params_path(it[0]))}.view()
+    extra_studies = channel_from_params_path(params.extra_studies)
+    visual_json              = Channel.fromPath(params.visual_json, 
+                                                checkIfExists: true)
 
 
 
@@ -458,20 +471,15 @@ workflow PLOTTING {
                                                                                  row.participant_tumor_subtype)) }
                                                     .unique()
 
+    
+    // plot drivers detected in uniform subtypes
     PLOT_OVERVIEW_OF_DRIVERS(uniform_tumor_subtypes.combine(patients_inv)
                                                    .combine(channel_from_params_path(""))
-                                                   .combine(results_inv, by: [0]))
-
-    extra_studies = channel_from_params_path(params.extra_studies).collect()
-    extra_studies_names = Channel.from(params.extra_studies_names).collect()
-    extra_studies_tumorsubtype = Channel.from(params.extra_studies_tumorsubtype).collect()
-
-    uniform_tumor_subtypes.combine(patients_inv)
-                                                   .combine(channel_from_params_path(""))
                                                    .combine(results_inv, by: [0])
+                                                   .combine(visual_json)
                                                    .combine(extra_studies)
-                                                   .combine(extra_studies_names)
-                                                   .combine(extra_studies_tumorsubtype)
+                                                   .groupTuple(by: [0, 1, 2, 3, 4, 5])
+                                                   .take(1))
     
 }
 
