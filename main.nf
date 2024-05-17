@@ -43,14 +43,23 @@ include { PLOT_OVERVIEW_OF_DRIVERS } from './modules/plotting.nf'
 /* ----------------------------------------------------------------------------
 * Custom functions
 *----------------------------------------------------------------------------*/
+def random_string_generator () {
+    alphabet = (('A'..'Z')+('0'..'9')).join()
+    n = 9
+    return new Random().with { (1..n).collect { alphabet[ nextInt( alphabet.length() ) ] }.join() }
+}
+
+def create_empty_file_channel () {
+    empty_file_name = params.empty_file_prefix + '_' + random_string_generator()
+    empty_file_channel = Channel.fromPath(empty_file_name, checkIfExists: false)
+
+    return empty_file_channel
+}
+
 def channel_from_params_path (staticPath) {
-    // create an empty dummy file
-    def no_file = new File(".NO_FILE")
-    no_file.createNewFile()
+    result = create_empty_file_channel()
 
-    result = Channel.fromPath(".NO_FILE")
-
-    if (staticPath != '' && staticPath.size() > 0)) {
+    if (staticPath != '' && staticPath.size() > 0) {
         result = Channel.fromPath(staticPath, checkIfExists: true)
                         .ifEmpty { exit 1, "[ERROR]: " + staticPath + "file not found"}
     }
@@ -420,7 +429,7 @@ workflow POSTPROCESSING {
     // do not forget to remove nbr from cds
 }
 
-workflow PLOTTING {
+workflow VISUALISATION {
     /*
         Step 1: check inventory which defines tiers, inventories with 
                 expression data and check rawP cap
@@ -478,8 +487,7 @@ workflow PLOTTING {
                                                    .combine(results_inv, by: [0])
                                                    .combine(visual_json)
                                                    .combine(extra_studies)
-                                                   .groupTuple(by: [0, 1, 2, 3, 4, 5])
-                                                   .take(1))
+                                                   .groupTuple(by: [0, 1, 2, 3, 4, 5]))
     
 }
 

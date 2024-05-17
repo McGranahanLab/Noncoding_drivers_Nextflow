@@ -11,10 +11,11 @@ process PLOT_OVERVIEW_OF_DRIVERS {
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
-    def composite_cancer_subtype   = drivers_composite_subtype.name != '.NO_FILE' ? "--composite_cancer_subtype $tumor_subtype" : ''
-    def drivers_composite_subtype  = drivers_composite_subtype.name != '.NO_FILE' ? "--drivers_composite_subtype $drivers_composite_subtype" : ''
-    def excluded_patients          = !excluded_patients.name.startsWith('.NO_FILE') ? "--excluded_patients $excluded_patients" : ''
+    def composite_cancer_subtype   = !drivers_composite_subtype.name.startsWith(params.empty_file_prefix) ? "--composite_cancer_subtype $tumor_subtype" : ''
+    def drivers_composite_subtype  = !drivers_composite_subtype.name.startsWith(params.empty_file_prefix) ? "--drivers_composite_subtype $drivers_composite_subtype" : ''
+    def excluded_patients          = !excluded_patients.name.startsWith(params.empty_file_prefix) ? "--excluded_patients $excluded_patients" : ''
     def allowed_filter_values      = params.allowed_filter_values.size != 0 ? "--allowed_filter_values "+params.allowed_filter_values.collect{ '"' + it + '"'}.join(" ") : ''
+    def extra_studies              = !extra_studies[0].name.startsWith(params.empty_file_prefix) ? "--extra_studies $extra_studies" : ''
     def extra_studies_names        = params.extra_studies.size != 0 ? "--extra_studies_names "+params.extra_studies_names.collect{ '"' + it + '"'}.join(" ") : ''
     def extra_studies_tumorsubtype = params.extra_studies.size != 0 ? "--extra_studies_tumorsubtype "+params.extra_studies_tumorsubtype.collect{ '"' + it + '"'}.join(" ") : ''
     """
@@ -30,7 +31,7 @@ process PLOT_OVERVIEW_OF_DRIVERS {
                                      $excluded_patients \
                                      $allowed_filter_values \
         --drivers_uniform_subtypes   $drivers_uniform_subtypes \
-        --extra_studies              $extra_studies \
+                                     $extra_studies \
                                      $extra_studies_names \
                                      $extra_studies_tumorsubtype \
         --visuals_json               $visual_json \
