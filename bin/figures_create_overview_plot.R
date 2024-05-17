@@ -626,6 +626,11 @@ if (length(notFoundVisuals)) {
 patientsInv <- readParticipantInventory(args$inventory_patients, 1)
 message('[', Sys.time(), '] Read --inventory_patients: ', 
         args$inventory_patients)
+patientsInv <- patientsInv[,.(tumor_subtype, participant_id, 
+                              participant_tumor_subtype)]
+
+uniformSubtypes <- patientsInv[,.(length(unique(participant_tumor_subtype))),
+                               by = tumor_subtype][V1 == 1]$tumor_subtype
 
 # Read in file with hypermutated patients IDs ---------------------------------
 if (!is.null(args$excluded_patients)) {
@@ -666,10 +671,12 @@ if (!is.null(args$drivers_uniform_subtypes)) {
                                                        gene_name)]
   driversUniformSubtypesUnfiltered[, gene_id := gsub('__and__', '&', gene_id)]
   
-  if (sum(driversUniformSubtypesUnfiltered$tumor_subtype != 
-          driversUniformSubtypesUnfiltered$participant_tumor_subtype, 
-          na.rm = T) > 1) {
-    stop() #exclusion of pan-lung mets here
+  notUniform <- setdiff(unique(driversUniformSubtypesUnfiltered$tumor_subtype),
+                        uniformSubtypes)
+  if (length(notUniform) > 0) {
+    stop('[', Sys.time(), '] Some of the results submitted as drivers in ',
+         'uniform subtypes are not actually uniform. Offending values: ',
+         paste0(notUniform, collapse = ', '), '.')
   }
   
   if (!is.null(args$drivers_composite_subtype)) {
@@ -776,6 +783,7 @@ if (!is.null(args$extra_studies)) {
 }
 
 # Calculate cohort sizes ------------------------------------------------------
+# here uniquely counting is made by participant_tumor_subtype 
 cohort_sizes <- patientsInv[,.(length(unique(participant_id))), 
                             by = participant_tumor_subtype]
 setnames(cohort_sizes, c("participant_tumor_subtype", 'V1'), 
@@ -851,29 +859,31 @@ if (max(drivers_restricted[,.N, by = gene_plots_id]$N) > 1) {
        paste(apply(offenders, 1, paste, collapse = '-'), collapse = ','))
 }
 
-for (i in 1:length(extra_studies)) {
-  keys_i <- intersect(c("gene_name", "gene_id"), colnames(extra_studies[[i]]))
-  if (!'is_known_cancer' %in% colnames(extra_studies[[i]])) {
-    extra_studies[[i]][, is_known_cancer := T]
+if (!is.null(args$extra_studies)) {
+  for (i in 1:length(extra_studies)) {
+    keys_i <- intersect(c("gene_name", "gene_id"), colnames(extra_studies[[i]]))
+    if (!'is_known_cancer' %in% colnames(extra_studies[[i]])) {
+      extra_studies[[i]][, is_known_cancer := T]
+    }
+    
+    extra_studies[[i]] <- merge(drivers_restricted, extra_studies[[i]], 
+                                by = keys_i, all.x = T)
+    extra_studies[[i]][is.na(is_known_cancer)]$is_known_cancer <- F
+    extra_studies[[i]][is.na(known_in_current_tumor_subtype)]$known_in_current_tumor_subtype <- F
+    extra_studies[[i]] <- extra_studies[[i]][,.(gr_id, gene_name, gene_id, 
+                                                gene_plots_id, FILTER, 
+                                                is_known_cancer,
+                                                known_in_current_tumor_subtype)]
+    extra_studies[[i]] <- unique(extra_studies[[i]])
+    extra_studies[[i]] <- extra_studies[[i]][order(gr_id, gene_name, gene_id, 
+                                                   gene_plots_id, FILTER,
+                                                   -is_known_cancer,
+                                                   -known_in_current_tumor_subtype)]
+    extra_studies[[i]] <- extra_studies[[i]][,.SD[1], 
+                                             by = .(gr_id, gene_name, gene_id,
+                                                    gene_plots_id, FILTER)]
+    extra_studies[[i]][, dummy := names(extra_studies)[i]]
   }
-  
-  extra_studies[[i]] <- merge(drivers_restricted, extra_studies[[i]], 
-                              by = keys_i, all.x = T)
-  extra_studies[[i]][is.na(is_known_cancer)]$is_known_cancer <- F
-  extra_studies[[i]][is.na(known_in_current_tumor_subtype)]$known_in_current_tumor_subtype <- F
-  extra_studies[[i]] <- extra_studies[[i]][,.(gr_id, gene_name, gene_id, 
-                                              gene_plots_id, FILTER, 
-                                              is_known_cancer,
-                                              known_in_current_tumor_subtype)]
-  extra_studies[[i]] <- unique(extra_studies[[i]])
-  extra_studies[[i]] <- extra_studies[[i]][order(gr_id, gene_name, gene_id, 
-                                                 gene_plots_id, FILTER,
-                                                 -is_known_cancer,
-                                                 -known_in_current_tumor_subtype)]
-  extra_studies[[i]] <- extra_studies[[i]][,.SD[1], 
-                                           by = .(gr_id, gene_name, gene_id,
-                                                  gene_plots_id, FILTER)]
-  extra_studies[[i]][, dummy := names(extra_studies)[i]]
 }
 
 # Barplot number of patients -------------------------------------------------
