@@ -306,7 +306,10 @@ formatAxisLabels <- function(plotDT, axisOrderCol, axisLabelCol, annoCol,
 extract_legend <- function(ggplotObj) {
   step1 <- ggplot_gtable(ggplot_build(ggplotObj))
   step2 <- which(sapply(step1$grobs, function(x) x$name) == "guide-box")
-  step3 <- step1$grobs[[step2]]
+  step3 <- NULL
+  if (length(step2) > 0) {
+    step3 <- step1$grobs[[step2]]
+  }
   step3
 }
 
