@@ -10,9 +10,9 @@ process check_inventories {
     stdout emit: inventories_pass
 
     script:
-    def inventory_blacklisted = blacklist_inventory_path.name != '.NO_FILE' ? "--inventory_blacklisted $blacklist_inventory_path" : ''
-    def inventory_digdriver = digdriverModels_inventory_path.name != '.NO_FILE' ? "--inventory_digdriver $digdriverModels_inventory_path" : ''
-    def inventory_chasmplus = chasmplusAnno_inventory_path.name != '.NO_FILE' ? "--inventory_chasmplus $chasmplusAnno_inventory_path" : ''
+    def inventory_blacklisted = !blacklist_inventory_path.name.startsWith(params.empty_file_prefix) ? "--inventory_blacklisted $blacklist_inventory_path" : ''
+    def inventory_digdriver   = !digdriverModels_inventory_path.name.startsWith(params.empty_file_prefix) ? "--inventory_digdriver $digdriverModels_inventory_path" : ''
+    def inventory_chasmplus   = !chasmplusAnno_inventory_path.name.startsWith(params.empty_file_prefix) ? "--inventory_chasmplus $chasmplusAnno_inventory_path" : ''
     """
     1_check_inventories.R --inventory_patients $patients_inventory_path \
                           --inventory_analysis $analysis_inventory_path \

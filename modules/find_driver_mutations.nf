@@ -12,7 +12,7 @@ process FIND_DRIVER_MUTATIONS {
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
-    def knownMuts = known_driver_mutations.name != '.NO_FILE' ? "--known_driver_mutations $known_driver_mutations" : ''
+    def knownMuts = !known_driver_mutations.name.startsWith(params.empty_file_prefix) ? "--known_driver_mutations $known_driver_mutations" : ''
     """
     RUN_CODE=$tumor_subtype'--'$params.target_genome_version
     MSG_FILE="findDriverMuts-"\$RUN_CODE'.out'

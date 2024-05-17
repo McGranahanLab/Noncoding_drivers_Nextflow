@@ -10,7 +10,7 @@ process ANNOTATE_GENOMICRANGES_WITH_CN {
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
-    def chain = chain.name != '.NO_FILE' ? "--chain $chain" : ''
+    def chain = !chain.name.startsWith(params.empty_file_prefix) ? "--chain $chain" : ''
     """
     RUN_CODE=$tumor_subtype'--'$params.target_genome_version
     MSG_FILE="annotateWithCN-"\$RUN_CODE'.out'

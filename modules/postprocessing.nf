@@ -15,9 +15,9 @@ process COMBINE_P_VALS_AND_ANNOTATE {
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
-    def synonyms = gene_name_synonyms.name != '.NO_FILE' ? "--gene_name_synonyms $gene_name_synonyms" : ''
-    def known_genes = known_cancer_genes.name != '.NO_FILE' ? "--known_cancer_genes $known_cancer_genes" : ''
-    def olfactory = olfactory_genes.name != '.NO_FILE' ? "--olfactory_genes $olfactory_genes" : ''
+    def synonyms    = !gene_name_synonyms.name.startsWith(params.empty_file_prefix) ? "--gene_name_synonyms $gene_name_synonyms" : ''
+    def known_genes = !known_cancer_genes.name.startsWith(params.empty_file_prefix) ? "--known_cancer_genes $known_cancer_genes" : ''
+    def olfactory   = !olfactory_genes.name.startsWith(params.empty_file_prefix) ? "--olfactory_genes $olfactory_genes" : ''
     """
     # a unique ID to use in all further commands
     RUN_CODE=$tumor_subtype'-'$gr_id'-'$params.target_genome_version

@@ -12,9 +12,9 @@ process FILTER_INPUT_MUTATIONS {
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
-    def inventory_blacklisted = blacklist_inventory_path.name != '.NO_FILE' ? "--inventory_blacklisted $blacklist_inventory_path" : ''
-    def target_genome_chr_len = target_genome_chr_len.name != '.NO_FILE' ? "--target_genome_chr_len $target_genome_chr_len" : ''
-    def chain = chain.name != '.NO_FILE' ? "--chain $chain" : ''
+    def inventory_blacklisted = !blacklist_inventory_path.name.startsWith(params.empty_file_prefix) ? "--inventory_blacklisted $blacklist_inventory_path" : ''
+    def target_genome_chr_len = !target_genome_chr_len.name.startsWith(params.empty_file_prefix) ? "--target_genome_chr_len $target_genome_chr_len" : ''
+    def chain                 = !chain.name.startsWith(params.empty_file_prefix) ? "--chain $chain" : ''
     """ 
     OUT_FILE='inputMutations-'$tumor_subtype'-'$params.target_genome_version'.maf'
     2_filter_input_mutations.R --inventory_patients $patients_inventory_path \

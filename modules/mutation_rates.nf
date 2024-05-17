@@ -11,9 +11,9 @@ process CALCULATE_MUTATION_RATES {
     tuple path('*.out'), path('*.err'), emit: logs
 
     script:
-    def gene_name_synonyms = gene_name_synonyms.name != '.NO_FILE' ? "--gene_name_synonyms $gene_name_synonyms" : ''
-    def target_genome_chr_len = target_genome_chr_len.name != '.NO_FILE' ? "--target_genome_chr_len $target_genome_chr_len" : ''
-    def varanno_conversion_table = varanno_conversion_table.name != '.NO_FILE' ? "--varanno_conversion_table $varanno_conversion_table" : ''
+    def gene_name_synonyms       = !gene_name_synonyms.name.startsWith(params.empty_file_prefix) ? "--gene_name_synonyms $gene_name_synonyms" : ''
+    def target_genome_chr_len    = !target_genome_chr_len.name.startsWith(params.empty_file_prefix) ? "--target_genome_chr_len $target_genome_chr_len" : ''
+    def varanno_conversion_table = !varanno_conversion_table.name.startsWith(params.empty_file_prefix) ? "--varanno_conversion_table $varanno_conversion_table" : ''
     """
     coding_gr_id_parsed=`echo $coding_gr_id | sed 's/\\[//g' | sed 's/,//g' | sed 's/\\]//g'` 
     4_calculate_mutation_rates.R --cancer_subtype $tumor_subtype \
