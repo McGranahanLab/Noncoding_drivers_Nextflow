@@ -76,6 +76,9 @@ readJsonWithVisualParameters <- function(jsonPath) {
   # subtypeSpecificityPalette
   colors_subtype_specificity <- unlist(json$colors_subtype_specificity)
   
+  # colors_perc_tumor_with_driver_mutation
+  colors_perc_tumor_with_driver_mutation <- unlist(json$colors_perc_tumor_with_driver_mutation)
+  
   # percTumorsWithDriverMutsPalette
   colors_perc_tumors_with_driver_mut <- unlist(json$colors_perc_tumor_with_driver_mutation)
   
@@ -87,10 +90,13 @@ readJsonWithVisualParameters <- function(jsonPath) {
                  'colors_tumor_type' = colors_tumor_type, 
                  'colors_biotype' = colors_biotype, 
                  'colors_subtype_specificity' = colors_subtype_specificity, 
+                 'colors_perc_tumor_with_driver_mutation' = colors_perc_tumor_with_driver_mutation,
                  'colors_perc_tumors_with_driver_mut' = colors_perc_tumors_with_driver_mut,
                  'colors_divergent_palette' = colors_divergent_palette,
                  'overview_plot_width' = json$overview_plot_width,
-                 'overview_plot_heigth' = json$overview_plot_heigth)
+                 'overview_plot_heigth' = json$overview_plot_heigth,
+                 'subtype_specificity_plot_width' = json$subtype_specificity_plot_width,
+                 'subtype_specificity_plot_heigth' = json$subtype_specificity_plot_heigth)
   result
 }
 
