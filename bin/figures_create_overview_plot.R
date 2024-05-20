@@ -466,11 +466,11 @@ parser$add_argument("-dcs", "--drivers_composite_subtype", required = F,
                     type = 'character', default = NULL,
                     help = compositeDriversHelp)
 
-patientsHelp <- paste('Path to patientsInv table listing information about',
-                      'patients, their cancer types and mutation files.',
-                      'Minimal columns: participant_id, tumor_subtype,',
+patientsHelp <- paste('Path to table listing information about patients,',
+                      'their cancer types and mutation files. Minimal',
+                      'columns: participant_id, tumor_subtype,',
                       'participant_tumor_subtype, somatic_path,',
-                      'somatic_genome, cohort_name')
+                      'somatic_genome, cohort_name.')
 parser$add_argument("-p", "--inventory_patients", required = T, 
                     type = 'character', help = patientsHelp)
 
