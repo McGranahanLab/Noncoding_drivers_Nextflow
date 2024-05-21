@@ -1,19 +1,150 @@
-library(data.table)
-library(ggplot2)
-library(ggpubr)
-library(plyr)
+#!/usr/bin/env Rscript
+# FILE:  bin/figures_create_n_coding_vs_noncoding_driver_mutations_plot.R -----
+#
+# DESCRIPTION: An R script which creates a plot showing number patients with a
+# specific combination of number of coding and noncoding driver mutations.
+# USAGE: 
+# OPTIONS: Run 
+#          Rscript --vanilla  bin/figures_create_n_coding_vs_noncoding_driver_mutations_plot.R -h
+#          to see the full list of options and their descriptions.
+#
+# REQUIREMENTS: R v4.1.0, data.table, ggplot2, ggpubr, plyr
+# BUGS: --
+# NOTES:  
+# AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk
+# COMPANY:  UCL, Cancer Institute, London, the UK
+# VERSION:  1
+# CREATED:  01.02.2023
+# REVISION: 20.05.2024
 
-source('bin/custom_functions.R')
 
-# Test input arguments --------------------------------------------------------
-args <- list(inventory_analysis = 'data/inventory/inventory_analysis.csv',
-             inventory_patients = 'data/inventory/inventory_patients.csv',
-             driver_mutations = "completed_runs/2023_12_25/results/tables/driver_mutations/driverMutations-Panlung--hg19.csv",
-             cancer_subtype = 'Panlung', exclude_cnv = T, 
-             fold_splicesites_in_coding = T)
+# Source custom functions -----------------------------------------------------
+#' get_script_dir
+#' @description Returns parent directory of the currently executing script
+#' @author https://stackoverflow.com/questions/47044068/get-the-path-of-current-script
+#' @return string, absolute path
+#' @note this functions has to be present in all R scripts sourcing any other
+#' script. Sourcing R scripts with use of box library is unstable then multiple
+#' processes try to execute the source at the same time.
+get_script_dir <- function() {
+  cArgs <- tibble::enframe(commandArgs(), name = NULL)
+  cArgsSplit <- tidyr::separate(cArgs, col = value, into = c("key", "value"),
+                                sep = "=", fill = "right")
+  cArgsFltr <- dplyr::filter(cArgsSplit, key == "--file")
+  
+  result <- dplyr::pull(cArgsFltr, value)
+  result <- tools::file_path_as_absolute(dirname(result))
+  result
+}
+
+srcDir <- get_script_dir()
+# to spread out multiple processes accessing the same file
+Sys.sleep(sample(1:15, 1))
+source(paste0(srcDir, '/custom_functions.R'))
+Sys.sleep(sample(1:15, 1))
+source(paste0(srcDir, '/custom_functions_for_figures.R'))
+
+# Libraries -------------------------------------------------------------------
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(library(ggpubr)))
+suppressWarnings(suppressPackageStartupMessages(library(plyr)))
+
+# Parse input arguments -------------------------------------------------------
+# create parser object
+parser <- ArgumentParser(prog = 'figures_create_n_coding_vs_noncoding_driver_mutations_plot.R')
+
+subtypeHelp <- paste('A name of the tumor subtype in which drivers were',
+                     'detected.')
+parser$add_argument("-c", "--cancer_subtype", required = T, 
+                    type = 'character', help = subtypeHelp)
+
+mutationsHelp <- paste('Path to detected driver mutations file in the ',
+                       'cancer subtype. Columns is_driver, gr_id, gene_id,',
+                       'gene_name, var_type, key, participant_id, n_total,',
+                       'n_driverMut_low, n_driverMut_mle, n_driverMut_high,',
+                       'n_tums_w_driver_mut are needed.')
+parser$add_argument("-d", "--driver_mutations", required = T, 
+                    type = 'character', default = NULL, help = mutationsHelp)
+
+analysisHelp <- paste('Path to inventory table containing details of the',
+                      'future analysis to be conducted. Minimal columns:',
+                      'tumor_subtype,', 'software,', 'gr_id,', 'gr_code,', 
+                      'gr_file,', 'gr_upstr,', 'gr_downstr,', 'gr_genome,', 
+                      'gr_excl_id,', 'gr_excl_code,', 'gr_excl_file,',
+                      'gr_excl_upstr,', 'gr_excl_downstr,', 'gr_excl_genome,',
+                      'blacklisted_codes.')
+parser$add_argument("-a", "--inventory_analysis", required = T, 
+                    type = 'character', help = analysisHelp)
+
+patientsHelp <- paste('Path to table listing information about patients,',
+                      'their cancer types and mutation files. Minimal',
+                      'columns: participant_id, tumor_subtype,',
+                      'participant_tumor_subtype, somatic_path,',
+                      'somatic_genome, cohort_name.')
+parser$add_argument("-p", "--inventory_patients", required = T, 
+                    type = 'character', help = patientsHelp)
+
+foldHelp <- paste0('Indicates, whether or not splice sites should be',
+                   'considered as part of CDS for the counting.',
+                   'Default: T.')
+parser$add_argument("-f", "--fold_splicesites_in_coding", required = F,
+                    default = 'T', choices = c('T', 'F'), type = 'character', 
+                    help = foldHelp)
+
+excludeCNVhelp <- paste0('Indicates, whether or not driver copy number',
+                         'variantions should be excluded from counting.',
+                         'Default: T.')
+parser$add_argument("-e", "--exclude_cnv", required = F,
+                    default = 'T', choices = c('T', 'F'), type = 'character', 
+                    help = excludeCNVhelp)
+
+jsonHelp <- paste('Path to a JSON file containing visual parameters to be',
+                  'used in the plot.')
+parser$add_argument("-v", "--visuals_json", required = T, 
+                    type = 'character', help = jsonHelp)
+
+outputTypeHelp <- paste('Type of image to create: pdf or png')
+parser$add_argument("-ot", "--output_type", required = F, 
+                    type = 'character', default = 'pdf',  
+                    choices = c('pdf', 'png'), help = outputTypeHelp)
+
+parser$add_argument("-o", "--output", required = T, type = 'character',
+                    help = "Path to the output file")
+
+args <- parser$parse_args()
+args$fold_splicesites_in_coding <- as.logical(args$fold_splicesites_in_coding)
+args$exclude_cnv <- as.logical(args$exclude_cnv)
+
+timeStart <- Sys.time()
+message('[', Sys.time(), '] Start time of run')
+printArgs(args)
 
 CNV_VAR_TYPES <- c('amp', 'hom.del.')
 LOW_CONFIDENCE <- c('only n. driver mutations')
+
+# Test input arguments --------------------------------------------------------
+# args <- list(inventory_analysis = 'data/inventory/inventory_analysis.csv',
+#              inventory_patients = 'data/inventory/inventory_patients.csv',
+#              driver_mutations = "completed_runs/2023_12_25/results/tables/driver_mutations/driverMutations-Panlung--hg19.csv",
+#              cancer_subtype = 'Panlung', exclude_cnv = T, 
+#              fold_splicesites_in_coding = T, 
+#              visuals_json = 'data/visual_parameters.json')
+
+# Read visuals JSON -----------------------------------------------------------
+ESSENTIAL_VISUAL_NAMES <- c('ggplot2_theme',
+                            'colors_divergent_palette',
+                            'n_coding_vs_noncoding_driver_muts_plot_width', 
+                            'n_coding_vs_noncoding_driver_muts_plot_heigth')
+
+visualParams <- readJsonWithVisualParameters(args$visuals_json)
+message('[', Sys.time(), '] Read --visuals_json: ', args$visuals_json)
+
+notFoundVisuals <- setdiff(ESSENTIAL_VISUAL_NAMES, names(visualParams))
+if (length(notFoundVisuals)) {
+  stop('[', Sys.time(), '] Following visuals: ', 
+       paste(notFoundVisuals, collapse = ', '), ' not found in JSON.')
+}
 
 # Read in patients inventory --------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients, 1)
@@ -30,6 +161,7 @@ driverMuts <- fread(args$driver_mutations, header = T, select = colsToKeep,
 driverMuts <- unique(driverMuts)
 driverMuts <- driverMuts[is_driver == T]
 driverMuts[, is_driver := NULL]
+message('[', Sys.time(), '] Read --driver_mutations: ', args$driver_mutations)
 
 # Read in analysis inventory --------------------------------------------------
 analysisInv <- readAnalysisInventory(args$inventory_analysis)
@@ -73,7 +205,8 @@ if (args$fold_splicesites_in_coding) {
 message(msg)
 
 # Set driver genomic element type (coding vs noncoding) -----------------------
-driverMuts[, gr_type := ifelse(gr_id %in% coding_gr_id, 'coding', 'non-coding')]
+driverMuts[, gr_type := ifelse(gr_id %in% coding_gr_id, 'coding', 
+                               'non-coding')]
 
 # Count number of SNV/small indel driver mutations per patient ----------------
 # count how many RESOLVED driver SNVs/small indels per patient
@@ -127,6 +260,10 @@ if (length(patientsWithoutDrivers) > 0) {
 }
 
 # Prepare for plotting --------------------------------------------------------
+neutralColorIdx <- median(1:length(visualParams$colors_divergent_palette))
+nColors <- visualParams$colors_divergent_palette
+hotPalette <- visualParams$colors_divergent_palette[(neutralColorIdx + 1):length(nColors)]
+
 nDriverMutsWide <- nDriverMuts[,.(participant_id, gr_type, N)]
 nDriverMutsWide[, N := sum(N), by = .(participant_id, gr_type)]
 nDriverMutsWide <- unique(nDriverMutsWide)
@@ -165,8 +302,23 @@ nCodVsNC_PLOT <- ggplot(nDriverMutsPlotDT,
                      breaks = seq(0, 
                                   max(c(nDriverMutsPlotDT$coding,
                                         nDriverMutsPlotDT$`non-coding`))+1)) +
-  scale_color_manual(values = colorRampPalette(N_PATIENTS_COLOR_SCHEME)(length(N_breaks) - 2)) +
-  customGgplot2Theme + labs(color = 'N. patients', size = 'N. patients') +
+  scale_color_manual(values = colorRampPalette(hotPalette)(length(N_breaks) - 2)) +
+  visualParams$ggplot2_theme + labs(color = 'N. patients', size = 'N. patients') +
   guides(color = guide_legend(nrow = 1), size = guide_legend(nrow = 1)) +
   theme(legend.position = 'bottom', legend.direction = 'horizontal')
 
+# Output plot to file ---------------------------------------------------------
+if (args$output_type == 'pdf') {
+  pdf(args$output, width = visualParams$n_coding_vs_noncoding_driver_muts_plot_width, 
+      height = visualParams$n_coding_vs_noncoding_driver_muts_plot_heigth)
+} else {
+  png(args$output, width = visualParams$n_coding_vs_noncoding_driver_muts_plot_width, 
+      height = visualParams$n_coding_vs_noncoding_driver_muts_plot_heigth)
+}
+nCodVsNC_PLOT
+dev.off()
+
+message("End time of run: ", Sys.time())
+message('Total execution time: ', 
+        difftime(Sys.time(), timeStart, units = 'mins'), ' mins.')
+message('Finished!')

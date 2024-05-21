@@ -102,7 +102,9 @@ readJsonWithVisualParameters <- function(jsonPath) {
                  'indel_enrichment_plot_width' = json$indel_enrichment_plot_width,
                  'indel_enrichment_plot_heigth' = json$indel_enrichment_plot_heigth,
                  'excusivity_cooccurrence_plot_width' = json$excusivity_cooccurrence_plot_width,
-                 'excusivity_cooccurrence_plot_heigth' = json$excusivity_cooccurrence_plot_heigth)
+                 'excusivity_cooccurrence_plot_heigth' = json$excusivity_cooccurrence_plot_heigth,
+                 'n_coding_vs_noncoding_driver_muts_plot_width' = json$n_coding_vs_noncoding_driver_muts_plot_width,
+                 'n_coding_vs_noncoding_driver_muts_plot_heigth' = json$n_coding_vs_noncoding_driver_muts_plot_heigth)
   result
 }
 
