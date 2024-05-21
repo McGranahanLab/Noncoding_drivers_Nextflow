@@ -98,7 +98,9 @@ readJsonWithVisualParameters <- function(jsonPath) {
                  'subtype_specificity_plot_width' = json$subtype_specificity_plot_width,
                  'subtype_specificity_plot_heigth' = json$subtype_specificity_plot_heigth,
                  'biotype_plot_width' = json$biotype_plot_width,
-                 'biotype_plot_heigth' = json$biotype_plot_heigth)
+                 'biotype_plot_heigth' = json$biotype_plot_heigth,
+                 'indel_enrichment_plot_width' = json$indel_enrichment_plot_width,
+                 'indel_enrichment_plot_heigth' = json$indel_enrichment_plot_heigth)
   result
 }
 
