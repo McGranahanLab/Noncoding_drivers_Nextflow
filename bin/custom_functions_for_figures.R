@@ -96,7 +96,9 @@ readJsonWithVisualParameters <- function(jsonPath) {
                  'overview_plot_width' = json$overview_plot_width,
                  'overview_plot_heigth' = json$overview_plot_heigth,
                  'subtype_specificity_plot_width' = json$subtype_specificity_plot_width,
-                 'subtype_specificity_plot_heigth' = json$subtype_specificity_plot_heigth)
+                 'subtype_specificity_plot_heigth' = json$subtype_specificity_plot_heigth,
+                 'biotype_plot_width' = json$biotype_plot_width,
+                 'biotype_plot_heigth' = json$biotype_plot_heigth)
   result
 }
 
@@ -235,6 +237,77 @@ create_plot_background <- function(plotDT, axisLabs, axisOrderCol, yCol,
   result
 }
 
+#' annotatePlotWithGRlines
+#' @description Annotates a ggplot with a lines and text deliniating groups of
+#'              the same genomic regions.
+#' @author Maria Litovchenko
+#' @param basePlot a ggplot2 object to which annotation should be added
+#' @param plotDT data table with processed data, ready to be plotted (main 
+#'        plot)
+#' @param axisLabs result of function format_xLabels
+#' @param xOrderCol column name containing order of X axis
+#' @param yCol column name containing data for Y axis
+#' @param direction string, one of "vertical" and "horizontal"
+#' @param ... other parameters to pass to geom_text
+#' @return ggplot2 object
+annotatePlotWithGRlines <- function(basePlot, plotDT, axisLabs, xOrderCol,
+                                    yCol, direction = 'vertical', ...) {
+  result <- basePlot
+  
+  if (!direction %in% c('vertical', 'horizontal')) {
+    stop('[', Sys.time(), '] direction should be vertical or horizontal')
+  }
+  
+  if (length(unique(plotDT$gr_id)) > 1) {
+    # compute coordinates for future lines showing genome region 
+    grShadeCoords <- get_gr_change_coords(plotDT, xOrderCol, yCol, axisLabs$dt)
+    nGRs <- nrow(grShadeCoords$gr_coords)
+    grShadeCoordsCut <- grShadeCoords$gr_coords[seq(2, nGRs, by = 2)]
+    
+    if (direction == 'vertical') {
+      if (is.factor(grShadeCoords$lab_coords$y)) {
+        result <- basePlot + 
+          geom_segment(data = grShadeCoords$gr_coords,  
+                       mapping = aes(x = start, xend = end, 
+                                     y = grShadeCoords$lab_coords$y,
+                                     yend = grShadeCoords$lab_coords$y)) +
+          geom_text(mapping = aes(x = x, y = y, label = gr),
+                    data = grShadeCoords$lab_coords, ...) +
+          scale_y_discrete(drop = F)
+      } else {
+        result <- basePlot + 
+          geom_segment(data = grShadeCoords$gr_coords, inherit.aes = F,
+                       mapping = aes(x = start, xend = end, 
+                                     y = grShadeCoords$lab_coords$y,
+                                     yend = grShadeCoords$lab_coords$y)) +
+          geom_text(mapping = aes(x = x, y = y, label = gr),
+                    inherit.aes = F, data = grShadeCoords$lab_coords, ...)
+      }
+      
+    } else {
+      if (is.factor(grShadeCoords$lab_coords$y)) {
+        result <- basePlot + 
+          geom_segment(data = grShadeCoords$gr_coords, 
+                       mapping = aes(y = start, yend = end, 
+                                     x = grShadeCoords$lab_coords$y,
+                                     xend = grShadeCoords$lab_coords$y)) +
+          geom_text(mapping = aes(x = y, y = x, label = gr),
+                    data = grShadeCoords$lab_coords, ...) +
+          scale_x_discrete(drop = F)
+      } else {
+        result <- basePlot + 
+          geom_segment(data = grShadeCoords$gr_coords,
+                       mapping = aes(y = start, yend = end, 
+                                     x = grShadeCoords$lab_coords$y,
+                                     xend = grShadeCoords$lab_coords$y)) +
+          geom_text(mapping = aes(x = y, y = x, label = gr),
+                    data = grShadeCoords$lab_coords, ...)
+      }
+    }
+  }
+  
+  result
+}
 # Functions : coloring of axis labels -----------------------------------------
 #' formatAxisLabels
 #' @description Formats labels for one axis, i.e. color and actual string to 
