@@ -1,10 +1,52 @@
-library(data.table)
-library(ggplot2)
-library(ggpubr)
-library(plyr)
+#!/usr/bin/env Rscript
+# FILE:  bin/figures_create_mutual_exclusivity_and_coocurence_plot.R ---------------------------
+#
+# DESCRIPTION: An R script which creates a plot showing
+# USAGE: 
+# OPTIONS: Run 
+#          Rscript --vanilla  bin/figures_create_mutual_exclusivity_and_coocurence_plot.R -h
+#          to see the full list of options and their descriptions.
+#
+# REQUIREMENTS: R v4.1.0, data.table, ggplot2, ggpubr, plyr
+# BUGS: --
+# NOTES:  
+# AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk
+# COMPANY:  UCL, Cancer Institute, London, the UK
+# VERSION:  1
+# CREATED:  01.02.2023
+# REVISION: 20.05.2024
 
-source('bin/custom_functions.R')
+# Source custom functions -----------------------------------------------------
+#' get_script_dir
+#' @description Returns parent directory of the currently executing script
+#' @author https://stackoverflow.com/questions/47044068/get-the-path-of-current-script
+#' @return string, absolute path
+#' @note this functions has to be present in all R scripts sourcing any other
+#' script. Sourcing R scripts with use of box library is unstable then multiple
+#' processes try to execute the source at the same time.
+get_script_dir <- function() {
+  cArgs <- tibble::enframe(commandArgs(), name = NULL)
+  cArgsSplit <- tidyr::separate(cArgs, col = value, into = c("key", "value"),
+                                sep = "=", fill = "right")
+  cArgsFltr <- dplyr::filter(cArgsSplit, key == "--file")
+  
+  result <- dplyr::pull(cArgsFltr, value)
+  result <- tools::file_path_as_absolute(dirname(result))
+  result
+}
 
+srcDir <- get_script_dir()
+# to spread out multiple processes accessing the same file
+Sys.sleep(sample(1:15, 1))
+source(paste0(srcDir, '/custom_functions.R'))
+Sys.sleep(sample(1:15, 1))
+source(paste0(srcDir, '/custom_functions_for_figures.R'))
+
+# Libraries -------------------------------------------------------------------
+suppressWarnings(suppressPackageStartupMessages(library(data.table)))
+suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
+suppressWarnings(suppressPackageStartupMessages(library(ggpubr)))
+suppressWarnings(suppressPackageStartupMessages(library(plyr)))
 
 # Functions: pre-processing ---------------------------------------------------
 #' prepDISCOVERforPlotting
@@ -81,19 +123,79 @@ addGenomicRegionsSpacer <- function(discoverResultsOneGR, dummyGene, axisID) {
   return(rbind(discoverResultsOneGR, spacerDT))
 }
 
-# Test input arguments --------------------------------------------------------
-args <- list(cancer_subtype = 'Panlung', 
-             discover_table = "completed_runs/2023_12_25/results/discover/discoverResults-Panlung--hg19.csv",
-             comparison = 'all', #all, coding, noncoding
-             p_value_min = 0.05)
+# Parse input arguments -------------------------------------------------------
+# create parser object
+parser <- ArgumentParser(prog = 'figures_create_mutual_exclusivity_and_coocurence_plot.R')
 
-args <- list(cancer_subtype = 'Adenocarcinoma',
-             discover_table = "completed_runs/2023_12_25/results/discover/discoverResults-Adenocarcinoma--hg19.csv",
-             comparison = 'all', #all, coding, noncoding
-             p_value_min = 0.05)
+subtypeHelp <- paste('A name of the tumor subtype in which drivers were',
+                     'detected.')
+parser$add_argument("-c", "--cancer_subtype", required = T, 
+                    type = 'character', help = subtypeHelp)
+
+discoverHelp <- 'Path to DISCOVER result for the tumor subtype'
+parser$add_argument("-d", "--discover_table", required = T, 
+                    type = 'character', help = discoverHelp)
+
+comparisonHelp <- paste('A comparison to be plotted. One of "all", "coding",',
+                        'or "noncoding".')
+parser$add_argument("-comp", "--comparison", required = T, 
+                    type = 'character', default = NULL, help = comparisonHelp,
+                    choices = c("all", "coding", "noncoding"))
+
+pvalueHelp <- paste("Maximum p-value which is considered statistically",
+                    "significant.")
+parser$add_argument("-p", "--p_value", required = T, 
+                    type = 'numeric', default = 0.05, help = pvalueHelp)
+
+jsonHelp <- paste('Path to a JSON file containing visual parameters to be',
+                  'used in the plot.')
+parser$add_argument("-v", "--visuals_json", required = T, 
+                    type = 'character', help = jsonHelp)
+
+outputTypeHelp <- paste('Type of image to create: pdf or png')
+parser$add_argument("-ot", "--output_type", required = F, 
+                    type = 'character', default = 'pdf',  
+                    choices = c('pdf', 'png'), help = outputTypeHelp)
+
+parser$add_argument("-o", "--output", required = T, type = 'character',
+                    help = "Path to the output file")
+
+args <- parser$parse_args()
+
+args$p_value <- as.numeric(args$p_value)
+
+timeStart <- Sys.time()
+message('[', Sys.time(), '] Start time of run')
+printArgs(args)
 
 COLUMN_WITH_RAW_P <- 'p.value'
 COLUMN_WITH_ADJ_P <- 'p.adj'
+
+# Test input arguments --------------------------------------------------------
+# args <- list(cancer_subtype = 'Panlung', 
+#              discover_table = "completed_runs/2023_12_25/results/discover/discoverResults-Panlung--hg19.csv",
+#              comparison = 'all', #all, coding, noncoding
+#              p_value = 0.05)
+
+# args <- list(cancer_subtype = 'Adenocarcinoma',
+#              discover_table = "completed_runs/2023_12_25/results/discover/discoverResults-Adenocarcinoma--hg19.csv",
+#              comparison = 'all', #all, coding, noncoding
+#              p_value = 0.05)
+
+# Read visuals JSON -----------------------------------------------------------
+ESSENTIAL_VISUAL_NAMES <- c('ggplot2_theme', 'colors_tumor_type',
+                            'colors_divergent_palette',
+                            'excusivity_cooccurrence_plot_width', 
+                            'excusivity_cooccurrence_plot_heigth')
+
+visualParams <- readJsonWithVisualParameters(args$visuals_json)
+message('[', Sys.time(), '] Read --visuals_json: ', args$visuals_json)
+
+notFoundVisuals <- setdiff(ESSENTIAL_VISUAL_NAMES, names(visualParams))
+if (length(notFoundVisuals)) {
+  stop('[', Sys.time(), '] Following visuals: ', 
+       paste(notFoundVisuals, collapse = ', '), ' not found in JSON.')
+}
 
 # Read discover table ---------------------------------------------------------
 discover <- fread(args$discover_table, header = T, stringsAsFactors = F)
@@ -119,7 +221,6 @@ if ('tumor_subtype_spec_Y' %in% colnames(discover)) {
   discover[gene_name_Y == 'placeholder']$tumor_subtype_spec_Y <- 'placeholder'
 }
 
-
 discover <- split(discover, by = 'gr_id_X')
 discover <- lapply(discover, addGenomicRegionsSpacer, 'placeholder', 'X')
 discover <- do.call(rbind, discover)
@@ -132,7 +233,7 @@ if ('tumor_subtype_spec_X' %in% colnames(discover)) {
 
 # Assign plot labels ----------------------------------------------------------
 discover[, cell_label := character()]
-p_levels <- c(args$p_value_min, args$p_value_min/10, args$p_value_min/100)
+p_levels <- c(args$p_value, args$p_value/10, args$p_value/100)
 for (p_level in p_levels) {
   labels_to_update_idx <- which(discover[, COLUMN_WITH_ADJ_P, 
                                          with = F] <= p_level)
@@ -144,31 +245,31 @@ discover[, cell_label := factor(cell_label, levels = paste('<', p_levels))]
 # x axis labels & color
 if ('tumor_subtype_spec_X' %in% colnames(discover)) {
   xAnnoCol <- 'tumor_subtype_spec_X'
-  highlightColors <- c(tumourTypeColorPalette, 'multiple' = 'grey',
+  highlightColors <- c(visualParams$colors_tumor_type, 'multiple' = 'grey',
                        'placeholder' = 'white')
 } else {
   discover[, is_placeholder := gene_name_X != 'placeholder']
   xAnnoCol <- 'is_placeholder'
   highlightColors <- 'white'
 }
-xAxisLabs <- format_xLabels(discover, 'Gene_X', 'gene_name_X', xAnnoCol, 
-                            defaultColor = 'black',
-                            highlightColor = highlightColors)
+xAxisLabs <- formatAxisLabels(discover, 'Gene_X', 'gene_name_X', xAnnoCol, 
+                              defaultColor = 'black',
+                              highlightColor = highlightColors)
 xAxisLabs$dt$gr_id <- gsub(',.*', '', xAxisLabs$dt$Gene_X)
 
 # y axis labels & color
 if ('tumor_subtype_spec_Y' %in% colnames(discover)) {
   yAnnoCol <- 'tumor_subtype_spec_Y'
-  highlightColors <- c(tumourTypeColorPalette, 'multiple' = 'grey',
+  highlightColors <- c(visualParams$colors_tumor_type, 'multiple' = 'grey',
                        'placeholder' = 'white')
 } else {
   discover[, is_placeholder := gene_name_Y != 'placeholder']
   yAnnoCol <- 'is_placeholder'
   highlightColors <- 'white'
 }
-yAxisLabs <- format_xLabels(discover, 'Gene_Y', 'gene_name_Y', yAnnoCol, 
-                            defaultColor = 'black',
-                            highlightColor = highlightColors)
+yAxisLabs <- formatAxisLabels(discover, 'Gene_Y', 'gene_name_Y', yAnnoCol, 
+                              defaultColor = 'black',
+                              highlightColor = highlightColors)
 yAxisLabs$dt$gr_id <- gsub(',.*', '', yAxisLabs$dt$Gene_Y)
 
 # Create plot -----------------------------------------------------------------
@@ -180,12 +281,12 @@ HEATMAP <- ggplot() +
                                  fill = paste0("log10.", COLUMN_WITH_RAW_P))) +
   geom_point(data = discover[!is.na(cell_label)], size = 1, inherit.aes = F,
              mapping = aes(x = Gene_X, y = Gene_Y, color = cell_label)) + 
-  scale_fill_gradientn(colours = gradientColors, na.value = '#FFFFFF', 
+  scale_fill_gradientn(colours = visualParams$colors_divergent_palette, na.value = '#FFFFFF', 
                        limits = c(-color_scale_limit, color_scale_limit)) +
   scale_color_manual(values = c('#74ee15', '#f52789', '#e900ff')) +
   scale_x_discrete(position = "top", labels = xAxisLabs$label) + 
   scale_y_discrete(position = "left", labels = yAxisLabs$label) + 
-  xlab('') + ylab('') + customGgplot2Theme + 
+  xlab('') + ylab('') + visualParams$ggplot2_theme + 
   theme(axis.text.x = element_text(angle = 90, hjust = 0, vjust = -1, size = 6,
                                    color = xAxisLabs$color, face = ),
         axis.text.y = element_text(size = 6, color = yAxisLabs$color),
@@ -249,3 +350,19 @@ ANNOTATED_HEATMAP <- ggarrange(LEGENDS,
                                          heights = c(0.15, 1),
                                          widths = c(0.15, 1)),
                                ncol = 1, heights = c(0.05, 1))
+
+# Output plot to file ---------------------------------------------------------
+if (args$output_type == 'pdf') {
+  pdf(args$output, width = visualParams$excusivity_cooccurrence_plot_width, 
+      height = visualParams$excusivity_cooccurrence_plot_heigth)
+} else {
+  png(args$output, width = visualParams$excusivity_cooccurrence_plot_width, 
+      height = visualParams$excusivity_cooccurrence_plot_heigth)
+}
+ANNOTATED_HEATMAP
+dev.off()
+
+message("End time of run: ", Sys.time())
+message('Total execution time: ', 
+        difftime(Sys.time(), timeStart, units = 'mins'), ' mins.')
+message('Finished!')
