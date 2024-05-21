@@ -79,6 +79,16 @@ subtypeHelp <- paste('A name of the tumor subtype in which drivers were',
 parser$add_argument("-c", "--cancer_subtype", required = T, 
                     type = 'character', help = subtypeHelp)
 
+analysisHelp <- paste('Path to inventory table containing details of the',
+                      'future analysis to be conducted. Minimal columns:',
+                      'tumor_subtype,', 'software,', 'gr_id,', 'gr_code,', 
+                      'gr_file,', 'gr_upstr,', 'gr_downstr,', 'gr_genome,', 
+                      'gr_excl_id,', 'gr_excl_code,', 'gr_excl_file,',
+                      'gr_excl_upstr,', 'gr_excl_downstr,', 'gr_excl_genome,',
+                      'blacklisted_codes.')
+parser$add_argument("-a", "--inventory_analysis", required = T, 
+                    type = 'character', help = analysisHelp)
+
 driversHelp <- paste('Path to file containing inferred biotypes of drivers')
 parser$add_argument("-d", "--drivers_biotyped", required = T,
                     type = 'character', default = NULL, help = driversHelp)
@@ -149,11 +159,11 @@ message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
 # Test input arguments --------------------------------------------------------
-args <- list(cancer_subtype = 'Panlung',
-             drivers_biotyped = "completed_runs/2023_12_25/results/tables/drivers_biotyped/driversBiotyped-Panlung--hg19.csv",
-             fold_splicesites_in_coding = T, weak_tsg = 0.33, tsg = 0.5,
-             weak_og = 0.33, og = 0.5, visuals_json = '', 
-             output_type = 'pdf', output = 'test.pdf')
+# args <- list(cancer_subtype = 'Panlung',
+#              drivers_biotyped = "completed_runs/2023_12_25/results/tables/drivers_biotyped/driversBiotyped-Panlung--hg19.csv",
+#              fold_splicesites_in_coding = T, weak_tsg = 0.33, tsg = 0.5,
+#              weak_og = 0.33, og = 0.5, visuals_json = '', 
+#              output_type = 'pdf', output = 'test.pdf')
 
 # Read visuals JSON -----------------------------------------------------------
 ESSENTIAL_VISUAL_NAMES <- c('ggplot2_theme', 'color_divider',
@@ -169,9 +179,14 @@ if (length(notFoundVisuals)) {
        paste(notFoundVisuals, collapse = ', '), ' not found in JSON.')
 }
 
+# Read analysis inventory -----------------------------------------------------
+analysisInv <- readAnalysisInventory(args$inventory_analysis, 1)
+message('[', Sys.time(), '] Read --inventory_analysis: ', 
+        args$inventory_analysis)
+
 # Read driver biotype ---------------------------------------------------------
 biotypes <- fread(args$drivers_biotyped, header = T, stringsAsFactors = F)
-message('[', Sys.time(), '] Read --biotypes: ', args$biotypes)
+message('[', Sys.time(), '] Read --biotypes: ', args$drivers_biotyped)
 biotypes[, gene_plots_id := paste(gene_name, gr_id)]
 # add filtering
 biotypes[, perc_group := 100 * perc_group]
@@ -242,8 +257,8 @@ biotypes[, gene_plots_id := factor(gene_plots_id, unique(gene_plots_id))]
 biotyped_drivers <- unique(biotypes[,.(gene_plots_id, gr_id, gene_name,
                                        is_known_cancer)])
 # color of plot labels
-xAxisLabs <- format_xLabels(biotyped_drivers, 'gene_plots_id', 'gene_name',
-                            'is_known_cancer')
+xAxisLabs <- formatAxisLabels(biotyped_drivers, 'gene_plots_id', 'gene_name',
+                              'is_known_cancer')
 xAxisLabs$labels <- gsub("__and__", "&", xAxisLabs$labels)
 # background plot to split different genomic regions from each other
 plotBackground <- create_plot_background(cbind(dummy = 1, biotyped_drivers),
@@ -257,8 +272,9 @@ INFERRED_TILE <- plotBackground +
   scale_x_discrete(drop = F, labels = xAxisLabs$label) + 
   scale_y_continuous(breaks = 1, labels = 'inferred biotype',
                      expand = c(0, 0)) +
-  scale_fill_manual(values = biotypePalette, na.value = '#FFFFFF') + 
-  customGgplot2Theme + labs(fill = 'biotype') +
+  scale_fill_manual(values = visualParams$colors_biotype,
+                    na.value = '#FFFFFF') + 
+  visualParams$ggplot2_theme + labs(fill = 'biotype') +
   theme(axis.line.x = element_blank(), axis.ticks.x = element_blank(),
         axis.text.x = element_blank(), axis.title = element_blank(),
         panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
@@ -285,8 +301,9 @@ KNOWN_TILE <- plotBackground +
   scale_x_discrete(drop = F, labels = xAxisLabs$label) + 
   scale_y_continuous(breaks = 1, labels = 'CGC biotype',
                      expand = c(0, 0)) +
-  scale_fill_manual(values = biotypePalette, na.value = '#FFFFFF') + 
-  customGgplot2Theme + labs(fill = 'biotype') +
+  scale_fill_manual(values = visualParams$colors_biotype, 
+                    na.value = '#FFFFFF') +
+  visualParams$ggplot2_theme + labs(fill = 'biotype') +
   theme(axis.line.x = element_blank(), axis.ticks.x = element_blank(),
         axis.text.x = element_blank(), axis.title = element_blank(),
         panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
@@ -294,7 +311,10 @@ KNOWN_TILE <- plotBackground +
   guides(fill = guide_legend(nrow = 1, byrow = T))
 
 # Barplot for mutations -------------------------------------------------------
-mutsPallete <- colorRampPalette(c(neutralColor, rev(tealPalette)))
+neutralColorIdx <- median(1:length(visualParams$colors_divergent_palette))
+neutralColor <- visualParams$colors_divergent_palette[neutralColorIdx]
+coldPalette <- visualParams$colors_divergent_palette[1:(neutralColorIdx - 1)]
+mutsPallete <- colorRampPalette(c(neutralColor, rev(coldPalette)))
 mutsPallete <- mutsPallete(length(unique(biotypes[alt_type == 'Mut']$val_group)))
 
 MUTS_BAR <- plotBackground + 
@@ -305,7 +325,7 @@ MUTS_BAR <- plotBackground +
   scale_x_discrete(drop = F, labels = xAxisLabs$labels) + 
   ylab('% of tumors with mut.') +
   scale_y_continuous() + 
-  customGgplot2Theme + 
+  visualParams$ggplot2_theme + 
   theme(axis.line.x = element_blank(), axis.ticks.x = element_blank(),
         axis.text.x = element_blank(), axis.title.x = element_blank(),
         panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
@@ -319,15 +339,19 @@ delGroups <- unique(biotypes[alt_type == 'CN' & lower_bound < 1]$val_group)
 ampGroups <- unique(biotypes[alt_type == 'CN' & lower_bound >= 1]$val_group)
 neutralGroups <- setdiff(unique(biotypes[alt_type == 'CN']$val_group),
                          c(delGroups, ampGroups))
+
+nColors <- visualParams$colors_divergent_palette
+hotPalette <- visualParams$colors_divergent_palette[(neutralColorIdx + 1):length(nColors)]
+
 cnPallete <- c()
 if (length(delGroups) > 0) {
-  cnPallete <- c(cnPallete, colorRampPalette(tealPalette)(length(delGroups)))
+  cnPallete <- c(cnPallete, colorRampPalette(coldPalette)(length(delGroups)))
 }
 if (length(neutralGroups) > 0) {
   cnPallete <- c(cnPallete, rep(neutralColor, length(neutralGroups)))
 }
 if (length(ampGroups) > 0) {
-  cnPallete <- c(cnPallete, colorRampPalette(orangePalette)(length(ampGroups)))
+  cnPallete <- c(cnPallete, colorRampPalette(hotPalette)(length(ampGroups)))
 }
 
 CNA_BAR <- plotBackground + 
@@ -339,10 +363,10 @@ CNA_BAR <- plotBackground +
   scale_x_discrete(drop = F, labels = xAxisLabs$labels) + 
   ylab('% of tumors with CN') +
   scale_y_continuous(expand = c(0, 0)) + 
-  customGgplot2Theme + 
+  visualParams$ggplot2_theme + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1,
-                                   family = customGgplot2Theme[[1]]$axis.text$family,
-                                   size = customGgplot2Theme[[1]]$axis.text$size,
+                                   family = visualParams$ggplot2_theme[[1]]$axis.text$family,
+                                   size = visualParams$ggplot2_theme[[1]]$axis.text$size,
                                    color = xAxisLabs$color),
         panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
