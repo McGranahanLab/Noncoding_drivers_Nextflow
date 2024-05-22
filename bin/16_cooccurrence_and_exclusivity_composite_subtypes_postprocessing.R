@@ -138,14 +138,14 @@ message('[', Sys.time(), '] Start time of run')
 printArgs(args)
 
 # Test arguments --------------------------------------------------------------
-args <- list(cancer_subtype = 'Panlung', 
-             discover_composite_subtype = 'completed_runs/2023_12_25/results/discover/discoverResults-Panlung--hg19.csv', 
-             discover_uniformal_subtypes = list('completed_runs/2023_12_25/results/discover/discoverResults-Adenocarcinoma--hg19.csv',
-                                                'completed_runs/2023_12_25/results/discover/discoverResults-Squamous_cell--hg19.csv'),
-             p_max_unif_subtype = 0.05,
-             subtype_specificity = 'completed_runs/2023_12_25/results/tables/subtype_specificity/subtypeSpecificity---hg19.csv',
-             specificity_mode = 'specific',
-             output = '')
+# args <- list(cancer_subtype = 'Panlung', 
+#              discover_composite_subtype = 'completed_runs/2023_12_25/results/discover/discoverResults-Panlung--hg19.csv', 
+#              discover_uniformal_subtypes = list('completed_runs/2023_12_25/results/discover/discoverResults-Adenocarcinoma--hg19.csv',
+#                                                 'completed_runs/2023_12_25/results/discover/discoverResults-Squamous_cell--hg19.csv'),
+#              p_max_unif_subtype = 0.05,
+#              subtype_specificity = 'completed_runs/2023_12_25/results/tables/subtype_specificity/subtypeSpecificity---hg19.csv',
+#              specificity_mode = 'specific',
+#              output = '')
 
 # Read DISCOVER results of composite subtype ----------------------------------
 discover <- fread(args$discover_composite_subtype, header = T, 
