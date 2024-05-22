@@ -1,0 +1,128 @@
+{
+  "font_family": "Helvetica",
+  "font_size_base": 6,
+  "font_size_text": 6,
+  "font_size_axis_title": 8,
+  "font_size_plot_title": 10,
+  "font_size_legend_title": 8,
+  "font_size_legend_text": 6,
+
+  "color_divider": "#eed9c4",
+  
+  "colors_tumor_type": {
+    "Adenocarcinoma": "#CC3311",
+    "Adenocarcinoma_met": "#CC6677",
+    "Adenosquamous": "#332288",
+    "Carcinoid": "#882255",
+    "Large_cell": "#DDCC77",
+    "Mesothelioma": "#999933",
+    "Neuroendocrine_carcinoma": "#EE8866",
+    "Small_cell": "#44AA99",
+    "Small_cell_met": "#bbe4dd",
+    "Squamous_cell": "#0077BB",
+    "Squamous_cell_met": "#88CCEE",
+    "Other": "#000000",
+    "Other_met": "#CCCCCC"
+  },
+  
+  "colors_tumor_type_default": [
+    "#fabebe",
+    "#e6194b",
+    "#800000",
+    "#fffac8",
+    "#ffd8b1",
+    "#ffe119",
+    "#f58231",
+    "#9a6324",
+    "#e6beff",
+    "#f032e6",
+    "#911eb4",
+    "#46f0f0",
+    "#aaffc3",
+    "#bcf60c",
+    "#3cb44b",
+    "#008080",
+    "#808000",
+    "#4363d8",
+    "#000075",
+    "#808080",
+    "#000000"
+  ],
+  
+  "colors_subtype_specificity": {
+    "leftSubtype-specific": "#CC3311",
+    "leftSubtype-preferential": "#f8b8a9",
+    "common": "#9970AB",
+    "MODE_UPD": "#AAAAAA",
+    "not enough evidence": "#F0E6B2",
+    "rightSubtype-preferential": "#a7dfff",
+    "rightSubtype-specific": "#0077BB"
+  },
+
+  "colors_subtype_specificity_default": {
+    "leftSubtype-specific": "#3cb44b",
+    "leftSubtype-preferential": "#bfef45",
+    "common": "#dcbeff",
+    "MODE_UPD": "#a9a9a9",
+    "not enough evidence": "#fffac8",
+    "rightSubtype-preferential": "#42d4f4",
+    "rightSubtype-specific": "#4363d8"
+  },
+
+  "colors_perc_tumor_with_driver_mutation": [
+    "#FFFFFF",
+    "#D9F0D3",
+    "#ACD39E",
+    "#5AAE61",
+    "#1B7837"
+  ],
+
+  "colors_perc_tumor_with_driver_mutation_default": [
+    "#FFFFFF",
+    "#aaffc3",
+    "#bfef45",
+    "#3cb44b",
+    "#469990"
+  ],
+
+  "colors_biotype": {
+    "OG": "#762A83",
+    "weak OG": "#E7D4E8",
+    "weak TSG": "#D9F0D3",
+    "TSG": "#1B7837",
+    "TSG & OG": "#FFEE99"
+  },
+
+  "colors_divergent_palette": [
+    "#125A56",
+    "#00767B",
+    "#238F9D",
+    "#42A7C6",
+    "#60BCE9",
+    "#9DCCEF",
+    "#C6DBED",
+    "#DEE6E7",
+    "#ECEADA",
+    "#F0E6B2",
+    "#F9D576",
+    "#FFB954",
+    "#FD9A44",
+    "#F57634",
+    "#E94C1F",
+    "#D11807",
+    "#A01813"
+  ],
+  
+  "overview_plot_width": 8,
+  "overview_plot_heigth": 8,
+  "subtype_specificity_plot_width": 3,
+  "subtype_specificity_plot_heigth": 5,
+  "biotype_plot_width": 6,
+  "biotype_plot_heigth": 3,
+  "indel_enrichment_plot_width": 8,
+  "indel_enrichment_plot_heigth": 2,
+  "excusivity_cooccurrence_plot_width": 8,
+  "excusivity_cooccurrence_plot_heigth": 8,
+  "n_coding_vs_noncoding_driver_muts_plot_width": 3,
+  "n_coding_vs_noncoding_driver_muts_plot_heigth": 3
+}
