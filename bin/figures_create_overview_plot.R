@@ -433,7 +433,8 @@ tilePlotPvalues <- function(pValsDT, xLabelCol, yLabelCol, colorBy,
 #              extra_studies_names = list("intogen", "mc3", "CGC"),
 #              extra_studies_tumorsubtype = list("LNET,LUAD,LUSC,NSCLC,SCLC", 
 #                                                "LUAD,LUSC", "nsclc,sclc,lung"),
-#              visuals_json = 'visual_parameters.json')
+#              visuals_json = 'data/visual_parameters.json', 
+#              output_type = 'pdf', output = 'test.pdf')
 
 # args <- list(cancer_subtype = NULL, drivers_composite_subtype = NULL,
 #              inventory_patients = 'data/inventory/inventory_patients.csv',
@@ -448,7 +449,8 @@ tilePlotPvalues <- function(pValsDT, xLabelCol, yLabelCol, colorBy,
 #              extra_studies_names = list("intogen", "mc3", "CGC"),
 #              extra_studies_tumorsubtype = list("LNET,LUAD,LUSC,NSCLC,SCLC", 
 #                                                "LUAD,LUSC", "nsclc,sclc,lung"),
-#              visuals_json = 'visual_parameters.json')
+#              visuals_json = 'data/visual_parameters.json',
+#              output_type = 'pdf', output = 'test.pdf')
 
 # Parse input arguments -------------------------------------------------------
 # create parser object
@@ -561,7 +563,7 @@ if (!is.null(args$excluded_patients)) {
   }
 }
 
-if (!is.null(args$allowed_filter_values)) {
+if (is.null(args$allowed_filter_values)) {
   args$allowed_filter_values <- list('PASS')
 }
 

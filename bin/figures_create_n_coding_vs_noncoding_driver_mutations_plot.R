@@ -129,7 +129,8 @@ LOW_CONFIDENCE <- c('only n. driver mutations')
 #              driver_mutations = "completed_runs/2023_12_25/results/tables/driver_mutations/driverMutations-Panlung--hg19.csv",
 #              cancer_subtype = 'Panlung', exclude_cnv = T, 
 #              fold_splicesites_in_coding = T, 
-#              visuals_json = 'data/visual_parameters.json')
+#              visuals_json = 'data/visual_parameters.json',
+#              output_type = 'pdf', output = 'test.pdf')
 
 # Read visuals JSON -----------------------------------------------------------
 ESSENTIAL_VISUAL_NAMES <- c('ggplot2_theme',
@@ -304,8 +305,8 @@ nCodVsNC_PLOT <- ggplot(nDriverMutsPlotDT,
                                         nDriverMutsPlotDT$`non-coding`))+1)) +
   scale_color_manual(values = colorRampPalette(hotPalette)(length(N_breaks) - 2)) +
   visualParams$ggplot2_theme + labs(color = 'N. patients', size = 'N. patients') +
-  guides(color = guide_legend(nrow = 1), size = guide_legend(nrow = 1)) +
-  theme(legend.position = 'bottom', legend.direction = 'horizontal')
+  guides(color = guide_legend(ncol = 1), size = guide_legend(nrow = 1)) +
+  theme(legend.position = 'right', legend.direction = 'vertical')
 
 # Output plot to file ---------------------------------------------------------
 if (args$output_type == 'pdf') {

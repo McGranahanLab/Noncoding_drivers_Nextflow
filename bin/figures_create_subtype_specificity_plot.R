@@ -207,7 +207,9 @@ MODE_UPD <- "found as driver in a tumor subtype,\nbut is preferential/specific t
 #              driver_mutations_2 = "completed_runs/2023_12_25/results/tables/driver_mutations/driverMutations-Squamous_cell--hg19.csv",
 #              drivers_2 = "completed_runs/2023_12_25/results/tables/drivers/drivers-Squamous_cell--hg19.csv",
 #              subtype_specificity_file = 'completed_runs/2023_12_25/results/tables/subtype_specificity/subtypeSpecificity---hg19.csv',
-#              min_n_patients = 3)
+#              min_n_patients = 3,
+#              visuals_json = 'data/visual_parameters.json', 
+#              output_type = 'pdf', output = 'test.pdf')
 
 # Read visuals JSON -----------------------------------------------------------
 ESSENTIAL_VISUAL_NAMES <- c('ggplot2_theme', 'color_divider', 

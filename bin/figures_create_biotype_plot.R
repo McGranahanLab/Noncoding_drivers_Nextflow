@@ -160,9 +160,11 @@ printArgs(args)
 
 # Test input arguments --------------------------------------------------------
 # args <- list(cancer_subtype = 'Panlung',
+#              inventory_analysis = 'data/inventory/inventory_analysis.csv'
 #              drivers_biotyped = "completed_runs/2023_12_25/results/tables/drivers_biotyped/driversBiotyped-Panlung--hg19.csv",
 #              fold_splicesites_in_coding = T, weak_tsg = 0.33, tsg = 0.5,
-#              weak_og = 0.33, og = 0.5, visuals_json = '', 
+#              weak_og = 0.33, og = 0.5, 
+#              visuals_json = 'data/visual_parameters.json', 
 #              output_type = 'pdf', output = 'test.pdf')
 
 # Read visuals JSON -----------------------------------------------------------

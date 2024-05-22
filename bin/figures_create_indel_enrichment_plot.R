@@ -120,7 +120,9 @@ VAR_CAT_LEVELS <- rev(c("SNP", "INDEL, 1bp", "INDEL, 2-5bp", "INDEL, 6-9bp",
 #              drivers = "completed_runs/2023_12_25/results/tables/drivers/drivers-Panlung--hg19.csv",
 #              allowed_filter_values = list("PASS", "INDEL, 2-5bp"),
 #              variant_categories_counts = "completed_runs/2023_12_25/results/mut_rates/varCatEnrich-Panlung--hg19.csv",
-#              category_of_interest = "INDEL, 2-5bp", p_adj = 0.05)
+#              category_of_interest = "INDEL, 2-5bp", p_adj = 0.05, 
+#              visuals_json = 'data/visual_parameters.json',
+#              output_type = 'pdf', output = 'test.pdf')
 
 # Read visuals JSON -----------------------------------------------------------
 ESSENTIAL_VISUAL_NAMES <- c('ggplot2_theme', 'color_divider',

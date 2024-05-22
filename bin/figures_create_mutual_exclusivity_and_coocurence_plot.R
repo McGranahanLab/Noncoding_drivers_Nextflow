@@ -175,12 +175,16 @@ COLUMN_WITH_ADJ_P <- 'p.adj'
 # args <- list(cancer_subtype = 'Panlung', 
 #              discover_table = "completed_runs/2023_12_25/results/discover/discoverResults-Panlung--hg19.csv",
 #              comparison = 'all', #all, coding, noncoding
-#              p_value = 0.05)
+#              p_value = 0.05, 
+#              visuals_json = 'data/visual_parameters.json', 
+#              output_type = 'pdf', output = 'test.pdf')
 
 # args <- list(cancer_subtype = 'Adenocarcinoma',
 #              discover_table = "completed_runs/2023_12_25/results/discover/discoverResults-Adenocarcinoma--hg19.csv",
 #              comparison = 'all', #all, coding, noncoding
-#              p_value = 0.05)
+#              p_value = 0.05, 
+#              visuals_json = 'data/visual_parameters.json', 
+#              output_type = 'pdf', output = 'test.pdf')
 
 # Read visuals JSON -----------------------------------------------------------
 ESSENTIAL_VISUAL_NAMES <- c('ggplot2_theme', 'colors_tumor_type',
