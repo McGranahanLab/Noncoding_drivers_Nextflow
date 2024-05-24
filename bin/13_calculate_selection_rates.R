@@ -201,7 +201,7 @@ names(mleDriveMuts) <- names(args$run_result)
 message('[', Sys.time(), '] Finished reading ',
         paste(args$run_result, collapse = ','))
 
-# Compare dNdScv/NBR selection rates for each tumor subtype pair --------------
+# Calculate selection rates based on dNdScv/NBR  ------------------------------
 globalMisTru <- apply(unique(drivers[,.(gr_id, gene_id)]), 1, 
                       function(x) calculateGlobalMisTruList(x['gene_id'],
                                                             x['gr_id'],

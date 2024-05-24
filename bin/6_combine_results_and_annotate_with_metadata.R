@@ -3,7 +3,7 @@
 #
 # DESCRIPTION: A script to read raw results of de-novo driver discovery 
 # software, compute combined p-values and annotate results with known cancer
-# driver status, olfactory gene status, gene lenght, quantile of mutation 
+# driver status, olfactory gene status, gene length, quantile of mutation 
 # rates, etc.
 #
 # USAGE: 

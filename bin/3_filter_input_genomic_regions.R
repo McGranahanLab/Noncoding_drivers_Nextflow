@@ -2,16 +2,18 @@
 # FILE: 3_filter_input_genomic_regions.R --------------------------------------
 #
 # DESCRIPTION: a script for creating input genomic regions for various cancer
-#              driver programs.
+# driver programs. This includes liftover of genomic regions, their 
+# clustering and filtering.
+#  
+# USAGE: This script is not intended to be used as stand alone one. It is a
+# part of Noncoding drivers Nextflow pipeline.
 #
-# USAGE: Rscript --vanilla
+# OPTIONS: Run
+#          Rscript --vanilla 3_filter_input_genomic_regions.R -h
+#          to see the full list of options and their descriptions.
 #
-# OPTIONS:
-#
-# EXAMPLE:
-#
-#
-# REQUIREMENTS:
+# REQUIREMENTS: R > 4.1.0, argparse, data.table, dndscv, dplyr, 
+# GenomicFeatures, GenomicRanges, plyr, plyranges, rtracklayer, strex, utils
 # BUGS: --
 # NOTES:  ---
 # AUTHOR:  Maria Litovchenko, m.litovchenko@ucl.ac.uk
