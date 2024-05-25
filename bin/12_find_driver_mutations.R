@@ -401,7 +401,7 @@ findDriverMutations <- function(mutDT, patientsInvDT, varType,
   }
   
   # If for some reason number of sum of driver mutations identified by CHASM+ 
-  # andknown driver mutations is 0, we can still pinpoint driver mutation if 
+  # and known driver mutations is 0, we can still pinpoint driver mutation if 
   # their percentage is high enough. This section will be executed for nonsense
   # indels and noncoding drivers
   mutInfoDT[, perc_diff := 1 - round(n_driverMut_mle)/n_total]
@@ -424,8 +424,8 @@ findDriverMutations <- function(mutDT, patientsInvDT, varType,
   
   # If gene was not identified as driver by dNdScv/NBR (but it was identified
   # as such by the other software, otherwise it wouldn't be here), it is likely
-  # that theexpected number of driver mutations for it will be 0. However, gene
-  #  can have known driver mutations.
+  # that the expected number of driver mutations for it will be 0. However, 
+  # gene can have known driver mutations.
   mutInfoDT[n_driverMut_mle == 0 & known_n_driver != 0 &
               status == '']$status <- 'known mut.'
   if (nrow(mutInfoDT[status == 'known mut.']) > 0) {
