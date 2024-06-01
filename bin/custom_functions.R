@@ -681,6 +681,52 @@ checkLiftOverByTr <- function(origGR, loGR) {
 }
 
 # Folding splice sites into coding drivers ------------------------------------
+#' findSpliceSiteAndCodingDriversToMerge
+#' @description Finds coding and splice site driver pairs which can be merged.
+#' @author Maria Litovchenko
+#' @param codingGrIds vector of characters. gr_ids considered as coding genomic
+#' elements
+#' @param ssGrIds vector of characters. gr_ids considered as splice site 
+#' genomic elements
+#' @param driversDT data table with driver genomic elements. Must have columns:
+#' gene_id, gene_name, gr_id
+#' @return data table with columns gene_id, gene_name, gr_id holding both 
+#' coding and splice site drivers to be folded  
+findSpliceSiteAndCodingDriversToMerge <- function(codingGrIds, ssGrIds, 
+                                                  driversDT) {
+  result <- NULL
+  
+  if (length(codingGrIds) == 0 | length(ssGrIds) == 0) {
+    message('[', Sys.time(), '] Either no coding or no splice site genomic ',
+            'regions were detected. Will not perform folding of splice sites ',
+            'into corresponding coding driver genetic elements.')
+    return(result)
+  }
+  
+  # GE = genomic element
+  driverGEs <- unique(driversDT[,.(gene_id, gene_name, gr_id)])
+  driverGEs[, nCodingGrId := sum(unique(gr_id) %in% codingGrIds),
+            by = .(gene_id, gene_name)]
+  driverGEs[, nSsGrId := sum(unique(gr_id) %in% ssGrIds), 
+            by = .(gene_id, gene_name)]
+  
+  result <- driverGEs[nCodingGrId >= 1 & nSsGrId >= 1]
+  if (nrow(result) == 0) {
+    result <- NULL
+  } else {
+    if (any(result$nCodingGrId) > 1) {
+      result <- result[nCodingGrId > 1]
+      stop('[', Sys.time(), '] Found genes for which > 1 gr_id can be ',
+           'considered as coding:\n', 
+           paste0(colnames(result), collapse = '\t'), '\n', 
+           paste0(apply(result, 1, paste0, collapse = '\t'), 
+                  collapse = '\n'), '. Can not process such  situation.')
+    }
+    result <- result[,.(gene_name, gene_id, gr_id)]
+  }
+  result
+}
+
 #' foldSplicSiteDriversIntoCodingDrivers
 #' @description Replaces gr_id of splice site driver genomic elements with 
 #' gr_id corresponding to coding driver genomic elements if a genomic element
@@ -694,49 +740,30 @@ checkLiftOverByTr <- function(origGR, loGR) {
 #' gene_id, gene_name, gr_id
 #' @return data table, updated driversDT
 foldSplicSiteDriversIntoCodingDrivers <- function(codingGrIds, ssGrIds, 
-                                                  driversDT) {
-  if (length(codingGrIds) == 0 | length(ssGrIds) == 0) {
-    message('[', Sys.time(), '] Either no coding or no splice site genomic ',
-            'regions were detected. Will not perform folding of splice sites ',
-            'into corresponding coding driver genetic elements.')
-    return(driversDT)
+                                                  driversDT, verbose = T) {
+  result <- copy(driversDT)
+  
+  driversToFold <- findSpliceSiteAndCodingDriversToMerge(codingGrIds, ssGrIds,
+                                                         driversDT)
+  if (is.null(driversToFold)) {
+    return(result)
   }
   
-  # GE = genomic element
-  driverGEs <- unique(driversDT[,.(gene_id, gene_name, gr_id)])
-  driverGEs[, nCodingGrId := sum(unique(gr_id) %in% codingGrIds),
-            by = .(gene_id, gene_name)]
-  driverGEs[, nSsGrId := sum(unique(gr_id) %in% ssGrIds), 
-            by = .(gene_id, gene_name)]
+  message('[', Sys.time(), '] Will fold splice sites drivers detected in ',
+          paste(unique(driversToFold$gene_name), collapse = ', '),
+          ' into corresponding coding drivers.')
   
-  driversToFold <- driverGEs[nCodingGrId >= 1 & nSsGrId >= 1]
-  if (nrow(driversToFold) > 0) {
-    message('[', Sys.time(), '] Will fold splice sites drivers detected in ',
-            paste(unique(driversToFold$gene_name), collapse = ', '),
-            ' into corresponding coding drivers.')
-    
-    if (any(driversToFold$nCodingGrId) > 1) {
-      driversToFold <- driversToFold[nCodingGrId > 1]
-      stop('[', Sys.time(), '] Found genes for which > 1 gr_id can be ',
-           'considered as coding:\n', 
-           paste0(colnames(driversToFold), collapse = '\t'), '\n', 
-           paste0(apply(driversToFold, 1, paste0, collapse = '\t'), 
-                  collapse = '\n'), '. Can not process such  situation.')
-    }
-    
-    driversToFold <- driversToFold[,.(gene_name, gene_id, gr_id)]
-    driversToFold <- split(driversToFold, by = c('gene_name', 'gene_id'),
-                           drop = T)
-    for (geneToFold in driversToFold) {
-      geneToFoldIdx <- which(driversDT$gene_id %in% geneToFold$gene_id & 
-                               driversDT$gene_name %in% geneToFold$gene_name &
-                               driversDT$gr_id %in% ssGrIds)
-      geneToFoldCodingGr <- geneToFold[gr_id %in% codingGrIds]$gr_id
-      driversDT[geneToFoldIdx]$gr_id <- geneToFoldCodingGr
-    }
+  driversToFold <- split(driversToFold, by = c('gene_name', 'gene_id'),
+                         drop = T)
+  for (geneToFold in driversToFold) {
+    geneToFoldIdx <- which(result$gene_id %in% geneToFold$gene_id & 
+                             result$gene_name %in% geneToFold$gene_name &
+                             result$gr_id %in% ssGrIds)
+    geneToFoldCodingGr <- geneToFold[gr_id %in% codingGrIds]$gr_id
+    result[geneToFoldIdx]$gr_id <- geneToFoldCodingGr
   }
   
-  driversDT
+  result
 }
 # Misc ------------------------------------------------------------------------
 #' stop_quietly
