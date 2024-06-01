@@ -96,6 +96,28 @@ subtypeHelp <- paste('A cancer subtype to select from patientsInv table. Only',
 parser$add_argument("-c", "--cancer_subtype", required = T, type = 'character',
                     help = subtypeHelp)
 
+analysisHelp <- paste('Path to inventory table containing details of the',
+                      'future analysis to be conducted. Minimal columns:',
+                      'tumor_subtype,', 'software,', 'gr_id,', 'gr_code,', 
+                      'gr_file,', 'gr_upstr,', 'gr_downstr,', 'gr_genome,', 
+                      'gr_excl_id,', 'gr_excl_code,', 'gr_excl_file,',
+                      'gr_excl_upstr,', 'gr_excl_downstr,', 'gr_excl_genome,',
+                      'blacklisted_codes.')
+parser$add_argument("-a", "--inventory_analysis", required = T, 
+                    type = 'character', help = analysisHelp)
+
+driversHelp <- paste('Path to file containing de-novo detected cancer drivers')
+parser$add_argument("-d", "--drivers", required = F,
+                    type = 'character', help = driversHelp)
+
+foldHelp <- paste0('Indicates, whether or not splice sites should be',
+                   'considered as part of corresponding coding drivers if a ',
+                   'genetic element was found as driver for both coding and ',
+                   'splice cite regions. Default: T.')
+parser$add_argument("-f", "--fold_splicesites_in_coding", required = F,
+                    default = 'T', choices = c('T', 'F'), type = 'character', 
+                    help = foldHelp)
+
 cnHelp <- paste('Path to a file with copy number information for a scanned',
                 'genomic regions. Columns participant_id, gr_name, nMinor,',
                 'nMajor and cn_type are needed.')
@@ -107,10 +129,6 @@ mutHelp <- paste('Path to a file with a mutations (SNV and small indels)',
                  'participant_id, gr_name, key and mut.multi are needed.')
 parser$add_argument("-m", "--mutmult", required = T, type = 'character',
                     help = mutHelp)
-
-driversHelp <- paste('Path to file containing de-novo detected cancer drivers')
-parser$add_argument("-d", "--drivers", required = F,
-                    type = 'character', help = driversHelp)
 
 minNmutHelp <- paste('Minimal number of patients in which a mutation (SNV or',
                      'small indel) in a genomic element should be found so',
@@ -167,6 +185,7 @@ parser$add_argument("-o", "--output", required = T,
                     type = 'character', help = outputHelp)
 
 args <- parser$parse_args()
+args$fold_splicesites_in_coding <- as.logical(args$fold_splicesites_in_coding)
 # check_input_arguments_postproc(args, outputType = 'file')
 
 timeStart <- Sys.time()
@@ -175,12 +194,19 @@ printArgs(args)
 
 # Test arguments --------------------------------------------------------------
 # args <- list(cancer_subtype = 'Panlung',
-#              cn = 'completed_runs/2023-12-14/results/tables/drivers_cn_multiplicity_annotated/driversAnnotatedWitCN-Panlung--hg19.csv', 
-#              mutmult = 'completed_runs/2023-12-14/results/tables/drivers_cn_multiplicity_annotated/driversAnnotatedWitMultipl-Panlung--hg19.csv',
-#              drivers = 'completed_runs/06_12_2023/results/tables/drivers/drivers-Panlung--hg19.csv',
+#              inventory_analysis = 'data/inventory/inventory_analysis.csv',
+#              drivers = 'completed_runs/2023_12_25/results/tables/drivers/drivers-Panlung--hg19.csv',
+#              fold_splicesites_in_coding = T,
+#              cn = 'completed_runs/2023_12_25/results/tables/drivers_cn_multiplicity/driversAnnotatedWitCN-Panlung--hg19.csv', 
+#              mutmult = 'completed_runs/2023_12_25/results/tables/drivers_cn_multiplicity/driversAnnotatedWitMultipl-Panlung--hg19.csv',
 #              min_n_patient_mut = 5, min_n_patient_cna = 10, 
 #              weak_tsg = 0.33, tsg = 0.5, weak_og = 0.33, og = 0.5,
 #              output = '')
+
+# Read analysis inventory -----------------------------------------------------
+analysisInv <- readAnalysisInventory(args$inventory_analysis, 1)
+message('[', Sys.time(), '] Read --inventory_analysis: ', 
+        args$inventory_analysis)
 
 # Read driver genes -----------------------------------------------------------
 if (!is.null(args$drivers)) {
@@ -203,6 +229,35 @@ if (!is.null(args$drivers)) {
                                         1, paste0, collapse = '--')]
 }
 
+# Identify splice sites drivers to be folding in a corresponding coding driver ----
+driversToFold <- NULL
+if (args$fold_splicesites_in_coding) {
+  message('[', Sys.time(), '] Will remove splice if a corresponding coding ',
+          'driver genetic element found.')
+  
+  # assign coding genomic regions - anything which contains CDS as gr_code
+  coding_gr_id <- unique(analysisInv[gr_code == 'CDS']$gr_id)
+  message('[', Sys.time(), '] Following genomic regions: ', 
+          paste0(coding_gr_id, collapse = ', '), ', will be considered as ',
+          'coding.')
+  # assign splice site genomic regions - anything which contains ss as gr_code
+  ss_gr_id <- unique(analysisInv[gr_code == 'ss']$gr_id)
+  message('[', Sys.time(), '] Following genomic regions: ', 
+          paste0(ss_gr_id, collapse = ', '), ', will be considered as ',
+          'containing splice sites.')
+  
+  if (length(coding_gr_id) != 0 & length(ss_gr_id) != 0) {
+    driversToFold <- findSpliceSiteAndCodingDriversToMerge(coding_gr_id, 
+                                                           ss_gr_id, drivers)
+    message('[', Sys.time(), "] Driver genomic elements considered as ",
+            "containing splice sites will be treated as noncoding for genes ",
+            "which do not have coding part detected as driver.")
+  } else {
+    message('[', Sys.time(), '] Did not find either coding or splice site ',
+            'regions. Can not fold splice site drivers into coding ones.')
+  }
+}
+
 # Read copy number resolved scanned genomic regions ---------------------------
 cnDT <- fread(args$cn, header = T, stringsAsFactors = F)
 cnDT[, participant_id := as.character(participant_id)]
@@ -216,6 +271,19 @@ if (!is.null(args$drivers)) {
                                      function(x) gsub(x['genomeVersion'], '',
                                                       x['gr_name']))]
   cnDT <- cnDT[gr_name_no_version %in% unique(drivers$gr_name_no_version)]
+  if (!is.null(driversToFold)) {
+    ssDriverToExclude <- merge(drivers, driversToFold,
+                               by = c("gene_id", "gene_name", "gr_id"))
+    ssDriverToExclude <- ssDriverToExclude[gr_id %in% ss_gr_id]
+    message('[', Sys.time(), '] Copy number variants overlapping splice ',
+            'site drivers for following genes: ', 
+            paste(ssDriverToExclude$gene_name, collapse = ','), ' will be ',
+            'excluded from counting as folding of splice sites into coding ',
+            'drivers was requested and it is very likely that copy number ',
+            'spanning coding regions of a gene will also span splice sites.')
+    cnDT <- cnDT[!gr_name_no_version %in% 
+                   unique(ssDriverToExclude$gr_name_no_version)]
+  }
   cnDT[, genomeVersion := NULL]
   cnDT[, gr_name_no_version := NULL]
   message('[', Sys.time(), '] Copy number regions were restricted to ones ',
@@ -236,6 +304,35 @@ if (!is.null(args$drivers)) {
                                                            '', x['gr_name']))]
   mutmultDT <- mutmultDT[gr_name_no_version %in% 
                            unique(drivers$gr_name_no_version)]
+  if (!is.null(driversToFold)) {
+    driversToFold <- driversToFold[,.(gr_id, gene_id, gene_name)]
+    driversToFold[, gr_name_no_version := apply(driversToFold, 1, paste0,
+                                                collapse = '--')]
+    driversToFold <- split(driversToFold, by = c('gene_name', 'gene_id'),
+                           drop = T)
+    for (geneToFold in driversToFold) {
+      geneToFoldIdx <- which(mutmultDT$gr_name_no_version %in% 
+                               geneToFold$gr_name_no_version)
+      
+      grNameNoVersionUpd <- geneToFold[gr_id %in% coding_gr_id]$gr_name_no_version
+      
+      grNameUpd <- mutmultDT[geneToFoldIdx]
+      grNameUpd <- grNameUpd[gr_name_no_version %in% grNameNoVersionUpd]
+      grNameUpd <- unique(grNameUpd$gr_name)
+      
+      mutmultDT[geneToFoldIdx]$gr_name_no_version <- grNameNoVersionUpd 
+      mutmultDT[geneToFoldIdx]$gr_name <- grNameUpd
+    }
+    mutmultDT <- unique(mutmultDT)
+    driversToFold <- do.call(rbind, driversToFold)
+    message('[', Sys.time(), '] Mutations overlapping splice site drivers ',
+            'for following genes: ', 
+            paste(unique(driversToFold$gene_name), collapse = ','), ' will be ',
+            'excluded from counting as folding of splice sites into coding ',
+            'drivers was requested and it is very likely that copy number ',
+            'spanning coding regions of a gene will also span splice sites.')
+  }
+  
   mutmultDT[, genomeVersion := NULL]
   mutmultDT[, gr_name_no_version := NULL]
   message('[', Sys.time(), '] Mutations were restricted to mutations ',
@@ -291,10 +388,9 @@ if (nbefore > nafter) {
 # separately (even if they also have CN not overlapping the mutation) with 
 # the priority given to mutation. Therefore, we can exclude genomic elements
 # from consideration if they overlap with mutations
-cnDT <- merge(cnDT, 
-              cbind(unique(mutmultDT[,.(participant_id, gr_name)]), 
-                    'has_snv' = T),
-              by = c('participant_id', 'gr_name'), all.x = T)
+cnDT <- merge(cnDT, cbind(unique(mutmultDT[,.(participant_id, gr_name)]), 
+                          'has_snv' = T), by = c('participant_id', 'gr_name'),
+              all.x = T)
 cnDT <- cnDT[is.na(has_snv)]
 cnDT[, has_snv := NULL]
 
