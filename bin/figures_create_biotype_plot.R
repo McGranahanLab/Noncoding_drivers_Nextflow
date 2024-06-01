@@ -79,26 +79,9 @@ subtypeHelp <- paste('A name of the tumor subtype in which drivers were',
 parser$add_argument("-c", "--cancer_subtype", required = T, 
                     type = 'character', help = subtypeHelp)
 
-analysisHelp <- paste('Path to inventory table containing details of the',
-                      'future analysis to be conducted. Minimal columns:',
-                      'tumor_subtype,', 'software,', 'gr_id,', 'gr_code,', 
-                      'gr_file,', 'gr_upstr,', 'gr_downstr,', 'gr_genome,', 
-                      'gr_excl_id,', 'gr_excl_code,', 'gr_excl_file,',
-                      'gr_excl_upstr,', 'gr_excl_downstr,', 'gr_excl_genome,',
-                      'blacklisted_codes.')
-parser$add_argument("-a", "--inventory_analysis", required = T, 
-                    type = 'character', help = analysisHelp)
-
 driversHelp <- paste('Path to file containing inferred biotypes of drivers')
 parser$add_argument("-d", "--drivers_biotyped", required = T,
                     type = 'character', default = NULL, help = driversHelp)
-
-foldHelp <- paste0('Indicates, whether or not splice sites should be',
-                   'considered as part of CDS for DISCOVER analysis.',
-                   'Default: T.')
-parser$add_argument("-f", "--fold_splicesites_in_coding", required = F,
-                    default = 'T', choices = c('T', 'F'), type = 'character', 
-                    help = foldHelp)
 
 weakTSGhelp <- paste('A munimal cut off on percentage of biallelically',
                      'inactivated patients from the total number of patients',
@@ -152,7 +135,6 @@ parser$add_argument("-o", "--output", required = T, type = 'character',
                     help = "Path to the output file")
 
 args <- parser$parse_args()
-args$fold_splicesites_in_coding <- as.logical(args$fold_splicesites_in_coding)
 
 timeStart <- Sys.time()
 message('[', Sys.time(), '] Start time of run')
@@ -160,9 +142,8 @@ printArgs(args)
 
 # Test input arguments --------------------------------------------------------
 # args <- list(cancer_subtype = 'Panlung',
-#              inventory_analysis = 'data/inventory/inventory_analysis.csv'
 #              drivers_biotyped = "completed_runs/2023_12_25/results/tables/drivers_biotyped/driversBiotyped-Panlung--hg19.csv",
-#              fold_splicesites_in_coding = T, weak_tsg = 0.33, tsg = 0.5,
+#              weak_tsg = 0.33, tsg = 0.5,
 #              weak_og = 0.33, og = 0.5, 
 #              visuals_json = 'data/visual_parameters.json', 
 #              output_type = 'pdf', output = 'test.pdf')
@@ -181,11 +162,6 @@ if (length(notFoundVisuals)) {
        paste(notFoundVisuals, collapse = ', '), ' not found in JSON.')
 }
 
-# Read analysis inventory -----------------------------------------------------
-analysisInv <- readAnalysisInventory(args$inventory_analysis, 1)
-message('[', Sys.time(), '] Read --inventory_analysis: ', 
-        args$inventory_analysis)
-
 # Read driver biotype ---------------------------------------------------------
 biotypes <- fread(args$drivers_biotyped, header = T, stringsAsFactors = F)
 message('[', Sys.time(), '] Read --biotypes: ', args$drivers_biotyped)
@@ -194,34 +170,6 @@ biotypes[, gene_plots_id := paste(gene_name, gr_id)]
 biotypes[, perc_group := 100 * perc_group]
 biotypes[, simplified_known_biotype := sapply(known_cancer_biotype, 
                                               simplifyBiotype)]
-
-# Fold splice sites into coding regions, if requested -------------------------
-if (args$fold_splicesites_in_coding) {
-  message('[', Sys.time(), '] Will fold splice sites into corresponding ',
-          'coding driver genetic elements.')
-  
-  # assign coding genomic regions - anything which contains CDS as gr_code
-  coding_gr_id <- unique(analysisInv[gr_code == 'CDS']$gr_id)
-  message('[', Sys.time(), '] Following genomic regions: ', 
-          paste0(coding_gr_id, collapse = ', '), ', will be considered as ',
-          'coding.')
-  # assign splice site genomic regions - anything which contains ss as gr_code
-  ss_gr_id <- unique(analysisInv[gr_code == 'ss']$gr_id)
-  message('[', Sys.time(), '] Following genomic regions: ', 
-          paste0(ss_gr_id, collapse = ', '), ', will be considered as ',
-          'containing splice sites.')
-  
-  if (length(coding_gr_id) != 0 & length(ss_gr_id) != 0) {
-    biotypes <- foldSplicSiteDriversIntoCodingDrivers(coding_gr_id, ss_gr_id,
-                                                      biotypes)
-    message('[', Sys.time(), "] Driver genomic elements considered as ",
-            "containing splice sites will be treated as noncoding for genes ",
-            "which do not have coding part detected as driver.")
-  } else {
-    message('[', Sys.time(), '] Did not find either coding or splice site ',
-            'regions. Can not fold splice site drivers into coding ones.')
-  }
-}
 
 # Set up levels(order) for genomic regions ------------------------------------
 # and genomic regions by maximum number of mutated patients (by only Mut type
