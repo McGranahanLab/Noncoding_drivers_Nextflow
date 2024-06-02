@@ -113,16 +113,31 @@
     "#A01813"
   ],
   
+  "colors_confidence_level": {
+    "dNdScv&CHASM+&known" : "#1B7837",
+    "dNdScv&CHASM+" : "#5AAE61",
+    "CHASM+" : "#ACD39E",
+    "dNdScv" : "#D9F0D3",
+    "NBR" : "#88CCEE",
+    "known mut." : "#44AA99",
+    "known" : "#44AA99",
+    "only n. driver mutations" : "#C2A5CF",
+    "passenger" : "#FEDA8B",
+    "multihit": "#CCCCCC"
+  },
+  
   "overview_plot_width": 8,
   "overview_plot_heigth": 8,
   "subtype_specificity_plot_width": 3,
   "subtype_specificity_plot_heigth": 5,
   "biotype_plot_width": 6,
-  "biotype_plot_heigth": 3,
+  "biotype_plot_heigth": 4,
   "indel_enrichment_plot_width": 8,
   "indel_enrichment_plot_heigth": 2,
   "excusivity_cooccurrence_plot_width": 8,
   "excusivity_cooccurrence_plot_heigth": 8,
   "n_coding_vs_noncoding_driver_muts_plot_width": 3,
-  "n_coding_vs_noncoding_driver_muts_plot_heigth": 3
+  "n_coding_vs_noncoding_driver_muts_plot_heigth": 3,
+  "onco_plot_width": 4,
+  "onco_plot_heigth": 3
 }
