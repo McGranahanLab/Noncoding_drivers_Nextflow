@@ -85,6 +85,8 @@ readJsonWithVisualParameters <- function(jsonPath) {
   # gradientColors
   colors_divergent_palette <- unlist(json$colors_divergent_palette)
   
+  colors_confidence_level <- unlist(json$colors_confidence_level)
+  
   result <- list('ggplot2_theme' = ggplot2_theme, 
                  'color_divider' = color_divider,
                  'colors_tumor_type' = colors_tumor_type, 
@@ -93,6 +95,7 @@ readJsonWithVisualParameters <- function(jsonPath) {
                  'colors_perc_tumor_with_driver_mutation' = colors_perc_tumor_with_driver_mutation,
                  'colors_perc_tumors_with_driver_mut' = colors_perc_tumors_with_driver_mut,
                  'colors_divergent_palette' = colors_divergent_palette,
+                 'colors_confidence_level' = colors_confidence_level,
                  'overview_plot_width' = json$overview_plot_width,
                  'overview_plot_heigth' = json$overview_plot_heigth,
                  'subtype_specificity_plot_width' = json$subtype_specificity_plot_width,
@@ -104,7 +107,9 @@ readJsonWithVisualParameters <- function(jsonPath) {
                  'excusivity_cooccurrence_plot_width' = json$excusivity_cooccurrence_plot_width,
                  'excusivity_cooccurrence_plot_heigth' = json$excusivity_cooccurrence_plot_heigth,
                  'n_coding_vs_noncoding_driver_muts_plot_width' = json$n_coding_vs_noncoding_driver_muts_plot_width,
-                 'n_coding_vs_noncoding_driver_muts_plot_heigth' = json$n_coding_vs_noncoding_driver_muts_plot_heigth)
+                 'n_coding_vs_noncoding_driver_muts_plot_heigth' = json$n_coding_vs_noncoding_driver_muts_plot_heigth,
+                 'onco_plot_width' = json$onco_plot_width,
+                 'onco_plot_heigth' = json$onco_plot_heigth)
   result
 }
 

@@ -39,8 +39,6 @@ srcDir <- get_script_dir()
 # to spread out multiple processes accessing the same file
 Sys.sleep(sample(1:15, 1))
 source(paste0(srcDir, '/custom_functions.R'))
-Sys.sleep(sample(1:15, 1))
-source(paste0(srcDir, '/custom_functions_postprocessing.R'))
 
 # Libraries -------------------------------------------------------------------
 suppressWarnings(suppressPackageStartupMessages(library(data.table)))
@@ -281,16 +279,18 @@ nDriverMuts <- nDriverMuts[order(participant_id, gr_type, struct_type)]
 
 # Identify patients which do not have coding driver mutation ------------------
 # but do have noncoding ones
-noCodingDriverMuts <- nDriverMuts[, N[gr_type == 'coding'] +
-                                    N[gr_type != 'coding'] == N[gr_type != 'coding'] &
+noCodingDriverMuts <- nDriverMuts[, N[gr_type != 'coding'] == 0  &
                                     N[gr_type != 'coding'] != 0, 
                                   by = participant_id]
 noCodingDriverMuts <- noCodingDriverMuts[V1 == T]
 
 if (nrow(noCodingDriverMuts) != 0) {
+  # gr_type != 'coding' is for protection against drivers with the low % of
+  # driver mutations.
   noCodingDriverMuts <- driverMuts[participant_id %in% 
                                      noCodingDriverMuts$participant_id & 
-                                     confidenceLvl != 'passenger']
+                                     confidenceLvl != 'passenger' &
+                                     gr_type != 'coding']
   if (args$exclude_cnv) {
     noCodingDriverMuts <- noCodingDriverMuts[!var_type %in% CNV_VAR_TYPES]
   }
