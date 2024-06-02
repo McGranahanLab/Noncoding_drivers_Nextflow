@@ -100,8 +100,16 @@ parser$add_argument("-e", "--exclude_cnv", required = F,
                     default = 'T', choices = c('T', 'F'), type = 'character', 
                     help = excludeCNVhelp)
 
+outputHelp <- paste("Path to the output file for the number of driver mutations",
+                    "per patient.")
 parser$add_argument("-o", "--output", required = T, type = 'character',
-                    help = "Path to the output file")
+                    help = outputHelp)
+
+outputNoncodHelp <- paste("Path to the output file for noncoding driver",
+                          "mutations found in patients where no coding",
+                          "driver mutations were found.")
+parser$add_argument("-o_noncod", "--output_noncoding", required = T,
+                    type = 'character', help = outputNoncodHelp)
 
 args <- parser$parse_args()
 args$fold_splicesites_in_coding <- as.logical(args$fold_splicesites_in_coding)
@@ -127,7 +135,8 @@ LOW_CONFIDENCE <- c('only n. driver mutations')
 #              excluded_patients = list("completed_runs/2023_12_25/inputs/hypermutated-Panlung.csv"), 
 #              driver_mutations = "completed_runs/2023_12_25/results/tables/driver_mutations/driverMutations-Panlung--hg19.csv",
 #              exclude_cnv = T, fold_splicesites_in_coding = T, 
-#              output = 'completed_runs/2023_12_25/results/tables/driver_mutations/driverMutationsCountsPerPatient-Panlung--hg19.csv')
+#              output = 'completed_runs/2023_12_25/results/tables/driver_mutations/driverMutationsCountsPerPatient-Panlung--hg19.csv',
+#              output_noncoding = 'completed_runs/2023_12_25/results/tables/driver_mutations/driverMutationsNoncodingDriversOnly-Panlung--hg19.csv')
 
 # Read in patients inventory --------------------------------------------------
 patientsInv <- readParticipantInventory(args$inventory_patients, 1)
@@ -270,10 +279,33 @@ if (length(patientsWithoutDrivers) > 0) {
 
 nDriverMuts <- nDriverMuts[order(participant_id, gr_type, struct_type)]
 
+# Identify patients which do not have coding driver mutation ------------------
+# but do have noncoding ones
+noCodingDriverMuts <- nDriverMuts[, N[gr_type == 'coding'] +
+                                    N[gr_type != 'coding'] == N[gr_type != 'coding'] &
+                                    N[gr_type != 'coding'] != 0, 
+                                  by = participant_id]
+noCodingDriverMuts <- noCodingDriverMuts[V1 == T]
+
+if (nrow(noCodingDriverMuts) != 0) {
+  noCodingDriverMuts <- driverMuts[participant_id %in% 
+                                     noCodingDriverMuts$participant_id & 
+                                     confidenceLvl != 'passenger']
+  if (args$exclude_cnv) {
+    noCodingDriverMuts <- noCodingDriverMuts[!var_type %in% CNV_VAR_TYPES]
+  }
+}
+
 # Output ----------------------------------------------------------------------
 write.table(nDriverMuts, args$output, append = F, quote = F, sep = '\t', 
             row.names = F, col.names = T)
 message('[', Sys.time(), '] Wrote output to ', args$output)
+
+if (nrow(noCodingDriverMuts) != 0) {
+  write.table(noCodingDriverMuts, args$output_noncoding, append = F, quote = F,
+              sep = '\t', row.names = F, col.names = T)
+  message('[', Sys.time(), '] Wrote output to ', args$noCodingDriverMuts)
+}
 
 message("End time of run: ", Sys.time())
 message('Total execution time: ', 

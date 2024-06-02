@@ -17,7 +17,6 @@
 # CREATED:  01.02.2023
 # REVISION: 20.05.2024
 
-
 # Source custom functions -----------------------------------------------------
 #' get_script_dir
 #' @description Returns parent directory of the currently executing script
