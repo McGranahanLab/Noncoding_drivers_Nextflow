@@ -4,6 +4,10 @@ This [Nextflow](https://www.nextflow.io/) pipeline is designed for the de-novo d
 
 This documentation provides comprehensive instructions on setting up, configuring, and running the pipeline, along with detailed descriptions of the outputs.
 
+## Requirements
+* **Nextflow**: The pipeline is written in DSL2 and requires [Nextflow](https://www.nextflow.io/docs/latest/install.html) version 23.04.2 or higher.
+* **Singularity**: All software used in the pipeline is containerized. Interactions with containers are executed via [Singularity](https://docs.sylabs.io/guides/3.5/user-guide/introduction.html). The pipeline has been tested with Singularity version 3.8.3.
+
 ## Input formats
 ### Inventory tables
 #### Patients inventory table
@@ -31,7 +35,7 @@ where
 - **tumor_subtype** *[essential]*: The name of the tumor cohort to be analyzed. For example, all patients with lung adenocarcinomas may be grouped in a cohort named `Adenocarcinoma`. This column must not contain values which are numbers, i.e. "adenocarcinama_1" is allowed value, but "1234" is not. The values in this column must not contain "-" character.
 - **participant_id** *[essential]*: The unique ID of a patient, e.g., `participant_1`. Each value of `participant_id` column must be linked to one and only one value of `participant_tumor_subtype` column.
 - **participant_tumor_subtype** *[essential]*: The histological subtype of a tumor found in the corresponding participant, e.g., `LUAD` (**Lu**ng **Ad**enocarcinoma). This column must not contain values which are numbers,  i.e. "LUAD_1" is allowed value, but "78" is not.
-- **somatic_genome** *[essential]*: The version of the genome in which the coordinates of mutations are specified, e.g., `hg38`. This column must not contain values which are numbers,  i.e. "hg38" is allowed value, but "38" is not. The genome version must be the same for all files listed in **somatic_path** column.
+- **somatic_genome** *[essential]*: The version of the genome in which the coordinates of mutations are specified, e.g., `hg38`. This column must not contain values which are numbers, i.e. "hg38" is allowed value, but "38" is not. The genome version must be the same for all files listed in **somatic_path** column. Ideally, all input files should be in `hg19` coordinates. However, if this is not the case, avoid performing the liftover as it is already implemented in the pipeline. This approach minimizes the potential inconsistencies introduced by the liftover procedure.
 - **somatic_path** *[essential]*: The full path on your system (computer/HPC/*etc*) to the file containing **somatic** genetic mutations detected in the tumor of the corresponding individual. For the format of this file, see the section above. Existence of the files in this column will be checked on prior to pipeline execution.
 - **mutmultiplicity_path** *[optional]*: The full path on your system (computer/HPC/*etc*) to the file containing mutation multiplicities for the genomic variants defined in the `somatic_path` column. For the format of this file, see the section above. Existence of the files in this column will be checked on prior to pipeline execution (if column is present in the table). 
 - **cn_segments_genome** *[optional]*: The version of the genome in which the coordinates of copy number segments are specified, e.g., `hg38`. This column must not contain values which are numbers,  i.e. "hg38" is allowed value, but "38" is not. The genome version must be the same for all files listed in **cn_segments_path** column.
