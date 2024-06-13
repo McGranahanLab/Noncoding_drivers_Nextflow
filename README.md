@@ -10,6 +10,15 @@ This documentation provides comprehensive instructions on setting up, configurin
 * **Nextflow**: The pipeline is written in DSL2 and requires [Nextflow](https://www.nextflow.io/docs/latest/install.html) version 23.04.2 or higher.
 * **Singularity**: All software used in the pipeline is containerized. Interactions with containers are executed via [Singularity](https://docs.sylabs.io/guides/3.5/user-guide/introduction.html). The pipeline has been tested with Singularity version 3.8.3.
 
+## Supported genome versions
+
+## Input formats
+Ideally, all input files should be in `hg19` coordinates. However, if this is not the case, avoid performing the liftover as it is already implemented in the pipeline. This approach minimizes the potential inconsistencies introduced by the liftover procedure.
+
+### Genomic variants files (mutations)
+### Genomic regions of interest
+### Mutations multiplicity
+
 ## Input formats
 ### Inventory tables
 #### Patients inventory table
