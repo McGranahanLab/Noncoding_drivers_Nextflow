@@ -1,4 +1,4 @@
-## Welcome
+# Welcome
 **THE DOCUMENTATION IS UNDER DEVELOPMENT. PLEASE BEAR WITH US**
 
 This [Nextflow](https://www.nextflow.io/) pipeline is designed for the de-novo detection of coding and noncoding somatic driver genomic elements in cancer patient cohorts. It currently integrates five advanced calling algorithms: [DIGdriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0), and [OncodriveFML](https://bbglab.irbbarcelona.org/oncodrivefml/home). DIGdriver, NBR, and OncodriveFML are capable of detecting both coding and noncoding driver genetic elements, whereas dNdScv and MutPanning focus solely on detecting coding drivers. Source code for NBR was provided by Dr. 
@@ -6,22 +6,22 @@ This [Nextflow](https://www.nextflow.io/) pipeline is designed for the de-novo d
 
 This documentation provides comprehensive instructions on setting up, configuring, and running the pipeline, along with detailed descriptions of the outputs.
 
-## Requirements
+# Requirements
 * **Nextflow**: The pipeline is written in DSL2 and requires [Nextflow](https://www.nextflow.io/docs/latest/install.html) version 23.04.2 or higher.
 * **Singularity**: All software used in the pipeline is containerized. Interactions with containers are executed via [Singularity](https://docs.sylabs.io/guides/3.5/user-guide/introduction.html). The pipeline has been tested with Singularity version 3.8.3.
 
-## Supported genome versions
+# Supported genome versions
 
-## Input formats
+# Input formats
 Ideally, all input files should be in `hg19` coordinates. However, if this is not the case, avoid performing the liftover as it is already implemented in the pipeline. This approach minimizes the potential inconsistencies introduced by the liftover procedure.
 
-### Genomic variants files (mutations)
-### Genomic regions of interest
-### Mutations multiplicity
+## Genomic variants files (mutations)
+## Genomic regions of interest
+## Mutations multiplicity
 
-## Input formats
-### Inventory tables
-#### Patients inventory table
+# Input formats
+## Inventory tables
+### Patients inventory table
 The patient inventory table is a comma-separated file that contains detailed information about all participants (patients) in the cohort, including ID, tumor subtype, path to the mutation table, and other relevant data. This table is also used to define specific cohorts of participants for further analysis, i.e. adenocarcinomas, squamous cell carcinomas, pan-cancer, etc. As parallelisation is ensured by the pipeline architecture as well as by Nextflow itself, there is no need to have separate patient inventory tables for each tumor subtype. 
 
 The table below provides an example of a patient inventory table.
@@ -55,7 +55,7 @@ where
 
 Cancer cohorts that include multiple histological subtypes (for example, a `pan-lung` cancer cohort may include tumor samples from adenocarcinomas, squamous cell carcinomas, mesotheliomas, neuroendocrine carcinomas, *etc.*) can be defined as shown in lines 7-12 of the table. It is preferable that the **participant_tumor_subtype** column contains the actual histological subtype of the tumor, rather than a "pan-lung" substitute.
  
-#### Analysis inventory table
+### Analysis inventory table
 The analysis inventory table is a comma-separated file that defines the genomic regions to be scanned for potential cancer driver elements. It also links tumor subtypes defined in the patient inventory table to these genomic regions of interest. Additionally, the table specifies the software to be used for scanning each genomic region. As parallelisation is ensured by the pipeline architecture as well as by Nextflow itself, there is no need to have separate analysis inventory tables for each tumor subtype. 
 
 The table below provides an example of an analysis inventory table.
