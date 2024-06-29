@@ -101,17 +101,10 @@ where
 - **software** *[essential]*: The name of the software to be applied to the cohort listed in the `tumor_subtype` column. Permitted values are: `digdriver`, `dndscv`, `mutpanning`, `chasmplus`, `nbr`, and `oncodrivefml`.
 - **gr_id** *[essential]*: The name of the genomic region(s) set(s) to be analyzed. This can be any user-defined string, such as "coding" for CDS. The values in this column must not contain "-" character.
 - **gr_code** *[essential]*: A code (string) defining the biotypes of component parts of the genomic region(s) set(s) to be analyzed. The biotypes of the component parts are defined via files listed in `gr_file` column. Permitted values are: `3primeUTR`, `5primeUTR`, `CDS`, `lincRNA`, `lincRNA_promoter`, `lincRNA_ss`, `miRNA`, `misc_RNA`, `promoter`, `rRNA`, `snoRNA`, `snRNA`, and `ss` (splice sites). Genomic regions annotated with the corresponding biological function (e.g., all 3'UTRs in the case of `3primeUTR` or long non-coding RNAs in the case of `lincRNA`) will be extracted from the files specified in `gr_file`, combined gene-wise (collapsed across transcripts in the case of UTRs), and included in the set defined in the `gr_id` column. Each set of genomic regions of interest (defined uniquely by its ID in the `gr_id` column) can comprise one or more `gr_code`s. For example, a `gr_id` named "coding_and_UTRs" can have `CDS`, `3primeUTR`, and `5primeUTR` in the `gr_code` column. Please see below for illustrative examples. For [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and `MutPanning` only `CDS` is accepted in this column.
-<<<<<<< HEAD
 - **gr_file** *[essential]*: The full path on your system (computer/HPC/*etc*) to a GTF or BED file from which genomic elements of interest should be extracted. The BED file must have the following columns: `chr`, `start`, `end`, `strand`, `gene_id`, `gene_name`, `rCode`, where the `rCode` column contains the biotype of the region as a string, matching one of the values in the `gr_code` column. The GTF file must have the following fields: `gene_name`, `gene_id`, `gene_type`, `gene_biotype`, `transcript_id`, `transcript_type`, `transcript_biotype`. Please refer to the section [genomic regions of interest](#Genomic-regions-of-interest) for more details. Existence of the files listed in this column will be checked prior to pipeline's execution.
 - **gr_upstr** *[essential]*: The number of bases upstream of the genomic region of interest to be included. For example, 5'UTRs can be extended upstream by an additional 50bp.
 - **gr_downstr** *[essential]*: The number of bases downstream of the genomic region of interest to be included.
 - **gr_genome** *[essential]*: The version of the genome in which the genomic coordinates of the regions are presented in the file listed in the `gr_file` column, e.g., `hg38`. This column must not contain values which are numbers, i.e. "hg38" is allowed value, but "38" is not.
-=======
-- **gr_file** *[essential]*: The path to a GTF or BED file from which genomic elements of interest should be extracted. The BED file must have the following columns: `chr`, `start`, `end`, `strand`, `gene_id`, `gene_name`, `rCode`, where the `rCode` column contains the biotype of the region as a string, matching one of the values in the `gr_code` column. The GTF file must have the following fields: `gene_name`, `gene_id`, `gene_type`, `gene_biotype`, `transcript_id`, `transcript_type`, `transcript_biotype`. Please refer to the section [genomic regions of interest](#Genomic-regions-of-interest) for more details. Existence of the files listed in this column will be checked prior to pipeline's execution.
-- **gr_upstr** *[essential]*: The number of bases upstream of the genomic region of interest to be included. For example, 5'UTRs can be extended upstream by an additional 50bp.
-- **gr_downstr** *[essential]*: The number of bases downstream of the genomic region of interest to be included.
-- **gr_genome** *[essential]*: The version of the genome in which the genomic coordinates of the regions are presented in the file listed in the `gr_file` column, e.g., `hg38`.
->>>>>>> 94b30664b07b4c0c434553b72b1f1f2ab0772005
 - **blacklisted_codes** *[essential]*: ; separated
 - **union_percentage**
 - **intersect_percentage**
@@ -158,7 +151,6 @@ The table above shows an example definition table for 3'UTRs. Bases overlapping 
 #### Example of analysis table entries for shortRNA
 
 ### Black or whitelisted regions inventory table
-<<<<<<< HEAD
 The black-/while- listed regions inventory table is a comma-separated file that
 defines genomic regions of inclusion (white) and exclusion (black). Base pairs 
 constituting genomic regions of interest defined in the 
@@ -175,11 +167,11 @@ studies: CRG alignability for 100mers, DAC blacklisted regions, and Duke
 uniqueness. More information about these tracks can be found 
 [here](https://genome.ucsc.edu/cgi-bin/hgTrackUi?g=wgEncodeMapability&db=hg19).
 
-|list_name | file_path | file_genome | file_type |
-|:--------:|:---------:|:-----------:|:---------:|
-|CRG | wgEncodeCrgMapabilityAlign100mer.bigWig | hg19 | white |
-|DAC | wgEncodeDacMapabilityConsensusExcludable.bed | hg19 | black |
-|DUKE | wgEncodeDukeMapabilityUniqueness35bp_processed.bed | hg19 | white |
+|list_name | file_path                                          | file_genome | file_type |
+|:--------:|:--------------------------------------------------:|:-----------:|:---------:|
+|CRG       | wgEncodeCrgMapabilityAlign100mer.bigWig            | hg19        | white     |
+|DAC       | wgEncodeDacMapabilityConsensusExcludable.bed       | hg19        | black     |
+|DUKE      | wgEncodeDukeMapabilityUniqueness35bp_processed.bed | hg19        | white     |
 
 where
 
@@ -209,43 +201,55 @@ parameter.
 ### DIGdriver models inventory table
 The DIGdriver inventory table is a comma-separated file that defines 
 relationship between the analysed tumor subtypes and models which will be used
-for them during DIGdriver run. 
+for them during DIGdriver run. The complete list of the available models can be
+found on [DIGdriver data portal](https://cb.csail.mit.edu/cb/DIG/downloads/).
 
-| tumor_subtype | model_file                                                |
-|:-------------:|:---------------------------------------------------------:|
-| LUAD          | DIGdriver_models/Lung-AdenoCA_SNV_MNV_INDEL.Pretrained.h5 |
-| LUSC          | DIGdriver_models/Lung-SCC_SNV_MNV_INDEL.Pretrained.h5     |
-| PANLUNG       | DIGdriver_models/Lung_tumors_SNV_MNV_INDEL.Pretrained.h5  |
+The table below provides an example of a DIGdriver models inventory table.
 
-#' 1) If DIGdriver analysis is requested, the inventory file exists and not
-#' empty
-#' 2) columns tumor_subtype and model_file are present
-#' 3) model files do exist
-#' 4) all tumor subtypes for which DIGdriver analysis is requested, have a 
-#' model assigned
-=======
-The black-/while- listed regions inventory table is a comma-separated file that defines 
+| tumor_subtype  | model_file                                                |
+|:--------------:|:---------------------------------------------------------:|
+| Adenocarcinoma | DIGdriver_models/Lung-AdenoCA_SNV_MNV_INDEL.Pretrained.h5 |
+| Squamous_cell  | DIGdriver_models/Lung-SCC_SNV_MNV_INDEL.Pretrained.h5     |
+| Panlung        | DIGdriver_models/Lung_tumors_SNV_MNV_INDEL.Pretrained.h5  |
 
-|list_name | file_path | file_genome | file_type | score_column | min_value | max_value |
-|:--------:|:---------:|:-----------:|:---------:|:------------:|:---------:|:---------:|
-|CRG | wgEncodeCrgMapabilityAlign100mer.bigWig | hg19 | white | score | 1 | 1 |
-|DAC | wgEncodeDacMapabilityConsensusExcludable.bed | hg19 | black | NA | NA | NA |
-|DUKE | wgEncodeDukeMapabilityUniqueness35bp_processed.bed | hg19 | white | NA | NA | NA |
+where
 
-### DIGdriver models inventory table
-| tumor_subtype | model_file |
-|:-------------:|:----------:|
-| LUAD | DIGdriver_models/Lung-AdenoCA_SNV_MNV_INDEL.Pretrained.h5 |
-| LUSC | DIGdriver_models/Lung-SCC_SNV_MNV_INDEL.Pretrained.h5 |
-| PANLUNG | DIGdriver_models/Lung_tumors_SNV_MNV_INDEL.Pretrained.h5 |
->>>>>>> 94b30664b07b4c0c434553b72b1f1f2ab0772005
+- **tumor_subtype** *[essential]*: The name of the tumor cohort to be analyzed.
+It should match one of the cohort names listed in the `tumor_subtype` column of
+the [patient inventory table](#Patients-inventory-table). All tumor subtypes 
+for which analysis with DIGdriver was requested in the 
+[analysis inventory table](#Analysis-inventory-table) must have a DIGdriver 
+model assigned.
+- **model_file** *[essential]*: A full path to one of [DIGdriver models](https://cb.csail.mit.edu/cb/DIG/downloads/)
+Same models could be used for the different tumor subtypes.
 
 ### CHASMplus annotators inventory table
+The CHASMplus annotators inventory table is a comma-separated file that defines
+relationship between the analysed tumor subtypes and annotators which will be 
+used for them during CHASMplus run. The complete list of the available annotators
+can be found on [here](https://chasmplus.readthedocs.io/en/latest/models.html).
+
+The table below provides an example of a CHASMplus annotators inventory table.
+
+
 | tumor_subtype | chasm_annotator |
 |:-------------:|:---------------:|
-| LUAD          | chasmplus_LUAD  | 
-| LUSC          | chasmplus_LUSC  | 
-| PANLUNG       | chasmplus       | 
+| Adenocarcinoma| chasmplus_LUAD  | 
+| Squamous_cell | chasmplus_LUSC  | 
+| Panlung       | chasmplus       |
+
+
+where
+
+- **tumor_subtype** *[essential]*: The name of the tumor cohort to be analyzed.
+It should match one of the cohort names listed in the `tumor_subtype` column of
+the [patient inventory table](#Patients-inventory-table). All tumor subtypes 
+for which analysis with CHASMplus was requested in the 
+[analysis inventory table](#Analysis-inventory-table) must have a CHASMplus 
+model assigned.
+- **chasm_annotator** *[essential]*: A name of a 
+[CHASMplus annotator](https://chasmplus.readthedocs.io/en/latest/models.html).
+Same annotator could be used for the different tumor subtypes.
 
 ### Expression inventory table
 
