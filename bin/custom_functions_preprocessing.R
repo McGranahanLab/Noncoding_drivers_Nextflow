@@ -144,47 +144,18 @@ readMappabilityTracks <- function(filePath, cores = 1, roiGR = NULL) {
   mapTrack
 }
 
-#' filterBWregions
-#' @description Filters black- or white- listed regions according to the 
-#' requested range of values in bwScoreCol column.
-#' @author Maria Litovchenko
-#' @param bwGRs GRanges object representation of black and white regions
-#' @param bwScoreCol string, name of the column containing scores on which 
-#' regions should be filtred.
-#' @param bwScoreMin numeric, minimum value of a score
-#' @param bwScoreMax numeric, maximum value of a score
-#' @return filtered Granges
-#' @export
-filterBWregions <- function(bwGRs, bwScoreCol = NA, bwScoreMin = NA, 
-                            bwScoreMax = NA) {
-  if (!is.na(bwScoreCol)) {
-    result <- bwGRs[as.vector(bwGRs[, bwScoreCol, with = F] >= bwScoreMin), ]
-    result <- result[as.vector(result[, bwScoreCol, with = F] <= bwScoreMax), ]
-  } else {
-    result <- copy(bwGRs)
-  }
-  result
-}
-
-#' readInAndFilterBWregions
-#' @description Reads in and filters, if required, file with black- or white-
-#' listed genomic regions.
+#' readBWregions
+#' @description Reads in file with black- or white- listed genomic regions.
 #' @author Maria Litovchenko
 #' @param bwFile path to file with black- or white- listed genomic regions.
 #' @param chrStyle character, one of NCBI or UCSC which determine chromosome
 #' naming style (1 or chr1 respectively). Final result will have this 
 #' chromosome naming style.
-#' @param bwScoreCol string, name of the column containing scores on which 
-#' regions should be filtred.
-#' @param bwScoreMin numeric, minimum value of a score
-#' @param bwScoreMax numeric, maximum value of a score
 #' @param roiGR GRanges, regions of interest. If given (not NULL), only regions
 #' of interest will be read from the file.
 #' @return GRanges object
 #' @export
-readInAndFilterBWregions <- function(bwFile, chrStyle, bwScoreCol = NA, 
-                                     bwScoreMin = NA, bwScoreMax = NA, 
-                                     cores = 1, roiGR = NULL) {
+readBWregions <- function(bwFile, chrStyle, cores = 1, roiGR = NULL) {
   if (chrStyle != 'NCBI' & chrStyle != 'UCSC') {
     stop('[', Sys.time(), '] chrStyle should be one of NCBI or UCSC.')
   }
@@ -198,22 +169,14 @@ readInAndFilterBWregions <- function(bwFile, chrStyle, bwScoreCol = NA,
       oneChr <- readMappabilityTracks(bwFile, cores, 
                                       roiGR[seqnames(roiGR) == chrID])
       nbefore <- nbefore + length(oneChr)
-      result <- rbind(result, filterBWregions(oneChr, bwScoreCol, 
-                                              bwScoreMin, bwScoreMax))
+      result <- rbind(result, oneChr)
     }
   } else {
     result <- readMappabilityTracks(bwFile, cores)
     nbefore <- length(result)
-    result <- filterBWregions(result, bwScoreCol, bwScoreMin, bwScoreMax)
   }
   result <- as.data.table(result)
-  if (!is.na(bwScoreCol)) {
-    nafter <- length(result)
-    message('[', Sys.time(), '] Removed ', nbefore - nafter, '(',
-            round(100 * (nbefore - nafter) / nbefore, 2), '%) entries from ', 
-            bwFile, ' due to not passing cut offs on ', bwScoreCol)
-    
-  }
+
   message('[', Sys.time(), '] Finished reading ', bwFile)
   
   result <- makeGRangesFromDataFrame(result)

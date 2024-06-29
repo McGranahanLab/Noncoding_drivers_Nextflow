@@ -864,26 +864,6 @@ getCleanRegions <- function(inventoryDT, allAvailableRegs, ignore.strand = T) {
   result
 }
 
-#' filterBWregions
-#' @description 
-#' @author Maria Litovchenko
-#' @param bwGRs GRanges object representation of black and white regions
-#' @param bwScoreCol string, name of the column containing scores on which 
-#' regions should be filtred.
-#' @param bwScoreMin numeric, minimum value of a score
-#' @param bwScoreMax numeric, maximum value of a score
-#' @return filtered Granges
-filterBWregions <- function(bwGRs, bwScoreCol = NA, bwScoreMin = NA, 
-                            bwScoreMax = NA) {
-  if (!is.na(bwScoreCol)) {
-    result <- bwGRs[as.vector(bwGRs[, bwScoreCol, with = F] >= bwScoreMin), ]
-    result <- result[as.vector(result[, bwScoreCol, with = F] <= bwScoreMax), ]
-  } else {
-    result <- copy(bwGRs)
-  }
-  result
-}
-
 # Functions : keeping mcols in GRanges after reduce was performed -------------
 #' reduce_col_to_one_row
 #' @description Reduces data from one column to a single value taking into 
@@ -1795,11 +1775,8 @@ if (liftOverIsNeeded == 'end') {
 if (!is.null(bwInv)) {
   setkey(bwInv, 'list_name')
   bwGR <- lapply(bwInv$list_name, 
-                 function(x) readInAndFilterBWregions(bwInv[x]$file_path, 
-                                                      chrStyle = outChrStyle,
-                                                      bwScoreCol = bwInv[x]$score_column, 
-                                                      bwScoreMin = bwInv[x]$min_value,
-                                                      bwScoreMax = bwInv[x]$max_value))
+                 function(x) readBWregions(bwInv[x]$file_path,
+                                           chrStyle = outChrStyle))
   names(bwGR) <- bwInv$list_name
   for (bwCode in names(bwGR)) {
     bwGR[[bwCode]]$rCode <- bwCode

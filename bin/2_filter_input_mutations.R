@@ -171,18 +171,12 @@ liftOverVariants <- function(inDT, targetGenome, chainObj) {
 #' @param chrStyle character, one of NCBI or UCSC which determine chromosome
 #' naming style (1 or chr1 respectively). Final result will have this 
 #' chromosome naming style.
-#' @param bwScoreCol string, name of the column containing scores on which 
-#' regions should be filtred.
-#' @param bwScoreMin numeric, minimum value of a score
-#' @param bwScoreMax numeric, maximum value of a score
 #' @param cores number of cores
 #' @param roiGR GRanges, regions of interest. If given (not NULL), only regions
 #' of interest will be read from the file.
 #' @return a filtered data table with variants
 filterVarsByBlackWhiteList <- function(varsDT, bwFile, chrStyle, bwName, 
-                                       bwFileType, bwScoreCol = NA, 
-                                       bwScoreMin = NA,  bwScoreMax = NA, 
-                                       cores = 1) {
+                                       bwFileType, cores = 1) {
   if (chrStyle != 'NCBI' & chrStyle != 'UCSC') {
     stop('[', Sys.time(), '] chrStyle should be one of NCBI or UCSC. Current ',
          'value: ', chrStyle, '.')
@@ -191,8 +185,7 @@ filterVarsByBlackWhiteList <- function(varsDT, bwFile, chrStyle, bwName,
   message('[', Sys.time(), '] Started filtering variants by ', bwName)
   
   # read black- or white- listed files
-  annoGR <- readInAndFilterBWregions(bwFile, chrStyle, bwScoreCol, bwScoreMin,
-                                     bwScoreMax, cores)
+  annoGR <- readBWregions(bwFile, chrStyle, cores)
   # convert variants to Granges
   result <- makeGRangesFromDataFrame(varsDT, keep.extra.columns = T)
   seqlevelsStyle(result) <- chrStyle
@@ -765,9 +758,6 @@ if ('blacklisted_codes' %in% colnames(analysisInv)) {
                                             chrStyle = outChrStyle,
                                             bwName = bwInv$list_name[i],
                                             bwFileType = bwInv$file_type[i],
-                                            bwScoreCol = bwInv$score_column[i],
-                                            bwScoreMin = bwInv$min_value[i],
-                                            bwScoreMax = bwInv$max_value[i],
                                             cores = args$cores)
       suppressMessages(suppressWarnings(gc()))
     }

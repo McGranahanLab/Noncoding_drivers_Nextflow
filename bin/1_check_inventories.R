@@ -286,8 +286,8 @@ checkParticipantInventory <- function(inventoryPath, cores = 1) {
 #' 2) files exist
 #' 3) software are one of the accepted ones
 #' 4) software can handle gr_code, i.e dndscv can only process CDS
-#' 5) gr_code and gr_excl_code do not contain - sign because it's going to be 
-#'    used in file naming.
+#  5) check, that gr_id do not contain - sign because it's going to be used
+#     in file naming
 #' 6) in gr_file and gr_excl_file only gtf or bed files are supplied
 #' 7) if gr_code / gr_excl_code is given, that the file is provided as well. 
 #' 8) gr_code is acceptable, if gr_file and gr_excl_file are gtf 
@@ -389,12 +389,12 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
     }
   }
   
-  # 5) check, that gr_code and gr_excl_code do not contain - sign because it's
-  # going to be used in file naming
-  if (any(grepl('-', result$gr_code) | grepl('-', result$gr_excl_code))) {
-    stop('[', Sys.time(), '] values of gr_code and gr_excl_code columns ',
-         'should not contain - character as it will be used in future file ', 
-         'names as separator. Please rename.')
+  # 5) check, that gr_id do not contain - sign because it's going to be used
+  # in file naming
+  if (any(grepl('-', result$gr_id))) {
+    stop('[', Sys.time(), '] values of gr_id column should not contain - ',
+         'character as it will be used in future file names as separator. ',
+         'Please rename.')
   }
   
   # 6) check that in gr_file and gr_excl_file only gtf or bed files are 
@@ -675,15 +675,11 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
 #' @description Checks for validity inventory table with black and white listed
 #' regions. Checks that:
 #' 1) all needed columns are present (list_name, file_path, file_genome, 
-#'    file_type, score_column, min_value and max_value) are present and columns
-#'    list_name, file_type, file_genome and score_column are not numbers
+#'    file_type) are present and all of them are not numbers
 #' 2) each list_name appears once and only once
 #' 3) each file_path appears once and only once
 #' 4) files listed in file_path exist
 #' 5) codes in file_type are "white" or "black" 
-#' 6) min_value and max_value are given or 
-#' 7) black& white lists are on the same genome version as target 
-#'    genome version.
 #' @author Maria Litovchenko
 #' @param inventoryPath black&white lists inventory analysis path
 #' @param targetGenomeVersion character, genome version, in which final files
@@ -692,17 +688,14 @@ checkAnalysisInventory <- function(inventoryPath, acceptedRegCodes,
 checkBlacklistInventory <- function(inventoryPath, targetGenomeVersion, 
                                     cores = 1) {
   # 1) read and check that all needed columns are present
-  essenCols <- c('list_name', 'file_path', 'file_genome', 'file_type', 
-                 'score_column', 'min_value', 'max_value')
+  essenCols <- c('list_name', 'file_path', 'file_genome', 'file_type')
   result <- checkHaveEssentialColumns(inventoryPath, essenCols, 
                                       'black&white lists', cores)
   
   # check, that values in list_name, file_genome, file_type and score_column 
   # columns are not numbers
   checkColumnNotNumber(result$list_name, 'list_name')
-  checkColumnNotNumber(result$file_type, 'file_type')
   checkColumnNotNumber(result$file_genome, 'file_genome')
-  checkColumnNotNumber(result$score_column, 'score_column')
   
   # 2) each file_path appears once and only once
   n_appearences <- result[,.N, by = file_path]
@@ -733,16 +726,6 @@ checkBlacklistInventory <- function(inventoryPath, targetGenomeVersion,
   if (!all(result$file_type %in% c('white', 'black'))) {
     stop('[', Sys.time(), '] file_type in --blacklist_inventory should be ',
          'white or black', )
-  }
-  
-  # 6) in case column score_column is not NA, min_value and max_value are given
-  result[, min_value := as.numeric(min_value)]
-  result[, min_value := as.numeric(max_value)]
-  if (any(is.na(result[!is.na(score_column)]$min_value)) |  
-      any(is.na(result[!is.na(score_column)]$max_value))) {
-    stop('[', Sys.time(), '] min_value and max_value should be numeric ',
-         '(not NA) in black&white lists inventory table if value in ',
-         'score_column is not NA')
   }
   
   # 7) check, black& white lists are on the same genome version as target 
