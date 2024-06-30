@@ -61,11 +61,11 @@ The table below demonstrates an example of a genomic variant file in Annovar-lik
 
 | **chr** | **start** | **stop** | **ref** | **var** | **Gene.refGene** | **Func.refGene** | **ExonicFunc.refGene** | **GeneDetail.refGene** | **AAChange.refGene** | **t_depth** | **t_ref_count** | **t_alt_count** | **n_depth** | **n_ref_count** | **n_alt_count** |
 |:-------:|:---------:|:--------:|:-------:|:-------:|:----------------:|:----------------:|:----------------------:|:----------------------:|:--------------------:|:------------------:|:---------------:|:---------------:|:-----------:|:---------------:|:---------------:|
-| 1 | 67705958 | 67705958 | G | A | IL23R | exonic | nonsynonymous SNV | 0 | IL23R:NM_144701:exon9:c.G1142A:p.R381Q | 25 | 15 | 9 | 42 | 42 | 0 |
-| 2 | 234183368 | 234183368 | A | G | ATG16L1 | exonic | nonsynonymous SNV | 0 | ATG16L1:NM_198890:exon5:c.A409G:p.T137A,ATG16L1:NM_017974:exon8:c.A841G:p.T281A,ATG16L1:NM_001190266:exon9:c.A646G:p.T216A,ATG16L1:NM_001190267:exon9:c.A550G:p.T184A,ATG16L1:NM_030803:exon9:c.A898G:p.T300A |  57 | 29 | 27 | 114 | 114 | 0 |
-| 16 | 50745926 | 50745926 | C | T | NOD2 | exonic | nonsynonymous SNV | 0 | NOD2:NM_001293557:exon3:c.C2023T:p.R675W,NOD2:NM_022162:exon4:c.C2104T:p.R702W | 38 | 30 | 8 | 38 | 38 | 0 |
-| 13 | 20797176 | 21105944 | 0 | -0 | CRYL1;GJB6 | exonic | frameshift deletion | 0 | GJB6:NM_001110220:wholegene,GJB6:NM_001110221:wholegene,GJB6:NM_006783:wholegene,GJB6:NM_001110219:wholegene,CRYL1:NM_015974:wholegene | 49 | 24 | 25 | 29 | 29 | 0 |
-| 8 | 8887543 | 8887543 | A | T | ERI1 | exonic | stoploss | 0 | ERI1:NM_153332:exon7:c.A1049T:p.X350L | 32 | 25 | 7 | 42 | 42 | 0 |
+| 1 | 67705958 | 67705958 | G | A | IL23R | exonic | nonsynonymous SNV | . | IL23R:NM_144701:exon9:c.G1142A:p.R381Q | 25 | 15 | 9 | 42 | 42 | 0 |
+| 2 | 234183368 | 234183368 | A | G | ATG16L1 | exonic | nonsynonymous SNV | . | ATG16L1:NM_198890:exon5:c.A409G:p.T137A,ATG16L1:NM_017974:exon8:c.A841G:p.T281A,ATG16L1:NM_001190266:exon9:c.A646G:p.T216A,ATG16L1:NM_001190267:exon9:c.A550G:p.T184A,ATG16L1:NM_030803:exon9:c.A898G:p.T300A |  57 | 29 | 27 | 114 | 114 | 0 |
+| 16 | 50745926 | 50745926 | C | T | NOD2 | exonic | nonsynonymous SNV | . | NOD2:NM_001293557:exon3:c.C2023T:p.R675W,NOD2:NM_022162:exon4:c.C2104T:p.R702W | 38 | 30 | 8 | 38 | 38 | 0 |
+| 13 | 20797176 | 21105944 | 0 | - | CRYL1;GJB6 | exonic | frameshift deletion | . | GJB6:NM_001110220:wholegene,GJB6:NM_001110221:wholegene,GJB6:NM_006783:wholegene,GJB6:NM_001110219:wholegene,CRYL1:NM_015974:wholegene | 49 | 24 | 25 | 29 | 29 | 0 |
+| 8 | 8887543 | 8887543 | A | T | ERI1 | exonic | stoploss | . | ERI1:NM_153332:exon7:c.A1049T:p.X350L | 32 | 25 | 7 | 42 | 42 | 0 |
 
 where
 
