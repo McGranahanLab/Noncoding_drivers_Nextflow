@@ -344,12 +344,14 @@ transformAllelesFromAnnovarToNorm <- function(varDT) {
 #' @param cores number of cores to used
 #' @return data table with columns chr, start, stop, ref, var, Gene.refGene,
 #' Func.refGene, ExonicFunc.refGene, GeneDetail.refGene, AAChange.refGene, 
-#' Optional columns: Use.For.Plots, Use.For.Plots.Indel, mut.multi
+#' Optional columns:  t_depth, t_ref_count, t_alt_count, n_depth,
+#' n_ref_count, n_alt_count, t_maxVAF, mut.multi
 readAnnovarMutFile <- function(filePath, cores = 1) {
   colsToSelect <- c('chr', 'start', 'stop', 'ref', 'var', 
                     'Gene.refGene', 'Func.refGene', 'ExonicFunc.refGene', 
-                    'GeneDetail.refGene', 'AAChange.refGene', 'Use.For.Plots',
-                    'Use.For.Plots.Indel', 'mut.multi')
+                    'GeneDetail.refGene', 'AAChange.refGene', 't_depth', 
+                    't_ref_count', 't_alt_count', 'n_depth', 'n_ref_count',
+                    'n_alt_count', 't_maxVAF', 'mut.multi')
   result <- suppressWarnings(fread(filePath, header = T, select = colsToSelect, 
                                    stringsAsFactors = F, nThread = cores))
   setnames(result, 'stop', 'end', skip_absent = T)
