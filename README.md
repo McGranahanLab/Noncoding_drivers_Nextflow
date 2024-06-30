@@ -1,7 +1,7 @@
 # Welcome
 **THE DOCUMENTATION IS UNDER DEVELOPMENT. PLEASE BEAR WITH US**
 
-This [Nextflow](https://www.nextflow.io/) pipeline is designed for the *de novo* detection of coding and noncoding somatic driver genomic elements in cancer patient cohorts. It currently integrates five advanced calling algorithms: [DIGdriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0), and [OncodriveFML](https://bbglab.irbbarcelona.org/oncodrivefml/home). [DIGdriver](https://github.com/maxwellsh/DIGDriver), NBR, and OncodriveFML are capable of detecting both coding and noncoding driver genetic elements, whereas [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and MutPanning focus solely on detecting coding drivers. Source code for NBR was provided by Dr. [Inigo Martincorena](https://github.com/im3sanger). 
+This [Nextflow](https://www.nextflow.io/) pipeline is designed for the *de novo* detection of coding and noncoding somatic driver genomic elements based on single nucleotide variations (SNVs) and small insertions and deletions (indels) in cancer patient cohorts. It currently integrates five advanced calling algorithms: [DIGdriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0), and [OncodriveFML](https://bbglab.irbbarcelona.org/oncodrivefml/home). [DIGdriver](https://github.com/maxwellsh/DIGDriver), NBR, and OncodriveFML are capable of detecting both coding and noncoding driver genetic elements, whereas [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and advanced calling algorithms: [DIGdriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0) focus solely on detecting coding drivers. Source code for NBR was provided by Dr. [Inigo Martincorena](https://github.com/im3sanger). 
 
 > CHASMplus
 
@@ -45,9 +45,76 @@ This documentation provides comprehensive instructions on setting up, configurin
 # Supported genome versions
 Ideally, all input files should be in `hg19` coordinates. However, if this is not the case, avoid performing the liftover as it is already implemented in the pipeline. This approach minimizes the potential inconsistencies introduced by the liftover procedure.
 
+# Supported NGS types
+NBR can not run on WES.
+
 # Inputs
+Two types of inputs which are absolutely essential for the *de-novo* detection of cancer driver genomic elements are genetic alterations (mutations) and genomic regions of interest (i.e. set of coordinates which defines coding regions, promoter, 5'UTRs, *etc*). To ensure that a signal of positive selection to be detected from the data is not distorted by lower ability to perform sequencing in some genomic regions, it is recommended to also provide coordinates of [black-/white- listed regions](#black-or-whitelisted-regions-inventory-table).
+
+[Inventory tables](#inventory-tables) are used to tie different input files, input types and software which will be applied to them together.
 
 ## Genomic variants files (mutations)
+The pipeline can handle genomic variants files of two formats: Annovar-like table and MAF-like table. Each file should contain genomic alterations (SNVs and small indels) for one patient only. The sections below provide an example of the input tables of two types. 
+
+### Annovar
+The table below demonstrates an example of genomic variant file in Annovar-like format.
+
+| **chr** | **start** | **stop** | **ref** | **var** | **Gene.refGene** | **Func.refGene** | **ExonicFunc.refGene** | **GeneDetail.refGene** | **AAChange.refGene** | **t_depth** | **t_ref_count** | **t_alt_count** | **n_depth** | **n_ref_count** | **n_alt_count** |
+|:-------:|:---------:|:--------:|:-------:|:-------:|:----------------:|:----------------:|:----------------------:|:-------------------------------:|:--------------------:|:--------------------:|:----------:|:---------------:|:---------------:|:------------------:|:---------------:|:---------------:|
+| 1 | 67705958 | 67705958 | G | A | exonic | IL23R | IL23R:NM_144701:exon9:c.G1142A:p.R381Q | 0 | nonsynonymous SNV | 25 | 15 | 9 | 42 | 42 | 0 |
+| 2 | 234183368 | 234183368 | A | G | exonic | ATG16L1 | ATG16L1:NM_198890:exon5:c.A409G:p.T137A,ATG16L1:NM_017974:exon8:c.A841G:p.T281A,ATG16L1:NM_001190266:exon9:c.A646G:p.T216A,ATG16L1:NM_001190267:exon9:c.A550G:p.T184A,ATG16L1:NM_030803:exon9:c.A898G:p.T300A | 0 | nonsynonymous SNV | 57 | 29 | 27 | 114 | 114 | 0 |
+| 16 | 50745926 | 50745926 | C | T | exonic | NOD2 | NOD2:NM_001293557:exon3:c.C2023T:p.R675W,NOD2:NM_022162:exon4:c.C2104T:p.R702W | 0 | nonsynonymous SNV | 38 | 30 | 8 | 38 | 38 | 0 |
+| 13 | 20797176 | 21105944 | 0 | -0 | exonic | CRYL1;GJB6 | GJB6:NM_001110220:wholegene,GJB6:NM_001110221:wholegene,GJB6:NM_006783:wholegene,GJB6:NM_001110219:wholegene,CRYL1:NM_015974:wholegene | 0 | frameshift deletion | 49 | 24 | 25 | 29 | 29 | 0 |
+| 8 | 8887543 | 8887543 | A | T | exonic | ERI1 | ERI1:NM_153332:exon7:c.A1049T:p.X350L | 0 | stoploss | 32 | 25 | 7 | 42 | 42 | 0 |
+
+where
+
+- **chr** *[essential]*: a chromosome where genomic variant was detected
+- **start** *[essential]*: a start position of a genomic variant
+- **stop** *[essential]*: an end position of a genomic variant
+- **ref** *[essential]*: reference allele
+- **var** *[essential]*: alternative allele
+- **Gene.refGene** *[essential]*: a name of a gene to which a mutation was mapped to
+- **Func.refGene** *[essential]*: 
+- **ExonicFunc.refGene** *[essential]*:
+- **GeneDetail.refGene** *[essential]*:
+- **AAChange.refGene** *[essential]*: aminoacid change which a mutation had induced
+- **t_depth** *[optional]*: depth of a tumor sample at this position
+- **t_ref_count** *[optional]*: number of reads with reference allele at this position in tumor sample
+- **t_alt_count** *[optional]*: number of reads with alternative allele at this position in tumor sample
+- **n_depth** *[optional]*: depth of a normal sample at this position
+- **n_ref_count** *[optional]*: number of reads with reference allele at this position in normal sample
+- **n_alt_count** *[optional]*:  number of reads with alternative allele at this position in normal sample
+                    
+### MAF
+The table below demonstrates an example of genomic variant file in MAF-like format.
+
+| **Tumor_Sample_Barcode** | **Chromosome** | **Start_Position** | **End_Position** | **Reference_Allele** | **Tumor_Seq_Allele2** | **Gene** | **Variant_Classification** | **Amino_acids** | **t_depth** | **t_ref_count** | **t_alt_count** | **n_depth** | **n_ref_count** | **n_alt_count** |
+|:------------------------:|:--------------:|:------------------:|:----------------:|:--------------------:|:---------------------:|:--------:|:--------------------------------:|:---------------:|:-----------:|:---------------:|:---------------:|:-----------:|:---------------:|:---------------:|
+| participant_1 | 10 | 96828976 | 96828977 | C | A | CYP2C8 | Intron | . | 25 | 15 | 9 | 42 | 42 | 0 |
+| participant_1 | 11 | 118343898 | 118343899 | C | T | KMT2A | Missense_Mutation | S/L | 57 | 29 | 27 | 114 | 114 | 0 |
+| participant_1 | 12 | 8074198 | 8074199 | G | A | SLC2A3 | Silent | I | 38 | 30 | 8 | 38 | 38 | 0 |
+| participant_1	| 13 | 23909421 | 23909422 | T | C | SACS | Missense_Mutation | H/R | 49 | 24 | 25 | 29 | 29 | 0 |
+| participant_1 | 1 | 17720542 | 17720543 | C | A | PADI6 | RNA | . | 32 | 25 | 7 | 42 | 42 | 0 | 
+
+where
+
+- **Tumor_Sample_Barcode** *[essential]*: The unique ID of a patient, e.g., `participant_1`.
+- **Chromosome** *[essential]*: a chromosome where genomic variant was detected
+- **Start_Position** *[essential]*: a start position of a genomic variant
+- **End_Position** *[essential]*: an end position of a genomic variant
+- **Reference_Allele** *[essential]*: reference allele
+- **Tumor_Seq_Allele2** *[essential]*: alternative allele
+- **Gene** *[essential]*: a name of a gene to which a mutation was mapped to
+- **Variant_Classification**: mutation's impact on a genomic element to which mutation was mapped. One of following values `Frame_Shift_Del`, `Frame_Shift_Ins`, `In_Frame_Del`, `In_Frame_Ins`, `Missense_Mutation`, `Nonsense_Mutation`, `Silent`, `Translation_Start_Site`, `Nonstop_Mutation`, `De_novo_Start_InFrame`, `De_novo_Start_OutOfFrame`, `Unknown`, `3'UTR`, `5'UTR`, `3'Flank`, `5'Flank`, `IGR`, `Intron`, `RNA`, `Splice_Site`.
+- **Amino_acids** *[essential]*: aminoacid change which a mutation had induced
+- **t_depth** *[optional]*: depth of a tumor sample at this position
+- **t_ref_count** *[optional]*: number of reads with reference allele at this position in tumor sample
+- **t_alt_count** *[optional]*: number of reads with alternative allele at this position in tumor sample
+- **n_depth** *[optional]*: depth of a normal sample at this position
+- **n_ref_count** *[optional]*: number of reads with reference allele at this position in normal sample
+- **n_alt_count** *[optional]*:  number of reads with alternative allele at this position in normal sample
+
 ## Genomic regions of interest
 ## Mutations multiplicity
 
@@ -230,7 +297,6 @@ used for them during CHASMplus run. The complete list of the available annotator
 can be found on [here](https://chasmplus.readthedocs.io/en/latest/models.html).
 
 The table below provides an example of a CHASMplus annotators inventory table.
-
 
 | tumor_subtype | chasm_annotator |
 |:-------------:|:---------------:|
