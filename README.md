@@ -1,13 +1,13 @@
 # Welcome
 **THE DOCUMENTATION IS UNDER DEVELOPMENT. PLEASE BEAR WITH US**
 
-This [Nextflow](https://www.nextflow.io/) pipeline is designed for the *de novo* detection of coding and noncoding somatic driver genomic elements based on single nucleotide variations (SNVs) and small insertions and deletions (indels) in cancer patient cohorts. It currently integrates five advanced calling algorithms: [DIGdriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0), and [OncodriveFML](https://bbglab.irbbarcelona.org/oncodrivefml/home). [DIGdriver](https://github.com/maxwellsh/DIGDriver), NBR, and OncodriveFML are capable of detecting both coding and noncoding driver genetic elements, whereas [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and advanced calling algorithms: [DIGdriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0) focus solely on detecting coding drivers. Source code for NBR was provided by Dr. [Inigo Martincorena](https://github.com/im3sanger). 
+This [Nextflow](https://www.nextflow.io/) pipeline is designed for the *de novo* detection of coding and noncoding somatic driver genomic elements based on single nucleotide variations (SNVs) and small insertions and deletions (indels) in cancer patient cohorts. It currently integrates five advanced calling algorithms: [DIGdriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0), and [OncodriveFML](https://bbglab.irbbarcelona.org/oncodrivefml/home). [DIGdriver](https://github.com/maxwellsh/DIGDriver), NBR, and OncodriveFML are capable of detecting both coding and noncoding driver genetic elements, whereas [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and advanced calling algorithms: [DIGdriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0) focus solely on detecting coding drivers. The source code for NBR was provided by Dr. [Inigo Martincorena](https://github.com/im3sanger). 
 
 > CHASMplus
 
 Overall, the pipeline can be divided into 3 steps: 1) application of the *de novo* cancer driver detection software to a patient cohort(s) and region(s) of interest to obtain raw p-values 2) postprocessing of the cancer driver detection software output, i.e. combination of raw p-values using Brown or methods  3) plotting of the results.
 
-It is higly recommended to include [dNdScv](https://github.com/im3sanger/dndscv/tree/master) for coding and NBR for noncoding regions as those software are essential in post processing to estimate percentage of driver mutations in the discovered driver genomic regions and to pinpoint individual driver mutations shall it be possible. As [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and NBR share concepts behind, it is not recommenced to run NBR on CDS at the same time as [dNdScv](https://github.com/im3sanger/dndscv/tree/master).
+It is highly recommended to include [dNdScv](https://github.com/im3sanger/dndscv/tree/master) for coding and NBR for noncoding regions as those software are essential in post-processing to estimate the percentage of driver mutations in the discovered driver genomic regions and to pinpoint individual driver mutations shall it be possible. As [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and NBR share concepts behind, it is not recommended to run NBR on CDS at the same time as [dNdScv](https://github.com/im3sanger/dndscv/tree/master).
 
 This documentation provides comprehensive instructions on setting up, configuring, and running the pipeline, along with detailed descriptions of the outputs.
 
@@ -49,23 +49,23 @@ Ideally, all input files should be in `hg19` coordinates. However, if this is no
 NBR can not run on WES.
 
 # Inputs
-Two types of inputs which are absolutely essential for the *de-novo* detection of cancer driver genomic elements are genetic alterations (mutations) and genomic regions of interest (i.e. set of coordinates which defines coding regions, promoter, 5'UTRs, *etc*). To ensure that a signal of positive selection to be detected from the data is not distorted by lower ability to perform sequencing in some genomic regions, it is recommended to also provide coordinates of [black-/white- listed regions](#black-or-whitelisted-regions-inventory-table).
+Two inputs essential for the *de-novo* detection of cancer driver genomic elements are genetic alterations (mutations) and genomic regions of interest (i.e., set of coordinates which define coding regions, promoter, 5'UTRs, *etc*). To ensure that a signal of positive selection to be detected from the data is not distorted by a lower ability to perform sequencing in some genomic regions, it is also recommended to provide coordinates of [black-/white- listed regions](#black-or-whitelisted-regions-inventory-table).
 
 [Inventory tables](#inventory-tables) are used to tie different input files, input types and software which will be applied to them together.
 
 ## Genomic variants files (mutations)
-The pipeline can handle genomic variants files of two formats: Annovar-like table and MAF-like table. Each file should contain genomic alterations (SNVs and small indels) for one patient only. The sections below provide an example of the input tables of two types. 
+The pipeline can handle genomic variants files of two formats: The annovar-like table and the MAF-like table. Each file should contain genomic alterations (SNVs and small indels) for one patient only. The sections below provide an example of the input tables of two types. 
 
 ### Annovar
-The table below demonstrates an example of genomic variant file in Annovar-like format.
+The table below demonstrates an example of a genomic variant file in Annovar-like format.
 
 | **chr** | **start** | **stop** | **ref** | **var** | **Gene.refGene** | **Func.refGene** | **ExonicFunc.refGene** | **GeneDetail.refGene** | **AAChange.refGene** | **t_depth** | **t_ref_count** | **t_alt_count** | **n_depth** | **n_ref_count** | **n_alt_count** |
-|:-------:|:---------:|:--------:|:-------:|:-------:|:----------------:|:----------------:|:----------------------:|:-------------------------------:|:--------------------:|:--------------------:|:----------:|:---------------:|:---------------:|:------------------:|:---------------:|:---------------:|
-| 1 | 67705958 | 67705958 | G | A | exonic | IL23R | IL23R:NM_144701:exon9:c.G1142A:p.R381Q | 0 | nonsynonymous SNV | 25 | 15 | 9 | 42 | 42 | 0 |
-| 2 | 234183368 | 234183368 | A | G | exonic | ATG16L1 | ATG16L1:NM_198890:exon5:c.A409G:p.T137A,ATG16L1:NM_017974:exon8:c.A841G:p.T281A,ATG16L1:NM_001190266:exon9:c.A646G:p.T216A,ATG16L1:NM_001190267:exon9:c.A550G:p.T184A,ATG16L1:NM_030803:exon9:c.A898G:p.T300A | 0 | nonsynonymous SNV | 57 | 29 | 27 | 114 | 114 | 0 |
-| 16 | 50745926 | 50745926 | C | T | exonic | NOD2 | NOD2:NM_001293557:exon3:c.C2023T:p.R675W,NOD2:NM_022162:exon4:c.C2104T:p.R702W | 0 | nonsynonymous SNV | 38 | 30 | 8 | 38 | 38 | 0 |
-| 13 | 20797176 | 21105944 | 0 | -0 | exonic | CRYL1;GJB6 | GJB6:NM_001110220:wholegene,GJB6:NM_001110221:wholegene,GJB6:NM_006783:wholegene,GJB6:NM_001110219:wholegene,CRYL1:NM_015974:wholegene | 0 | frameshift deletion | 49 | 24 | 25 | 29 | 29 | 0 |
-| 8 | 8887543 | 8887543 | A | T | exonic | ERI1 | ERI1:NM_153332:exon7:c.A1049T:p.X350L | 0 | stoploss | 32 | 25 | 7 | 42 | 42 | 0 |
+|:-------:|:---------:|:--------:|:-------:|:-------:|:----------------:|:----------------:|:----------------------:|:----------------------:|:--------------------:|:------------------:|:---------------:|:---------------:|:-----------:|:---------------:|:---------------:|
+| 1 | 67705958 | 67705958 | G | A | IL23R | exonic | nonsynonymous SNV | 0 | IL23R:NM_144701:exon9:c.G1142A:p.R381Q | 25 | 15 | 9 | 42 | 42 | 0 |
+| 2 | 234183368 | 234183368 | A | G | ATG16L1 | exonic | nonsynonymous SNV | 0 | ATG16L1:NM_198890:exon5:c.A409G:p.T137A,ATG16L1:NM_017974:exon8:c.A841G:p.T281A,ATG16L1:NM_001190266:exon9:c.A646G:p.T216A,ATG16L1:NM_001190267:exon9:c.A550G:p.T184A,ATG16L1:NM_030803:exon9:c.A898G:p.T300A |  57 | 29 | 27 | 114 | 114 | 0 |
+| 16 | 50745926 | 50745926 | C | T | NOD2 | exonic | nonsynonymous SNV | 0 | NOD2:NM_001293557:exon3:c.C2023T:p.R675W,NOD2:NM_022162:exon4:c.C2104T:p.R702W | 38 | 30 | 8 | 38 | 38 | 0 |
+| 13 | 20797176 | 21105944 | 0 | -0 | CRYL1;GJB6 | exonic | frameshift deletion | 0 | GJB6:NM_001110220:wholegene,GJB6:NM_001110221:wholegene,GJB6:NM_006783:wholegene,GJB6:NM_001110219:wholegene,CRYL1:NM_015974:wholegene | 49 | 24 | 25 | 29 | 29 | 0 |
+| 8 | 8887543 | 8887543 | A | T | ERI1 | exonic | stoploss | 0 | ERI1:NM_153332:exon7:c.A1049T:p.X350L | 32 | 25 | 7 | 42 | 42 | 0 |
 
 where
 
