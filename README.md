@@ -120,7 +120,7 @@ where
 
 ## Inventory tables
 ### Patients inventory table
-The patient inventory table is a comma-separated file that contains detailed information about all participants (patients) in the cohort, including ID, tumor subtype, path to the mutation table, and other relevant data. This table is also used to define specific cohorts of participants for further analysis, i.e. adenocarcinomas, squamous cell carcinomas, pan-cancer, etc. As parallelisation is ensured by the pipeline architecture as well as by Nextflow itself, there is no need to have separate patient inventory tables for each tumor subtype. 
+The patient inventory table is a comma-separated file that contains detailed information about all participants (patients) in the cohorts, including ID, tumor subtype, path to the mutation table, and other relevant data. This table is also used to define specific cohorts of participants for further analysis, i.e. adenocarcinomas, squamous cell carcinomas, pan-cancer, etc. As parallelisation is ensured by the pipeline architecture as well as by Nextflow itself, there is no need to have separate patient inventory tables for each tumor subtype. 
 
 The table below provides an example of a patient inventory table.
 
@@ -320,38 +320,81 @@ Same annotator could be used for the different tumor subtypes.
 ### Expression inventory table
 
 # Parameters
-All the parameters described below are set in [nextflow.config file](nextflow.config).
+All the parameters described below are set in [nextflow.config file](nextflow.config). path to reference genome fasta are in profiles
 
 ### General
 
-**Target genome version**
-- `target_genome_version` 'hg19'
-path to refernce genome fasta are in profiles
+#### Target genome version
+- `target_genome_version`: a genome version to which the data should be brought
+to before the driver detection software is applied. Currently, only `hg19` is
+accepted. Please see [supported genomes version](#supported-genome-versions)
+section for the reasoning.
 
-**Inventories**
-- `patients_inventory`             'data/inventory/inventory_patients.csv' 
-- `analysis_inventory`             'data/inventory/inventory_analysis.csv' 
-- `blacklist_inventory`            'data/inventory/inventory_blacklist.csv' optional blacklist_inventory '' 
+#### Inventories
+- `patients_inventory`: a path to the inventory file, i.e. 
+`'data/inventory/inventory_patients.csv'` providing detailed information about
+all participants (patients) in the cohort(s). See 
+[patients inventory table](#patients-inventory-table) section for more details.
+- `analysis_inventory`: a path to the inventory file, i.e.              
+`'data/inventory/inventory_analysis.csv'`. The table links together cohorts of
+tumor subtypes, genomic regions of interest and software to be applied to the
+regions. See 
+[analysis inventory table](#analysis-inventory-table) section for more details.
+- `blacklist_inventory`: a path to the inventory file, i.e.              
+`'data/inventory/inventory_blacklist.csv'` providing detailed information about
+black-/white- listed genomic regions. See 
+[black or whitelisted regions inventory table](#black-or-whitelisted-regions-inventory-table)
+section for more details. This inventory is optional. If no genomic regions are
+black-/white- listed, set the value of this parameter to '', i.e. 
+`blacklist_inventory = ''`.
 
-required if [DIGdriver](https://github.com/maxwellsh/DIGDriver) run is requested, otherwise, set to ''
-
-- `digdriver_models_inventory`     'data/inventory/inventory_digdriver_models.csv' 
-- `digdriver_elements` 'data/assets/DIGdriver/element_data.h5'
-
-required if CHAMSMplus run is requested, otherwise, set to ''
-
-- `chasmplus_annotators_inventory` 'data/inventory/inventory_chasmplus_annotator.csv' 
-
-NBR 
-- `nbr_regions_neutralbins_file`    'data/assets/NBR/Neutral_regions_within_100kb_bins_hg19.txt'
-- `nbr_trinucfreq_neutralbins_file` 'data/assets/NBR/Trinucfreqs_within_100kb_bins_hg19.txt'
-- `nbr_driver_regs_file`            'data/assets/NBR/GRanges_driver_regions_hg19.txt'
-
-required if CHAMSMplus run is requested, otherwise, set to ''
-
-- `oncodrivefml_config` 'conf/oncodrivefml_hg19.config'
-
+#### Output directory
 - `outdir` 'completed_runs/2023_12_25/'
+
+#### CHASMplus - specific files
+If analysis of data with [CHASMplus](https://chasmplus.readthedocs.io/en/latest/)
+is requested, an inventory linking together cohorts of tumor subtypes and
+[CHASMplus](https://chasmplus.readthedocs.io/en/latest/) annotators should be 
+provided via `chasmplus_annotators_inventory` parameter, i.e. 
+`chasmplus_annotators_inventory = 'data/inventory/inventory_chasmplus_annotator.csv'`.
+If analysis with [CHASMplus](https://chasmplus.readthedocs.io/en/latest/) is 
+not requested, set this parameter to `''`, i.e. 
+`chasmplus_annotators_inventory = ''`.
+
+#### DIGdriver - specific files
+
+If analysis of genomic regions with [DIGdriver](https://github.com/maxwellsh/DIGDriver)
+is requested, then a file matching [DIGdriver](https://github.com/maxwellsh/DIGDriver)
+models to the tumor subtypes under considereations and a `element_data.h5` file
+needed for [DIGdriver](https://github.com/maxwellsh/DIGDriver) training.
+- `digdriver_models_inventory`: a path to the inventory file, i.e. 
+`'data/inventory/inventory_digdriver_models.csv'`. The table links together
+cohorts of tumor subtypes and [DIGdriver](https://github.com/maxwellsh/DIGDriver)
+models to be used for their analysis.
+- `digdriver_elements`: a path to `element_data.h5` used internally by 
+[DIGdriver](https://github.com/maxwellsh/DIGDriver). The file can be downloaded
+[here](https://cb.csail.mit.edu/cb/DIG/downloads//dig_data_files/). 
+
+If analysis with [DIGdriver](https://github.com/maxwellsh/DIGDriver) is not
+requested, set these parameters to `''`, i.e. `digdriver_models_inventory = ''`
+and `digdriver_elements = ''`.
+
+#### NBR - specific files
+If analysis of genomic regions with NBR is requested, then three additional
+files are needed to be provided. All of this files can be found in the
+[NBR](data/assets/NBR.zip) folder of this GitHub repository.
+
+- `nbr_regions_neutralbins_file`: a path to a file defining neutral regions, 
+i.e. `'data/assets/NBR/Neutral_regions_within_100kb_bins_hg19.txt'`.
+- `nbr_trinucfreq_neutralbins_file`: a path to file listing trinucleotide
+content within 100kb bins, i.e. 
+`data/assets/NBR/Trinucfreqs_within_100kb_bins_hg19.txt`
+- `nbr_driver_regs_file`: a path to file listing genomic regions containing
+known driver genomic elements, i.e. 
+`data/assets/NBR/GRanges_driver_regions_hg19.txt`
+
+#### OncodriveFML - specific files
+- `oncodrivefml_config` `conf/oncodrivefml_hg19.config`
 
 ### Containers
 The following set of parameters define containers to be used during all steps of the pipeline execution. All containers can be viewed at [Docker hub](https://hub.docker.com/r/marialitovchenko/noncoding_driver_pipeline/tags). Recipes for container re-creation can be found in [container_recipes folder](container_recipes).
@@ -369,7 +412,7 @@ The following set of parameters define containers to be used during all steps of
 - `min_tumor_vaf`: a minimal percentage from the total reads with the alternative (mutated) allele (also known as variant allele fraction (VAF)) in the tumor sample for the mutation to be considered for the *de novo* cancer driver discovery. Recommended value: `5` (percent).
 - `max_germline_vac`: a maximum number of reads with the alternative (mutated) allele in the germline sample for the mutation to be considered for the *de novo* cancer driver discovery. Recommended value: `5`.
 - `max_germline_vaf`: a maximum percentage from the total reads with the alternative (mutated) allele in the germline sample for the mutation to be considered for the *de novo* cancer driver discovery. Recommended value: `1` (percent).
-- `max_n_vars` `90000`
+- `max_n_vars`: a maximum number of SNVs and small indels discovered in a participant's tumor so that sample is _not_ recognised as hypermutated. If mutations' number exceeds `max_n_vars`, then a sample will be removed from the analysis. Recommended value: `90000`.
 - `ignore_strand` `'T'`
 - `min_reg_len` `5`
 - `gene_name_synonyms` `'data/assets/hgnc_complete_set_processed.csv'`   optional
@@ -397,14 +440,12 @@ The following set of parameters define containers to be used during all steps of
 - `min_n_soft_noncod`       2    // put to 0 to disable
 - `min_n_muts`              3    // put to 0 to disable
 - `min_n_patients`          3    // put to 0 to disable 
-- `max_local_mut_rate_q`    0.95 // put to 1 to disable
-    //max_gr_mut_rate_q       0.99    // put to 1 to disable
-    `max_gr_mut_rate_q`       1    // put to 1 to disable
-    //max_gr_syn_mut_rate_q   0.99    // put to 1 to disable
-    `max_gr_syn_mut_rate_q`   1    // put to 1 to disable
-    `max_gr_len_q`            0.99 // put to 1 to disable
-    `remove_olfactory`        'T'  // put to 'F' to disable
-    `remove_2_5bp_enrich`     'T' // put to 'F' to disable
+- `max_local_mut_rate_q`    0.95 // put to 1 to disable 
+- `max_gr_mut_rate_q`       1    // put to 1 to disable //max_gr_mut_rate_q       0.99    // put to 1 to disable
+- `max_gr_syn_mut_rate_q`   1    // put to 1 to disable //max_gr_syn_mut_rate_q   0.99    // put to 1 to disable
+- `max_gr_len_q`            0.99 // put to 1 to disable
+- `remove_olfactory`        'T'  // put to 'F' to disable
+- `remove_2_5bp_enrich`     'T' // put to 'F' to disable
 - `padj_2_5bp_enrich`       `'5e-2'`
 
 - `min_gapwidt`                   1000
@@ -436,12 +477,12 @@ The following set of parameters define containers to be used during all steps of
 - `p_adj_discover`                    `0.05`
     
 ### Plotting
-- allowed_filter_values      ["PASS", "INDEL, 2-5bp"]
-- extra_studies              ["data/assets/intogene_detectedCancerGenes.csv", "data/assets/mc3_detectedCancerGenes.csv", "data/assets/cgc_knownCancerGenes.csv"]
-- extra_studies_names        ["intogen", "mc3", "CGC"]
-- extra_studies_tumorsubtype ["LNET,LUAD,LUSC,NSCLC,SCLC", "LUAD,LUSC", "nsclc,sclc,lung"]
-- plot_output_type           "pdf" // or "png"
-- visual_json                "data/visual_parameters.json"
+- `allowed_filter_values`      ["PASS", "INDEL, 2-5bp"]
+- `extra_studies`              ["data/assets/intogene_detectedCancerGenes.csv", "data/assets/mc3_detectedCancerGenes.csv", "data/assets/cgc_knownCancerGenes.csv"]
+- `extra_studies_names`        ["intogen", "mc3", "CGC"]
+- `extra_studies_tumorsubtype` ["LNET,LUAD,LUSC,NSCLC,SCLC", "LUAD,LUSC", "nsclc,sclc,lung"]
+- `plot_output_type`          "pdf" // or "png"
+- `visual_json`                "data/visual_parameters.json"
 
 # Profiles
 
