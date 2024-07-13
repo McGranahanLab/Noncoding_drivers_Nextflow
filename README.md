@@ -1,6 +1,10 @@
 # Welcome
 **THE DOCUMENTATION IS UNDER DEVELOPMENT. PLEASE BEAR WITH US**
 
+[![Nextflow](https://img.shields.io/badge/nextflow%20DSL2-%E2%89%A523.04.0-23aa62.svg)](https://www.nextflow.io/)
+[![run with docker](https://img.shields.io/badge/run%20with-docker-0db7ed?labelColor=000000&logo=docker)](https://www.docker.com/)
+[![run with singularity](https://img.shields.io/badge/run%20with-singularity-1d355c.svg?labelColor=000000)](https://sylabs.io/docs/)
+
 This [Nextflow](https://www.nextflow.io/) pipeline is designed for the *de novo* detection of coding and noncoding somatic driver genomic elements based on single nucleotide variations (SNVs) and small insertions and deletions (indels) in cancer patient cohorts. It currently integrates five advanced calling algorithms: [DIGdriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0), and [OncodriveFML](https://bbglab.irbbarcelona.org/oncodrivefml/home). [DIGdriver](https://github.com/maxwellsh/DIGDriver), NBR, and OncodriveFML are capable of detecting both coding and noncoding driver genetic elements, whereas [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and advanced calling algorithms: [DIGdriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0) focus solely on detecting coding drivers. The source code for NBR was provided by Dr. [Inigo Martincorena](https://github.com/im3sanger). 
 
 > CHASMplus
@@ -116,6 +120,15 @@ where
 - **n_alt_count** *[optional]*:  number of reads with an alternative allele at this position in the normal sample
 
 ## Genomic regions of interest
+Genomic regions of interest can be provided via files in [`gtf`](https://www.ensembl.org/info/website/upload/gff.html) or [`bed`](https://genome.ucsc.edu/FAQ/FAQformat.html#format1) format. It is customary that more well established regions of a genome with known biological function, i.e. CDS, promoters, lncRNA, miRNA, are derived from `gtf` files and custom genome regions, i.e. regions with yet unknown functionality or not yet fully experimentally validated ones, such as enhancers, are supplied via `bed` files.
+
+> [!NOTE]
+> There is no need to perform an extraction of your of interest from a `gtf` file
+> 
+### GTF
+
+### BED
+
 ## Mutations multiplicity
 
 ## Inventory tables
