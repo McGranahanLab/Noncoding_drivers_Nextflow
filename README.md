@@ -343,11 +343,12 @@ coordinates of the regions are presented in the file listed in the `file_path`
 column, e.g., `hg19`. This column must not contain values which are numbers, 
 i.e. "hg19" is allowed value, but "19" is not.
 
-> Due possible split of the genomic region into numerous smaller regions and 
-the subsequent increase in the computation requirements (i.e. RAM) required for
-the pipeline, black- and white-listed regions must be provided based on the
-same genome version as the target genome set by `target_genome_version` 
-parameter.
+> [!WARNING]
+> Due to possible split of the genomic region into numerous smaller regions and
+> the subsequent increase in the computation requirements (i.e. RAM) required 
+> for the pipeline, black- and white-listed regions must be provided based on 
+> the same genome version as the target genome set by `target_genome_version` 
+> parameter.
 
 ### DIGDriver models inventory table
 The DIGDriver inventory table is a comma-separated file that defines 
