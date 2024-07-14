@@ -405,7 +405,11 @@ The same annotator could be used for the different tumour subtypes.
 ### Expression inventory table
 
 # Parameters
-All the parameters described below are set in [nextflow.config file](nextflow.config). path to reference genome fasta is in profiles
+All the parameters described below are set in 
+[nextflow.config file](nextflow.config). Parameters related to the reference
+genome, such as path to the reference fasta (`target_genome_path`), chromosomal
+lengths (`target_genome_chr_len`) and chain file for liftover (`chain`) are set
+up in configuration files in [conf](conf/) folder.
 
 ### General
 
@@ -434,7 +438,8 @@ black-/white- listed, set the value of this parameter to '', i.e.
 `blacklist_inventory = ''`.
 
 #### Output directory
-- `outdir` 'completed_runs/2023_12_25/'
+- `outdir` path to the output directory where results will be stored, i.e.
+`completed_runs/`.
 
 #### CHASMplus - specific files
 If analysis of data with [CHASMplus](https://chasmplus.readthedocs.io/en/latest/)
@@ -479,7 +484,26 @@ known driver genomic elements, i.e.
 `data/assets/NBR/GRanges_driver_regions_hg19.txt`
 
 #### OncodriveFML - specific files
-- `oncodrivefml_config` `conf/oncodrivefml_hg19.config`
+If analysis of genomic regions with OncodriveFML is requested, then several 
+additional files are needed to be provided. First of all, a configuration file
+containing all OncodriveFML - specific perameters. Example of such file can be
+found in [conf/oncodrivefml_hg19.config](conf/oncodrivefml_hg19.config). 
+Descriptions of the parameters is available 
+[here](https://oncodrivefml.readthedocs.io/en/latest/configuration.html). To 
+let the pipeline know which file should be used as OncodriveFML configuration
+file, set up `oncodrivefml_config` parameter as path to the provided file,
+i.e. `conf/oncodrivefml_hg19.config`. If analysis of genomic regions with 
+OncodriveFML is not requested, `oncodrivefml_config` parameter can be set to 
+`''`.
+
+> [!WARNING]
+> OncodriveFML requires a large files (17Gb) with genomic scores to be 
+> executed. It is not possible unfortunately to put such large files in the
+> container. Therefore, the files need to be pre-downloaded in your computing
+> environment. The download can be completed by executing the 
+> [example OncodriveFML run](https://oncodrivefml.readthedocs.io/en/latest/includes.html#run-the-example).
+> Upon the run completion all the needed files will be stored in your system
+> in `~/bgdata` folder.
 
 ### Containers
 The following set of parameters defines containers to be used during all steps of the pipeline execution. All containers can be viewed at [Docker hub](https://hub.docker.com/r/marialitovchenko/noncoding_driver_pipeline/tags). Recipes for container re-creation can be found in [container_recipes folder](container_recipes).
@@ -498,17 +522,84 @@ The following set of parameters defines containers to be used during all steps o
 - `max_germline_vac`: a maximum number of reads with the alternative (mutated) allele in the germline sample for the mutation to be considered for the *de novo* cancer driver discovery. Recommended value: `5`.
 - `max_germline_vaf`: a maximum percentage from the total reads with the alternative (mutated) allele in the germline sample for the mutation to be considered for the *de novo* cancer driver discovery. Recommended value: `1` (percent).
 - `max_n_vars`: a maximum number of SNVs and small indels discovered in a participant's tumour so that the sample is _not_ recognised as hypermutated. If mutations' number exceeds `max_n_vars`, then a sample will be removed from the analysis. Recommended value: `90000`.
-- `ignore_strand` `'T'`
-- `min_reg_len` `5`
+
+### Genomic regions filtering parameters
+- `ignore_strand`: boolean, indicating, whatever or not strand information 
+should be taken into account while removing regions to exclude from the target
+regions. For example, if 3'UTR of a gene_A is located on '+' strand and 
+overlaps CDS of a gene_B located on the '-' strand, then bases of gene_A's 
+3'UTR will be removed if `ignore_strand` set to `F` and kept otherwide. 
+Default: `'T'`. Accepted values: `'T'` and `'F'`.
+- `min_reg_len`: during removal of unwanted regions from target regions (i.e.
+CDS from the set of 3'UTRs) some regions may become very small. The 
+`min_reg_len` parameter sets the smallest length of a region which still will
+be considered. Default: `5`.
+
+### Assignment of mutations to regions and mutation rate calculations parameters
+During pipeline execution three types of mutation rate based on mutation 
+mapping to genomic region can be computed: 1) genomic region specific mutation
+rate then number of mutations within each specific genomic region, i.e. TP53 
+CDS, is computed and divided by the length of the corresponding region, 2) 
+local mutation rate computed via bining the genome on consequtive bins of 
+certain size (for example 50kb), counting mutations inside them and dividing
+by the bin size 3) synonumous mutation rate computed as number of synonymous
+mutations in a certain genomic region; the synonumous mutation rate is only
+computed for CDS regions. These three mutation rates can be later used in 
+postprocessing for filtering out hypermutated regions of a genome. The genomic
+region specific mutation rate will always be computed. Calculations of the
+local mutation rate can be switched off by setting `bin_len` parameter to `-1`.
+Similarly, calculations of synonumous mutation rate are controlled via 
+`calc_synonymous` parameter.
+
+- `bin_len` sets the length of the bins (in bp) for the local mutation rate
+computations. Set it to `-1` to switch off local mutation rate calculations.
+Reccomended value: `50000` (50kb).
+- `calc_synonymous` boolean, indicating whether mutation rate based on
+synonymous mutations should be computed (CDS regions only). Reccomended value:
+`T`. Accepted values: `T` and `F`.
+
 - `gene_name_synonyms` `'data/assets/hgnc_complete_set_processed.csv'`   optional
-- `bin_len` `50000`  optional, set it to `-1` to switch off filtering based on local mutation rate
-- `calc_synonymous` `'T'` optional, set it to `'F'` to switch off filtering based on synonymous mutation rate (CDS only)
-- `remove_synonymous_from_coding` `'T'` put to `F` to disable
+synTabHelp <- paste('Path to table containing information about gene names',
+                    '(symbols) and their synonyms. Required columns: idx and',
+                    'gene_name.')
+- `remove_synonymous_from_coding` `'T'` put to `F` to disable removeSynHelp <- paste('Boolean, indicating whether synonymous mutations ',
+ should be removed from calculations of mutational ',
+ rates in coding genomic regions.')
+
 - `cdsAcceptedClass` `Frame_Shift_Del Frame_Shift_Ins In_Frame_Del In_Frame_Ins Missense_Mutation Nonsense_Mutation Silent Translation_Start_Site Nonstop_Mutation De_novo_Start_InFrame De_novo_Start_OutOfFrame Unknown`
+Variant_Classification-s from MAF format which are',
+acceptable as annotation of coding variants.',
+Suggested values: Frame_Shift_Del, Frame_Shift_Ins',
+                      "In_Frame_Del, In_Frame_Ins, Missense_Mutation,",
+                      "Nonsense_Mutation, Silent, Translation_Start_Site,",
+                      "Nonstop_Mutation, De_novo_Start_InFrame,",
+                      "De_novo_Start_OutOfFrame, Unknown. It is higly",
+reccomended to include Unknown to handle MNPs.')
+
 - `synAcceptedClass` `Silent`
+synClassHelp <- paste('Variant_Classification-s from MAF format which are',
+acceptable as markers of synonymous variants. ',
+Suggested values: Silent')
+
 - `ncAcceptedClass`  `3primeUTR 3primeFlank 5primeUTR 5primeFlank IGR Intron RNA Targeted_Region Splice_Site Unknown`
+ncClassHelp <- paste('Variant_Classification-s from MAF format which are',
+                     'acceptable as annotation of noncoding variants.',
+                     "Suggested values: 3primeUTR, 3primeFlank, 5primeUTR,",
+                     "5primeFlank, IGR, Intron, RNA, Targeted_Region,", 
+                     "Splice_Site, Unknown.")
+
 - `varanno_conversion_table` `data/assets/variantAnnotation_to_annovar_conversion.txt` optional, set to '' to not use
-- `annotation_failed_code` `Unknown`
+conversionTabHelp <- paste('Path to table with columns:',
+     variantAnnotation_anno, var_type, var_class which',
+     denotes conversion from variantAnnotation terms',
+     of protein coding variant annotations (i.e.',
+     synonymous) to the ones given by tool used by a',
+     user to annotate their variants (i.e. Silent in',
+     case of annovar). var_type should be one of SNP,',
+     DEL, INS, MNP.')
+
+- `annotation_failed_code`: string which should be used if variantAnnotation 
+package fails to re-annotate a variant. Reccomended value: `Unknown`.
 
 ### Postprocessing
 - `known_cancer_genes` `'data/assets/cgc_knownCancerGenes.csv'`
