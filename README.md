@@ -5,7 +5,7 @@
 [![run with docker](https://img.shields.io/badge/run%20with-docker-0db7ed?labelColor=000000&logo=docker)](https://www.docker.com/)
 [![run with singularity](https://img.shields.io/badge/run%20with-singularity-1d355c.svg?labelColor=000000)](https://sylabs.io/docs/)
 
-This [Nextflow](https://www.nextflow.io/) pipeline is designed for the *de novo* detection of coding and noncoding somatic driver genomic elements based on single nucleotide variations (SNVs) and small insertions and deletions (indels) in cancer patient cohorts. It currently integrates five advanced calling algorithms: [DIGdriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0), and [OncodriveFML](https://bbglab.irbbarcelona.org/oncodrivefml/home). [DIGdriver](https://github.com/maxwellsh/DIGDriver), NBR, and OncodriveFML are capable of detecting both coding and noncoding driver genetic elements, whereas [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and advanced calling algorithms: [DIGdriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0) focus solely on detecting coding drivers. The source code for NBR was provided by Dr. [Inigo Martincorena](https://github.com/im3sanger). 
+This [Nextflow](https://www.nextflow.io/) pipeline is designed for the *de novo* detection of coding and noncoding somatic driver genomic elements based on single nucleotide variations (SNVs) and small insertions and deletions (indels) in cancer patient cohorts. It currently integrates five advanced calling algorithms: [DIGDriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0), and [OncodriveFML](https://bbglab.irbbarcelona.org/oncodrivefml/home). [DIGDriver](https://github.com/maxwellsh/DIGDriver), NBR, and OncodriveFML are capable of detecting both coding and noncoding driver genetic elements, whereas [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and advanced calling algorithms: [DIGDriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0) focus solely on detecting coding drivers. The source code for NBR was provided by Dr. [Inigo Martincorena](https://github.com/im3sanger). 
 
 > CHASMplus
 
@@ -19,20 +19,20 @@ This documentation provides comprehensive instructions on setting up, configurin
 - [Software requirements](#requirements)
 - [Supported genome versions](#supported-genome-versions)
 - [Inputs](#inputs)
-  - [Genomic variants files (mutations)](#genomic-variants-files)
+  - [Genomic variants files (mutations)](#genomic-variants-files-mutations)
   - [Genomic regions of interest](#genomic-regions-of-interest)
   - [Mutations multiplicity](#mutations-multiplicity)
   - [Inventory tables](#inventory-tables)
     - [Patients inventory table](#patients-inventory-table)
     - [Analysis inventory table](#analysis-inventory-table)
-      - [Example of analysis table entries for CDS](#)
-      - [Example of analysis table entries for splice sites](#)
-      - [Example of analysis table entries for 5'UTRs](#)
-      - [Example of analysis table entries for 3'UTRs](#)
-      - [Example of analysis table entries for shortRNA](#)
+      - [Example of analysis table entries for CDS](#example-of-analysis-table-entries-for-cds)
+      - [Example of analysis table entries for splice sites](#example-of-analysis-table-entries-for-splice-sites)
+      - [Example of analysis table entries for 5'UTRs](#example-of-analysis-table-entries-for-5utrs)
+      - [Example of analysis table entries for 3'UTRs](#example-of-analysis-table-entries-for-3utrs)
+      - [Example of analysis table entries for shortRNA](#example-of-analysis-table-entries-for-shortrna)
     - [Black or whitelisted regions inventory table](#black-or-whitelisted-regions-inventory-table)
-    - [DIGdriver models inventory table](#digdriver-models-inventory-table)
-    - [CHASMplus annotators inventory table](#CHASMplus annotators inventory table)
+    - [DIGDriver models inventory table](#DIGDriver-models-inventory-table)
+    - [CHASMplus annotators inventory table](#chasmplus-annotators-inventory-table)
     - [Expression inventory table](#Expression inventory table)
 - [Parameters](#Parameters)
   - [General: path to inventories]()
@@ -120,14 +120,85 @@ where
 - **n_alt_count** *[optional]*:  number of reads with an alternative allele at this position in the normal sample
 
 ## Genomic regions of interest
-Genomic regions of interest can be provided via files in [`gtf`](https://www.ensembl.org/info/website/upload/gff.html) or [`bed`](https://genome.ucsc.edu/FAQ/FAQformat.html#format1) format. It is customary that more well established regions of a genome with known biological function, i.e. CDS, promoters, lncRNA, miRNA, are derived from `gtf` files and custom genome regions, i.e. regions with yet unknown functionality or not yet fully experimentally validated ones, such as enhancers, are supplied via `bed` files.
+Genomic regions of interest can be provided via files in 
+[`gtf`](https://www.ensembl.org/info/website/upload/gff.html) or 
+[`bed`](https://genome.ucsc.edu/FAQ/FAQformat.html#format1) format. It is 
+customary that more well established regions of a genome with known 
+biological function, i.e. CDS, promoters, lncRNA, miRNA, are derived from `gtf`
+files and custom genome regions, i.e. regions with yet unknown functionality or
+not yet fully experimentally validated ones, such as enhancers, are supplied 
+via `bed` files. 
 
-> [!NOTE]
-> There is no need to perform an extraction of your of interest from a `gtf` file
-> 
 ### GTF
 
+> [!NOTE]
+> Due to inability of some *de-novo* driver calling software to support 
+> different genome versions (see 
+> [supported genome versions](#supported-genome-versions) section) it is 
+> highly recommended to use `gtf` genome annotations files for `hg19` 
+> genome. Specifically, necessary files for 
+> [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0) 
+> and [DIGDriver](https://github.com/maxwellsh/DIGDriver) execution are solely
+> available on `hg19` coordinates. While it is possible to liftover genomic 
+> coordinates to `hg19` from the other genome versions, such procedure may
+> lead to shattering of regions into smaller ones or disruption of regions'
+> internal structure, i.e. codons of CDS.
+
+Standard `gtf` files for `hg19` genome can be downloaded from the
+[UCSC web browser](https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/genes/).
+It is recommended to use `refGene`, `ncbiRefSeq` or `ensGene` versions of the 
+`gtf` as these files have both `gene_name` and `gene_id` annotation. However, 
+all of these file formats are lacking `transcript_biotype` field which is 
+***essential** for distinguishing between protein coding genes and other types
+of genes, i.e. `lncRNA` with the internal structure annotated as `exons`. Here
+is an example of `gtf` file without `transcript_biotype` field:
+
+```
+chr1	refGene	transcript	11874	14409	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018";  gene_name "DDX11L1";
+chr1	refGene	exon	11874	12227	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; exon_number "1"; exon_id "NR_046018.1"; gene_name "DDX11L1";
+chr1	refGene	exon	12613	12721	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; exon_number "2"; exon_id "NR_046018.2"; gene_name "DDX11L1";
+chr1	refGene	exon	13221	14409	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; exon_number "3"; exon_id "NR_046018.3"; gene_name "DDX11L1";
+```
+and with `transcript_biotype` field:
+```
+chr1	refGene	exon	11874	12227	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; gene_name "DDX11L1"; exon_number "1"; transcript_biotype "misc_RNA"; transcript_id_m "NR_046018";
+chr1	refGene	transcript	11874	14409	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; gene_name "DDX11L1"; transcript_biotype "misc_RNA"; transcript_id_m "NR_046018";
+chr1	refGene	exon	12613	12721	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; gene_name "DDX11L1"; exon_number "2"; transcript_biotype "misc_RNA"; transcript_id_m "NR_046018";
+chr1	refGene	exon	13221	14409	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; gene_name "DDX11L1"; exon_number "3"; transcript_biotype "misc_RNA"; transcript_id_m "NR_046018";
+```
+`transcript_biotype` field can be added by intersecting `refGene gtf` with
+`ensembl gtf` file. The most recent `ensembl` annotation `gtf` for 
+`hg19`/`GRCh37.75.gtf.gz` can be downloaded 
+[here](https://ftp.ensembl.org/pub/release-75/gtf/homo_sapiens/). A script
+to perform the intersection is available in 
+[preprocessing_scripts](preprocessing_scripts/) folder.
+
 ### BED
+One of the most convenient ways to define custom genomic regions, i.e. 
+enhancers, is though the `bed`-like formatted file. Such file must be tab
+separated and contain 7 columns, for example:
+
+| **chr** | **start** | **end** | **strand** | **gene_id** | **gene_name** | **rCode** |
+|:-------:|:---------:|:-------:|:----------:|:-----------:|:-------------:|:---------:|
+|chr1|858255|858648|*|SAMD11|SAMD11|enhancer|
+|chr1|893086|897162|*|KLHL17|KLHL17|enhancer|
+|chr1|893086|897162|*|NOC2L|NOC2L|enhancer|
+|chr1|901067|902970|*|PLEKHN1|PLEKHN1|enhancer|
+|chr1|910650|915364|*|PERM1|PERM1|enhancer|
+
+where
+- **chr** *[essential]*: chromosome 
+- **start** *[essential]*: start of the region
+- **end** *[essential]*: end of the region
+- **strand** *[essential]*: strand on which regions is located, i.e. `+`, `-` or 
+`*` (no strand) 
+- **gene_id** *[essential]*: ID of the gene to which region belongs. It can be 
+any string.
+- **gene_name** *[essential]*: gene name to which region belongs. It can be 
+any string.
+- **rCode** *[essential]*: string, region biotype. The `rCode` can have any
+string. **The values from the `rCode` column should be used as an entry for** 
+**`gr_code` column of the [analysis table](#analysis-inventory-table).**
 
 ## Mutations multiplicity
 
@@ -178,7 +249,7 @@ The table below provides an example of an analysis inventory table.
 where
 
 - **tumour_subtype** *[essential]*: The name of the tumour cohort to be analyzed. It should match one of the cohort names listed in the `tumour_subtype` column of the [patient inventory table](#Patients-inventory-table). The values in this column must not contain a "-" character.
-- **software** *[essential]*: The name of the software to be applied to the cohort listed in the `tumour_subtype` column. Permitted values are: `digdriver`, `dndscv`, `mutpanning`, `chasmplus`, `nbr`, and `oncodrivefml`.
+- **software** *[essential]*: The name of the software to be applied to the cohort listed in the `tumour_subtype` column. Permitted values are: `DIGDriver`, `dndscv`, `mutpanning`, `chasmplus`, `nbr`, and `oncodrivefml`.
 - **gr_id** *[essential]*: The name of the genomic region(s) set(s) to be analyzed. This can be any user-defined string, such as "coding" for CDS. The values in this column must not contain a "-" character.
 - **gr_code** *[essential]*: A code (string) defining the biotypes of component parts of the genomic region(s) set(s) to be analyzed. The biotypes of the component parts are defined via files listed in `gr_file` column. Permitted values are: `3primeUTR`, `5primeUTR`, `CDS`, `lincRNA`, `lincRNA_promoter`, `lincRNA_ss`, `miRNA`, `misc_RNA`, `promoter`, `rRNA`, `snoRNA`, `snRNA`, and `ss` (splice sites). Genomic regions annotated with the corresponding biological function (e.g., all 3'UTRs in the case of `3primeUTR` or long non-coding RNAs in the case of `lincRNA`) will be extracted from the files specified in `gr_file`, combined gene-wise (collapsed across transcripts in the case of UTRs), and included in the set defined in the `gr_id` column. Each set of genomic regions of interest (defined uniquely by its ID in the `gr_id` column) can comprise one or more `gr_code`s. For example, a `gr_id` named "coding_and_UTRs" can have `CDS`, `3primeUTR`, and `5primeUTR` in the `gr_code` column. Please see below for illustrative examples. For [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and `MutPanning` only `CDS` is accepted in this column.
 - **gr_file** *[essential]*: The full path on your system (computer/HPC/*etc*) to a GTF or BED file from which genomic elements of interest should be extracted. The BED file must have the following columns: `chr`, `start`, `end`, `strand`, `gene_id`, `gene_name`, and `rCode`, where the `rCode` column contains the biotype of the region as a string, matching one of the values in the `gr_code` column. The GTF file must have the following fields: `gene_name`, `gene_id`, `gene_type`, `gene_biotype`, `transcript_id`, `transcript_type`, `transcript_biotype`. Please refer to the section [genomic regions of interest](#Genomic-regions-of-interest) for more details. The existence of the files listed in this column will be checked prior to the pipeline's execution.
@@ -278,29 +349,29 @@ the pipeline, black- and white-listed regions must be provided based on the
 same genome version as the target genome set by `target_genome_version` 
 parameter.
 
-### DIGdriver models inventory table
-The DIGdriver inventory table is a comma-separated file that defines 
+### DIGDriver models inventory table
+The DIGDriver inventory table is a comma-separated file that defines 
 relationship between the analysed tumour subtypes and models which will be used
-for them during the DIGdriver run. The complete list of the available models can be
-found on [DIGdriver data portal](https://cb.csail.mit.edu/cb/DIG/downloads/).
+for them during the DIGDriver run. The complete list of the available models can be
+found on [DIGDriver data portal](https://cb.csail.mit.edu/cb/DIG/downloads/).
 
-The table below provides an example of a DIGdriver models inventory table.
+The table below provides an example of a DIGDriver models inventory table.
 
 | tumour_subtype  | model_file                                                |
 |:--------------:|:---------------------------------------------------------:|
-| Adenocarcinoma | DIGdriver_models/Lung-AdenoCA_SNV_MNV_INDEL.Pretrained.h5 |
-| Squamous_cell  | DIGdriver_models/Lung-SCC_SNV_MNV_INDEL.Pretrained.h5     |
-| Panlung        | DIGdriver_models/Lung_tumours_SNV_MNV_INDEL.Pretrained.h5  |
+| Adenocarcinoma | DIGDriver_models/Lung-AdenoCA_SNV_MNV_INDEL.Pretrained.h5 |
+| Squamous_cell  | DIGDriver_models/Lung-SCC_SNV_MNV_INDEL.Pretrained.h5     |
+| Panlung        | DIGDriver_models/Lung_tumours_SNV_MNV_INDEL.Pretrained.h5  |
 
 where
 
 - **tumour_subtype** *[essential]*: The name of the tumour cohort to be analyzed.
 It should match one of the cohort names listed in the `tumour_subtype` column of
 the [patient inventory table](#Patients-inventory-table). All tumour subtypes 
-for which analysis with DIGdriver was requested in the 
-[analysis inventory table](#Analysis-inventory-table) must have a DIGdriver 
+for which analysis with DIGDriver was requested in the 
+[analysis inventory table](#Analysis-inventory-table) must have a DIGDriver 
 model assigned.
-- **model_file** *[essential]*: A full path to one of [DIGdriver models](https://cb.csail.mit.edu/cb/DIG/downloads/)
+- **model_file** *[essential]*: A full path to one of [DIGDriver models](https://cb.csail.mit.edu/cb/DIG/downloads/)
 The same models could be used for the different tumour subtypes.
 
 ### CHASMplus annotators inventory table
@@ -374,23 +445,23 @@ If analysis with [CHASMplus](https://chasmplus.readthedocs.io/en/latest/) is
 not requested, set this parameter to `''`, i.e. 
 `chasmplus_annotators_inventory = ''`.
 
-#### DIGdriver - specific files
+#### DIGDriver - specific files
 
-If analysis of genomic regions with [DIGdriver](https://github.com/maxwellsh/DIGDriver)
-is requested, then a file matching [DIGdriver](https://github.com/maxwellsh/DIGDriver)
+If analysis of genomic regions with [DIGDriver](https://github.com/maxwellsh/DIGDriver)
+is requested, then a file matching [DIGDriver](https://github.com/maxwellsh/DIGDriver)
 models to the tumour subtypes under considereations and a `element_data.h5` file
-needed for [DIGdriver](https://github.com/maxwellsh/DIGDriver) training.
-- `digdriver_models_inventory`: a path to the inventory file, i.e. 
-`'data/inventory/inventory_digdriver_models.csv'`. The table links together
-cohorts of tumour subtypes and [DIGdriver](https://github.com/maxwellsh/DIGDriver)
+needed for [DIGDriver](https://github.com/maxwellsh/DIGDriver) training.
+- `DIGDriver_models_inventory`: a path to the inventory file, i.e. 
+`'data/inventory/inventory_DIGDriver_models.csv'`. The table links together
+cohorts of tumour subtypes and [DIGDriver](https://github.com/maxwellsh/DIGDriver)
 models to be used for their analysis.
-- `digdriver_elements`: a path to `element_data.h5` used internally by 
-[DIGdriver](https://github.com/maxwellsh/DIGDriver). The file can be downloaded
+- `DIGDriver_elements`: a path to `element_data.h5` used internally by 
+[DIGDriver](https://github.com/maxwellsh/DIGDriver). The file can be downloaded
 [here](https://cb.csail.mit.edu/cb/DIG/downloads//dig_data_files/). 
 
-If analysis with [DIGdriver](https://github.com/maxwellsh/DIGDriver) is not
-requested, set these parameters to `''`, i.e. `digdriver_models_inventory = ''`
-and `digdriver_elements = ''`.
+If analysis with [DIGDriver](https://github.com/maxwellsh/DIGDriver) is not
+requested, set these parameters to `''`, i.e. `DIGDriver_models_inventory = ''`
+and `DIGDriver_elements = ''`.
 
 #### NBR - specific files
 If analysis of genomic regions with NBR is requested, then three additional
@@ -413,7 +484,7 @@ known driver genomic elements, i.e.
 The following set of parameters defines containers to be used during all steps of the pipeline execution. All containers can be viewed at [Docker hub](https://hub.docker.com/r/marialitovchenko/noncoding_driver_pipeline/tags). Recipes for container re-creation can be found in [container_recipes folder](container_recipes).
 
 - `chasmplus_container`: a container to be used for CHASMplus execution. Default: `marialitovchenko/noncoding_driver_pipeline:chasmplus`
-- `digdriver_container`: a container to be used for [DIGdriver](https://github.com/maxwellsh/DIGDriver) execution. Default: `marialitovchenko/noncoding_driver_pipeline:digdriver`
+- `DIGDriver_container`: a container to be used for [DIGDriver](https://github.com/maxwellsh/DIGDriver) execution. Default: `marialitovchenko/noncoding_driver_pipeline:DIGDriver`
 - `mutpanning_container`: a container to be used for MutPanning execution. Default: `marialitovchenko/noncoding_driver_pipeline:mutpanning`
 - `oncodrivefml_container`: a container to be used for OncodriveFML execution. Default: `marialitovchenko/noncoding_driver_pipeline:oncodrivefml`
 - `r_container`: a container to be used for the creation of input files for all software, as well as [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR and postprocessing execution. Default: `marialitovchenko/noncoding_driver_pipeline:r_packages`
