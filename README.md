@@ -149,7 +149,7 @@ Standard `gtf` files for `hg19` genome can be downloaded from the
 It is recommended to use `refGene`, `ncbiRefSeq` or `ensGene` versions of the 
 `gtf` as these files have both `gene_name` and `gene_id` annotation. However, 
 all of these file formats are lacking `transcript_biotype` field which is 
-***essential** for distinguishing between protein coding genes and other types
+**essential** for distinguishing between protein coding genes and other types
 of genes, i.e. `lncRNA` with the internal structure annotated as `exons`. Here
 is an example of `gtf` file without `transcript_biotype` field:
 
@@ -536,70 +536,127 @@ CDS from the set of 3'UTRs) some regions may become very small. The
 be considered. Default: `5`.
 
 ### Assignment of mutations to regions and mutation rate calculations parameters
-During pipeline execution three types of mutation rate based on mutation 
-mapping to genomic region can be computed: 1) genomic region specific mutation
-rate then number of mutations within each specific genomic region, i.e. TP53 
-CDS, is computed and divided by the length of the corresponding region, 2) 
-local mutation rate computed via bining the genome on consequtive bins of 
-certain size (for example 50kb), counting mutations inside them and dividing
-by the bin size 3) synonumous mutation rate computed as number of synonymous
-mutations in a certain genomic region; the synonumous mutation rate is only
-computed for CDS regions. These three mutation rates can be later used in 
-postprocessing for filtering out hypermutated regions of a genome. The genomic
-region specific mutation rate will always be computed. Calculations of the
-local mutation rate can be switched off by setting `bin_len` parameter to `-1`.
-Similarly, calculations of synonumous mutation rate are controlled via 
-`calc_synonymous` parameter.
+In the course of pipeline execution three types of mutation rate based on  
+mutation mapping to genomic region can be computed: 
 
-- `bin_len` sets the length of the bins (in bp) for the local mutation rate
-computations. Set it to `-1` to switch off local mutation rate calculations.
-Reccomended value: `50000` (50kb).
+1. **genomic region specific mutation rate** then number of mutations within
+each specific genomic region, i.e. TP53 CDS, is computed and divided by the 
+length of the corresponding region, 
+2. **local mutation rate** computed via bining the genome on consequtive bins
+of certain size (for example 50kb), counting mutations inside them and dividing
+by the bin size 
+3. **synonumous mutation rate** computed as number of synonymous mutations in a
+certain genomic region; the synonumous mutation rate is only computed for CDS 
+regions. 
+
+These three mutation rates can be later used in postprocessing for filtering 
+out hypermutated regions of a genome. The genomic region specific mutation rate
+will always be computed. Calculations of the local mutation rate can be 
+switched off by setting `bin_len` parameter to `-1`. Similarly, calculations of
+synonumous mutation rate are controlled via `calc_synonymous` parameter.
+
+- `remove_synonymous_from_coding` boolean, indicating whether synonymous 
+mutations should be removed from calculations of genomic region specific 
+mutation rate in coding genomic regions. Default: `T`. Accepted values: `T` and
+`F`.
+- `bin_len` parameter sets the length of the bins (in bp) for the local 
+mutation rate computations. Set it to `-1` to switch off local mutation rate 
+calculations. Reccomended value: `50000` (50kb).
 - `calc_synonymous` boolean, indicating whether mutation rate based on
 synonymous mutations should be computed (CDS regions only). Reccomended value:
 `T`. Accepted values: `T` and `F`.
 
-- `gene_name_synonyms` `'data/assets/hgnc_complete_set_processed.csv'`   optional
-synTabHelp <- paste('Path to table containing information about gene names',
-                    '(symbols) and their synonyms. Required columns: idx and',
-                    'gene_name.')
-- `remove_synonymous_from_coding` `'T'` put to `F` to disable removeSynHelp <- paste('Boolean, indicating whether synonymous mutations ',
- should be removed from calculations of mutational ',
- rates in coding genomic regions.')
+During calculations of the mutation rates genomic variants will be mapped to 
+the genomic regions of interest. The mapping will be checked for consistency by
+ensuring that coding mutations are indeed mapped to the coding regions of a 
+genome and noncoding to the noncoding ones respectively. 
 
-- `cdsAcceptedClass` `Frame_Shift_Del Frame_Shift_Ins In_Frame_Del In_Frame_Ins Missense_Mutation Nonsense_Mutation Silent Translation_Start_Site Nonstop_Mutation De_novo_Start_InFrame De_novo_Start_OutOfFrame Unknown`
-Variant_Classification-s from MAF format which are',
-acceptable as annotation of coding variants.',
-Suggested values: Frame_Shift_Del, Frame_Shift_Ins',
-                      "In_Frame_Del, In_Frame_Ins, Missense_Mutation,",
-                      "Nonsense_Mutation, Silent, Translation_Start_Site,",
-                      "Nonstop_Mutation, De_novo_Start_InFrame,",
-                      "De_novo_Start_OutOfFrame, Unknown. It is higly",
-reccomended to include Unknown to handle MNPs.')
+- `gene_name_synonyms` a path to file which contains gene name synonyms, i.e.
+`'data/assets/hgnc_complete_set_processed.csv'`. Set this parameter to `''` if
+no such file can be provided. This file is used to match mutation to the 
+corresponding genes even if different gene names synonyms were used. For 
+example, `RASA1` gene is also 
+[known](https://www.ensembl.org/Homo_sapiens/Gene/Summary?db=core;g=ENSG00000145715;r=5:87267883-87391931)
+under `CM-AVM`, `GAP`, `P120`, `P120GAP`, `P120RASGAP` and `RASA` names and
+mutations assigned to any of these synonums should be mapped to genomic regions
+associated with `RASA1`. The file should have two columns: `idx` and 
+`gene_name`. Gene names synonyms should have the same `idx`, i.e.:
 
-- `synAcceptedClass` `Silent`
-synClassHelp <- paste('Variant_Classification-s from MAF format which are',
-acceptable as markers of synonymous variants. ',
-Suggested values: Silent')
+| idx | gene_name  |
+|:---:|:----------:|
+| 1234| CM-AVM     |  
+| 1234| GAP        |
+| 1234| P120       |
+| 1234| P120GAP    |
+| 1234| P120RASGAP |
+| 1234| RASA       |
+| 1234| RASA1      |
+| 12  | TP53       |
+| 12  | TP53       |
 
-- `ncAcceptedClass`  `3primeUTR 3primeFlank 5primeUTR 5primeFlank IGR Intron RNA Targeted_Region Splice_Site Unknown`
-ncClassHelp <- paste('Variant_Classification-s from MAF format which are',
-                     'acceptable as annotation of noncoding variants.',
-                     "Suggested values: 3primeUTR, 3primeFlank, 5primeUTR,",
-                     "5primeFlank, IGR, Intron, RNA, Targeted_Region,", 
-                     "Splice_Site, Unknown.")
+`idx` can be any number.
 
-- `varanno_conversion_table` `data/assets/variantAnnotation_to_annovar_conversion.txt` optional, set to '' to not use
-conversionTabHelp <- paste('Path to table with columns:',
-     variantAnnotation_anno, var_type, var_class which',
-     denotes conversion from variantAnnotation terms',
-     of protein coding variant annotations (i.e.',
-     synonymous) to the ones given by tool used by a',
-     user to annotate their variants (i.e. Silent in',
-     case of annovar). var_type should be one of SNP,',
-     DEL, INS, MNP.')
+- `cdsAcceptedClass` variant classifications from MAF format which are
+acceptable as annotation of coding variants. Should a mutation not annotated
+with the variant classifications set in this parameter be found in the coding
+genomic regions, it will be flagged and re-annotated. Reccomended value: 
+`Frame_Shift_Del Frame_Shift_Ins In_Frame_Del In_Frame_Ins Missense_Mutation Nonsense_Mutation Silent Translation_Start_Site Nonstop_Mutation De_novo_Start_InFrame De_novo_Start_OutOfFrame Unknown`.
+It is higly reccomended to include `Unknown` in the `cdsAcceptedClass` to 
+handle MNPs.
+- `synAcceptedClass` variant classifications from MAF format which are
+acceptable as annotation of synonymous variants. Reccomended value: `Silent`.
+- `ncAcceptedClass` variant classifications from MAF format which are
+acceptable as annotation of noncoding variants. Should a mutation not annotated
+with the variant classifications set in this parameter be found in the coding
+genomic regions, it will be flagged and re-annotated. Reccomended value: 
+`3primeUTR 3primeFlank 5primeUTR 5primeFlank IGR Intron RNA Targeted_Region Splice_Site Unknown`
 
-- `annotation_failed_code`: string which should be used if variantAnnotation 
+As mentioned above in the description of `cdsAcceptedClass` and 
+`ncAcceptedClass` parameters, should a mismatch between genomic region class
+and mutation class be detected, a variant re-annotation will be conducted by 
+means of [VariantAnnotation](https://www.bioconductor.org/packages/release/bioc/html/VariantAnnotation.html)
+package. It is very likely that the initial annotation of the genetic variants
+was not performed by the VariantAnnotation package, and therefore the new and 
+the original annotations should be harmonized. Parameter 
+`varanno_conversion_table` serves exactly this purpose.
+
+- `varanno_conversion_table` a path to file which contains table for 
+harmonizing annotations created by VariantAnnotation package with the original
+ones. The file should contain three columns: `variantAnnotation_anno`, 
+`var_type` and `var_class`, where
+  - `variantAnnotation_anno` denotes a term used by VariantAnnotation package,
+   i.e. `synonymous` 
+  - `var_type` denotes variant structural type, and should be one of `SNP`, 
+  `DEL`, `INS` or `MNP`.
+  - `var_class` denotes a term used by the tool used to produce original 
+  annotation, i.e. `Silent`. 
+
+  Please note that 
+
+  | variantAnnotation_anno | var_type  | var_type|
+  |:---:|:----------:|:---:|
+  | synonymous	| SNP	| Silent | 
+  | synonymous	| DEL	| Unknown| 
+  | synonymous	| INS	| Unknown| 
+  | synonymous	| MNP	| Silent|
+  | nonsynonymous	| SNP	| Missense_Mutation|
+  | nonsynonymous	| DEL	| In_Frame_Del|
+  | nonsynonymous	| INS	| Frame_Shift_Ins|
+  | nonsynonymous	| MNP	| Missense_Mutation|
+  | nonsense	| SNP	| Nonsense_Mutation|
+  | nonsense	| DEL	| Frame_Shift_Del|
+  | nonsense	| INS	| Frame_Shift_Ins|
+  | nonsense	| MNP	| Nonsense_Mutation|
+  | frameshift	| SNP	| Unknown|
+  | frameshift	| DEL	| Frame_Shift_Del|
+  | frameshift	| INS	| Frame_Shift_Ins|
+  | frameshift	| MNP	| Unknown|
+- `annotation_failed_code`: string which should be used if `VariantAnnotation` 
 package fails to re-annotate a variant. Reccomended value: `Unknown`.
+
+> [!NOTE]
+> While a re-annotation will be attempted, it is expected that the amount of 
+> cases needing such a procedure will be low.
 
 ### Postprocessing
 - `known_cancer_genes` `'data/assets/cgc_knownCancerGenes.csv'`
