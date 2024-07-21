@@ -1,11 +1,12 @@
 # Welcome
+
 **THE DOCUMENTATION IS UNDER DEVELOPMENT. PLEASE BEAR WITH US**
 
 [![Nextflow](https://img.shields.io/badge/nextflow%20DSL2-%E2%89%A523.04.0-23aa62.svg)](https://www.nextflow.io/)
 [![run with docker](https://img.shields.io/badge/run%20with-docker-0db7ed?labelColor=000000&logo=docker)](https://www.docker.com/)
 [![run with singularity](https://img.shields.io/badge/run%20with-singularity-1d355c.svg?labelColor=000000)](https://sylabs.io/docs/)
 
-This [Nextflow](https://www.nextflow.io/) pipeline is designed for the *de novo* detection of coding and noncoding somatic driver genomic elements based on single nucleotide variations (SNVs) and small insertions and deletions (indels) in cancer patient cohorts. It currently integrates five advanced calling algorithms: [DIGDriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0), and [OncodriveFML](https://bbglab.irbbarcelona.org/oncodrivefml/home). [DIGDriver](https://github.com/maxwellsh/DIGDriver), NBR, and OncodriveFML are capable of detecting both coding and noncoding driver genetic elements, whereas [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and advanced calling algorithms: [DIGDriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0) focus solely on detecting coding drivers. The source code for NBR was provided by Dr. [Inigo Martincorena](https://github.com/im3sanger). 
+This [Nextflow](https://www.nextflow.io/) pipeline is designed for the *de novo* detection of coding and noncoding somatic driver genomic elements based on single nucleotide variations (SNVs) and small insertions and deletions (indels) in cancer patient cohorts. It currently integrates five advanced calling algorithms: [DIGDriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0), and [OncodriveFML](https://bbglab.irbbarcelona.org/oncodrivefml/home). [DIGDriver](https://github.com/maxwellsh/DIGDriver), NBR, and OncodriveFML are capable of detecting both coding and noncoding driver genetic elements, whereas [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and advanced calling algorithms: [DIGDriver](https://github.com/maxwellsh/DIGDriver), [dNdScv](https://github.com/im3sanger/dndscv/tree/master), NBR, [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0) focus solely on detecting coding drivers. The source code for NBR was provided by Dr. [Inigo Martincorena](https://github.com/im3sanger).
 
 > CHASMplus
 
@@ -16,7 +17,8 @@ It is highly recommended to include [dNdScv](https://github.com/im3sanger/dndscv
 This documentation provides comprehensive instructions on setting up, configuring, and running the pipeline along with detailed descriptions of the outputs.
 
 # Table of content
-- [Software requirements](#requirements)
+
+- [Software requirements](#software-requirements)
 - [Supported genome versions](#supported-genome-versions)
 - [Inputs](#inputs)
   - [Genomic variants files (mutations)](#genomic-variants-files-mutations)
@@ -31,36 +33,42 @@ This documentation provides comprehensive instructions on setting up, configurin
       - [Example of analysis table entries for 3'UTRs](#example-of-analysis-table-entries-for-3utrs)
       - [Example of analysis table entries for shortRNA](#example-of-analysis-table-entries-for-shortrna)
     - [Black or whitelisted regions inventory table](#black-or-whitelisted-regions-inventory-table)
-    - [DIGDriver models inventory table](#DIGDriver-models-inventory-table)
+    - [DIGDriver models inventory table](#digdriver-models-inventory-table)
     - [CHASMplus annotators inventory table](#chasmplus-annotators-inventory-table)
     - [Expression inventory table](#Expression inventory table)
-- [Parameters](#Parameters)
+- [Parameters](#parameters)
   - [General: path to inventories]()
-  - [Containers](#Containers)
-  - [Mutations filtering parameters](#Mutations-filtering-parameters)
-- [Profiles](#Profiles)
+  - [Containers](#containers)
+  - [Mutations filtering parameters](#mutations-filtering-parameters)
+- [Profiles](#profiles)
 - [Pipeline's execution](#Pipeline-s-execution)
-- [Outputs](#Outputs)
+- [Outputs](#outputs)
 
 # Software requirements
-* **Nextflow**: The pipeline is written in DSL2 and requires [Nextflow](https://www.nextflow.io/docs/latest/install.html) version 23.04.2 or higher.
-* **Singularity**: All software used in the pipeline is containerized. Interactions with containers are executed via [Singularity](https://docs.sylabs.io/guides/3.5/user-guide/introduction.html). The pipeline has been tested with Singularity version 3.8.3.
+
+- **Nextflow**: The pipeline is written in DSL2 and requires [Nextflow](https://www.nextflow.io/docs/latest/install.html) version 23.04.2 or higher.
+- **Singularity**: All software used in the pipeline is containerized. Interactions with containers are executed via [Singularity](https://docs.sylabs.io/guides/3.5/user-guide/introduction.html). The pipeline has been tested with Singularity version 3.8.3.
 
 # Supported genome versions
+
 Ideally, all input files should be in `hg19` coordinates. However, if this is not the case, avoid performing the liftover as it is already implemented in the pipeline. This approach minimizes the potential inconsistencies introduced by the liftover procedure.
 
 # Supported NGS types
+
 NBR can not run on WES.
 
 # Inputs
+
 Two inputs essential for the *de-novo* detection of cancer driver genomic elements are genetic alterations (mutations) and genomic regions of interest (i.e., set of coordinates which define coding regions, promoter, 5'UTRs, *etc*). To ensure that a signal of positive selection to be detected from the data is not distorted by a lower ability to perform sequencing in some genomic regions, it is also recommended to provide coordinates of [black-/white- listed regions](#black-or-whitelisted-regions-inventory-table).
 
 [Inventory tables](#inventory-tables) are used to tie different input files, input types and software which will be applied to them together.
 
 ## Genomic variants files (mutations)
-The pipeline can handle genomic variants files of two formats: The annovar-like table and the MAF-like table. Each file should contain genomic alterations (SNVs and small indels) for one patient only. The sections below provide an example of the input tables of two types. 
+
+The pipeline can handle genomic variants files of two formats: The annovar-like table and the MAF-like table. Each file should contain genomic alterations (SNVs and small indels) for one patient only. The sections below provide an example of the input tables of two types.
 
 ### Annovar
+
 The table below demonstrates an example of a genomic variant file in Annovar-like format.
 
 | **chr** | **start** | **stop** | **ref** | **var** | **Gene.refGene** | **Func.refGene** | **ExonicFunc.refGene** | **GeneDetail.refGene** | **AAChange.refGene** | **t_depth** | **t_ref_count** | **t_alt_count** | **n_depth** | **n_ref_count** | **n_alt_count** |
@@ -79,7 +87,7 @@ where
 - **ref** *[essential]*: reference allele
 - **var** *[essential]*: alternative allele
 - **Gene.refGene** *[essential]*: a name of a gene to which a mutation was mapped to
-- **Func.refGene** *[essential]*: 
+- **Func.refGene** *[essential]*:
 - **ExonicFunc.refGene** *[essential]*:
 - **GeneDetail.refGene** *[essential]*:
 - **AAChange.refGene** *[essential]*: aminoacid change which a mutation had induced
@@ -89,8 +97,9 @@ where
 - **n_depth** *[optional]*: depth of a normal sample at this position
 - **n_ref_count** *[optional]*: number of reads with reference allele at this position in the normal sample
 - **n_alt_count** *[optional]*:  number of reads with an alternative allele at this position in the normal sample
-                    
+
 ### MAF
+
 The table below demonstrates an example of a genomic variant file in MAF-like format.
 
 | **tumour_Sample_Barcode** | **Chromosome** | **Start_Position** | **End_Position** | **Reference_Allele** | **tumour_Seq_Allele2** | **Gene** | **Variant_Classification** | **Amino_acids** | **t_depth** | **t_ref_count** | **t_alt_count** | **n_depth** | **n_ref_count** | **n_alt_count** |
@@ -98,8 +107,8 @@ The table below demonstrates an example of a genomic variant file in MAF-like fo
 | participant_1 | 10 | 96828976 | 96828977 | C | A | CYP2C8 | Intron | . | 25 | 15 | 9 | 42 | 42 | 0 |
 | participant_1 | 11 | 118343898 | 118343899 | C | T | KMT2A | Missense_Mutation | S/L | 57 | 29 | 27 | 114 | 114 | 0 |
 | participant_1 | 12 | 8074198 | 8074199 | G | A | SLC2A3 | Silent | I | 38 | 30 | 8 | 38 | 38 | 0 |
-| participant_1	| 13 | 23909421 | 23909422 | T | C | SACS | Missense_Mutation | H/R | 49 | 24 | 25 | 29 | 29 | 0 |
-| participant_1 | 1 | 17720542 | 17720543 | C | A | PADI6 | RNA | . | 32 | 25 | 7 | 42 | 42 | 0 | 
+| participant_1 | 13 | 23909421 | 23909422 | T | C | SACS | Missense_Mutation | H/R | 49 | 24 | 25 | 29 | 29 | 0 |
+| participant_1 | 1 | 17720542 | 17720543 | C | A | PADI6 | RNA | . | 32 | 25 | 7 | 42 | 42 | 0 |
 
 where
 
@@ -120,61 +129,66 @@ where
 - **n_alt_count** *[optional]*:  number of reads with an alternative allele at this position in the normal sample
 
 ## Genomic regions of interest
-Genomic regions of interest can be provided via files in 
-[`gtf`](https://www.ensembl.org/info/website/upload/gff.html) or 
-[`bed`](https://genome.ucsc.edu/FAQ/FAQformat.html#format1) format. It is 
-customary that more well established regions of a genome with known 
+
+Genomic regions of interest can be provided via files in
+[`gtf`](https://www.ensembl.org/info/website/upload/gff.html) or
+[`bed`](https://genome.ucsc.edu/FAQ/FAQformat.html#format1) format. It is
+customary that more well established regions of a genome with known
 biological function, i.e. CDS, promoters, lncRNA, miRNA, are derived from `gtf`
 files and custom genome regions, i.e. regions with yet unknown functionality or
-not yet fully experimentally validated ones, such as enhancers, are supplied 
-via `bed` files. 
+not yet fully experimentally validated ones, such as enhancers, are supplied
+via `bed` files.
 
 ### GTF
 
 > [!NOTE]
-> Due to inability of some *de-novo* driver calling software to support 
-> different genome versions (see 
-> [supported genome versions](#supported-genome-versions) section) it is 
-> highly recommended to use `gtf` genome annotations files for `hg19` 
-> genome. Specifically, necessary files for 
-> [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0) 
+> Due to inability of some *de-novo* driver calling software to support
+> different genome versions (see
+> [supported genome versions](#supported-genome-versions) section) it is
+> highly recommended to use `gtf` genome annotations files for `hg19`
+> genome. Specifically, necessary files for
+> [MutPanning](https://www.genepattern.org/modules/docs/MutPanning#gsc.tab=0)
 > and [DIGDriver](https://github.com/maxwellsh/DIGDriver) execution are solely
-> available on `hg19` coordinates. While it is possible to liftover genomic 
+> available on `hg19` coordinates. While it is possible to liftover genomic
 > coordinates to `hg19` from the other genome versions, such procedure may
 > lead to shattering of regions into smaller ones or disruption of regions'
 > internal structure, i.e. codons of CDS.
 
 Standard `gtf` files for `hg19` genome can be downloaded from the
 [UCSC web browser](https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/genes/).
-It is recommended to use `refGene`, `ncbiRefSeq` or `ensGene` versions of the 
-`gtf` as these files have both `gene_name` and `gene_id` annotation. However, 
-all of these file formats are lacking `transcript_biotype` field which is 
+It is recommended to use `refGene`, `ncbiRefSeq` or `ensGene` versions of the
+`gtf` as these files have both `gene_name` and `gene_id` annotation. However,
+all of these file formats are lacking `transcript_biotype` field which is
 **essential** for distinguishing between protein coding genes and other types
 of genes, i.e. `lncRNA` with the internal structure annotated as `exons`. Here
 is an example of `gtf` file without `transcript_biotype` field:
 
+```text
+chr1 refGene transcript 11874 14409 . + . gene_id "DDX11L1"; transcript_id "NR_046018";  gene_name "DDX11L1";
+chr1 refGene exon 11874 12227 . + . gene_id "DDX11L1"; transcript_id "NR_046018"; exon_number "1"; exon_id "NR_046018.1"; gene_name "DDX11L1";
+chr1 refGene exon 12613 12721 . + . gene_id "DDX11L1"; transcript_id "NR_046018"; exon_number "2"; exon_id "NR_046018.2"; gene_name "DDX11L1";
+chr1 refGene exon 13221 14409 . + . gene_id "DDX11L1"; transcript_id "NR_046018"; exon_number "3"; exon_id "NR_046018.3"; gene_name "DDX11L1";
 ```
-chr1	refGene	transcript	11874	14409	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018";  gene_name "DDX11L1";
-chr1	refGene	exon	11874	12227	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; exon_number "1"; exon_id "NR_046018.1"; gene_name "DDX11L1";
-chr1	refGene	exon	12613	12721	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; exon_number "2"; exon_id "NR_046018.2"; gene_name "DDX11L1";
-chr1	refGene	exon	13221	14409	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; exon_number "3"; exon_id "NR_046018.3"; gene_name "DDX11L1";
-```
+
 and with `transcript_biotype` field:
+
+```text
+chr1 refGene exon 11874 12227 . + . gene_id "DDX11L1"; transcript_id "NR_046018"; gene_name "DDX11L1"; exon_number "1"; transcript_biotype "misc_RNA"; transcript_id_m "NR_046018";
+chr1 refGene transcript 11874 14409 . + . gene_id "DDX11L1"; transcript_id "NR_046018"; gene_name "DDX11L1"; transcript_biotype "misc_RNA"; transcript_id_m "NR_046018";
+chr1 refGene exon 12613 12721 . + . gene_id "DDX11L1"; transcript_id "NR_046018"; gene_name "DDX11L1"; exon_number "2"; transcript_biotype "misc_RNA"; transcript_id_m "NR_046018";
+chr1 refGene exon 13221 14409 . + . gene_id "DDX11L1"; transcript_id "NR_046018"; gene_name "DDX11L1"; exon_number "3"; transcript_biotype "misc_RNA"; transcript_id_m "NR_046018";
 ```
-chr1	refGene	exon	11874	12227	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; gene_name "DDX11L1"; exon_number "1"; transcript_biotype "misc_RNA"; transcript_id_m "NR_046018";
-chr1	refGene	transcript	11874	14409	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; gene_name "DDX11L1"; transcript_biotype "misc_RNA"; transcript_id_m "NR_046018";
-chr1	refGene	exon	12613	12721	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; gene_name "DDX11L1"; exon_number "2"; transcript_biotype "misc_RNA"; transcript_id_m "NR_046018";
-chr1	refGene	exon	13221	14409	.	+	.	gene_id "DDX11L1"; transcript_id "NR_046018"; gene_name "DDX11L1"; exon_number "3"; transcript_biotype "misc_RNA"; transcript_id_m "NR_046018";
-```
+
 `transcript_biotype` field can be added by intersecting `refGene gtf` with
-`ensembl gtf` file. The most recent `ensembl` annotation `gtf` for 
-`hg19`/`GRCh37.75.gtf.gz` can be downloaded 
+`ensembl gtf` file. The most recent `ensembl` annotation `gtf` for
+`hg19`/`GRCh37.75.gtf.gz` can be downloaded
 [here](https://ftp.ensembl.org/pub/release-75/gtf/homo_sapiens/). A script
-to perform the intersection is available in 
+to perform the intersection is available in
 [preprocessing_scripts](preprocessing_scripts/) folder.
 
 ### BED
-One of the most convenient ways to define custom genomic regions, i.e. 
+
+One of the most convenient ways to define custom genomic regions, i.e.
 enhancers, is though the `bed`-like formatted file. Such file must be tab
 separated and contain 7 columns, for example:
 
@@ -187,24 +201,27 @@ separated and contain 7 columns, for example:
 |chr1|910650|915364|*|PERM1|PERM1|enhancer|
 
 where
-- **chr** *[essential]*: chromosome 
+
+- **chr** *[essential]*: chromosome
 - **start** *[essential]*: start of the region
 - **end** *[essential]*: end of the region
-- **strand** *[essential]*: strand on which regions is located, i.e. `+`, `-` or 
-`*` (no strand) 
-- **gene_id** *[essential]*: ID of the gene to which region belongs. It can be 
+- **strand** *[essential]*: strand on which regions is located, i.e. `+`, `-` or
+`*` (no strand)
+- **gene_id** *[essential]*: ID of the gene to which region belongs. It can be
 any string.
-- **gene_name** *[essential]*: gene name to which region belongs. It can be 
+- **gene_name** *[essential]*: gene name to which region belongs. It can be
 any string.
 - **rCode** *[essential]*: string, region biotype. The `rCode` can have any
-string. **The values from the `rCode` column should be used as an entry for** 
+string. **The values from the `rCode` column should be used as an entry for**
 **`gr_code` column of the [analysis table](#analysis-inventory-table).**
 
 ## Mutations multiplicity
 
 ## Inventory tables
+
 ### Patients inventory table
-The patient inventory table is a comma-separated file that contains detailed information about all participants (patients) in the cohorts, including ID, tumour subtype, path to the mutation table, and other relevant data. This table is also used to define specific cohorts of participants for further analysis, i.e. adenocarcinomas, squamous cell carcinomas, pan-cancer, etc. As parallelisation is ensured by the pipeline architecture as well as by Nextflow itself, there is no need to have separate patient inventory tables for each tumour subtype. 
+
+The patient inventory table is a comma-separated file that contains detailed information about all participants (patients) in the cohorts, including ID, tumour subtype, path to the mutation table, and other relevant data. This table is also used to define specific cohorts of participants for further analysis, i.e. adenocarcinomas, squamous cell carcinomas, pan-cancer, etc. As parallelisation is ensured by the pipeline architecture as well as by Nextflow itself, there is no need to have separate patient inventory tables for each tumour subtype.
 
 The table below provides an example of a patient inventory table.
 
@@ -230,15 +247,16 @@ where
 - **participant_tumour_subtype** *[essential]*: The histological subtype of a tumour found in the corresponding participant, e.g., `LUAD` (**Lu**ng **Ad**enocarcinoma). This column must not contain values which are numbers,  i.e. "LUAD_1" is an allowed value, but "78" is not.
 - **somatic_genome** *[essential]*: The version of the genome in which the coordinates of mutations are specified, e.g., `hg38`. This column must not contain values which are numbers, i.e. "hg38" is an allowed value, but "38" is not. The genome version must be the same for all files listed in the **somatic_path** column. Ideally, all input files should be in `hg19` coordinates. However, if this is not the case, avoid performing the liftover as it is already implemented in the pipeline. This approach minimizes the potential inconsistencies introduced by the liftover procedure.
 - **somatic_path** *[essential]*: The full path on your system (computer/HPC/*etc*) to the file containing **somatic** genetic mutations detected in the tumour of the corresponding individual. For the format of this file, see the section above. The existence of the files in this column will be checked before pipeline execution.
-- **mutmultiplicity_path** *[optional]*: The full path on your system (computer/HPC/*etc*) to the file containing mutation multiplicities for the genomic variants defined in the `somatic_path` column. For the format of this file, see the section above. The existence of the files in this column will be checked before pipeline execution (if the column is present in the table). 
+- **mutmultiplicity_path** *[optional]*: The full path on your system (computer/HPC/*etc*) to the file containing mutation multiplicities for the genomic variants defined in the `somatic_path` column. For the format of this file, see the section above. The existence of the files in this column will be checked before pipeline execution (if the column is present in the table).
 - **cn_segments_genome** *[optional]*: The version of the genome in which the coordinates of copy number segments are specified, e.g., `hg38`. This column must not contain values which are numbers,  i.e. "hg38" is an allowed value, but "38" is not. The genome version must be the same for all files listed in the **cn_segments_path** column.
 - **cn_segments_path** *[optional]*: The full path on your system (computer/HPC/*etc*) to the file containing copy number segments of the tumour genome found in the corresponding participant. For the format of this file, see the section above. The existence of the files in this column will be checked before pipeline execution (if the column is present in the table).
 - **cohort_name**  *[essential]*: . This column must not contain values which are numbers, i.e. "GEL_1" is an allowed value, but "009" is not.
 
 Cancer cohorts that include multiple histological subtypes (for example, a `pan-lung` cancer cohort may include tumour samples from adenocarcinomas, squamous cell carcinomas, mesotheliomas, neuroendocrine carcinomas, *etc.*) can be defined as shown in lines 7-12 of the table. It is preferable that the **participant_tumour_subtype** column contains the actual histological subtype of the tumour, rather than a "pan-lung" substitute.
- 
+
 ### Analysis inventory table
-The analysis inventory table is a comma-separated file that defines the genomic regions to be scanned for potential cancer driver elements. It also links tumour subtypes defined in the patient inventory table to these genomic regions of interest. Additionally, the table specifies the software to be used for scanning each genomic region. As parallelism is ensured by the pipeline architecture as well as by Nextflow itself, there is no need to have separate analysis inventory tables for each tumour subtype. 
+
+The analysis inventory table is a comma-separated file that defines the genomic regions to be scanned for potential cancer driver elements. It also links tumour subtypes defined in the patient inventory table to these genomic regions of interest. Additionally, the table specifies the software to be used for scanning each genomic region. As parallelism is ensured by the pipeline architecture as well as by Nextflow itself, there is no need to have separate analysis inventory tables for each tumour subtype.
 
 The table below provides an example of an analysis inventory table.
 
@@ -248,11 +266,11 @@ The table below provides an example of an analysis inventory table.
 
 where
 
-- **tumour_subtype** *[essential]*: The name of the tumour cohort to be analyzed. It should match one of the cohort names listed in the `tumour_subtype` column of the [patient inventory table](#Patients-inventory-table). The values in this column must not contain a "-" character.
+- **tumour_subtype** *[essential]*: The name of the tumour cohort to be analyzed. It should match one of the cohort names listed in the `tumour_subtype` column of the [patient inventory table](#patients-inventory-table). The values in this column must not contain a "-" character.
 - **software** *[essential]*: The name of the software to be applied to the cohort listed in the `tumour_subtype` column. Permitted values are: `DIGDriver`, `dndscv`, `mutpanning`, `chasmplus`, `nbr`, and `oncodrivefml`.
 - **gr_id** *[essential]*: The name of the genomic region(s) set(s) to be analyzed. This can be any user-defined string, such as "coding" for CDS. The values in this column must not contain a "-" character.
 - **gr_code** *[essential]*: A code (string) defining the biotypes of component parts of the genomic region(s) set(s) to be analyzed. The biotypes of the component parts are defined via files listed in `gr_file` column. Permitted values are: `3primeUTR`, `5primeUTR`, `CDS`, `lincRNA`, `lincRNA_promoter`, `lincRNA_ss`, `miRNA`, `misc_RNA`, `promoter`, `rRNA`, `snoRNA`, `snRNA`, and `ss` (splice sites). Genomic regions annotated with the corresponding biological function (e.g., all 3'UTRs in the case of `3primeUTR` or long non-coding RNAs in the case of `lincRNA`) will be extracted from the files specified in `gr_file`, combined gene-wise (collapsed across transcripts in the case of UTRs), and included in the set defined in the `gr_id` column. Each set of genomic regions of interest (defined uniquely by its ID in the `gr_id` column) can comprise one or more `gr_code`s. For example, a `gr_id` named "coding_and_UTRs" can have `CDS`, `3primeUTR`, and `5primeUTR` in the `gr_code` column. Please see below for illustrative examples. For [dNdScv](https://github.com/im3sanger/dndscv/tree/master) and `MutPanning` only `CDS` is accepted in this column.
-- **gr_file** *[essential]*: The full path on your system (computer/HPC/*etc*) to a GTF or BED file from which genomic elements of interest should be extracted. The BED file must have the following columns: `chr`, `start`, `end`, `strand`, `gene_id`, `gene_name`, and `rCode`, where the `rCode` column contains the biotype of the region as a string, matching one of the values in the `gr_code` column. The GTF file must have the following fields: `gene_name`, `gene_id`, `gene_type`, `gene_biotype`, `transcript_id`, `transcript_type`, `transcript_biotype`. Please refer to the section [genomic regions of interest](#Genomic-regions-of-interest) for more details. The existence of the files listed in this column will be checked prior to the pipeline's execution.
+- **gr_file** *[essential]*: The full path on your system (computer/HPC/*etc*) to a GTF or BED file from which genomic elements of interest should be extracted. The BED file must have the following columns: `chr`, `start`, `end`, `strand`, `gene_id`, `gene_name`, and `rCode`, where the `rCode` column contains the biotype of the region as a string, matching one of the values in the `gr_code` column. The GTF file must have the following fields: `gene_name`, `gene_id`, `gene_type`, `gene_biotype`, `transcript_id`, `transcript_type`, `transcript_biotype`. Please refer to the section [genomic regions of interest](#genomic-regions-of-interest) for more details. The existence of the files listed in this column will be checked prior to the pipeline's execution.
 - **gr_upstr** *[essential]*: The number of bases upstream of the genomic region of interest to be included. For example, 5'UTRs can be extended upstream by an additional 50bp.
 - **gr_downstr** *[essential]*: The number of bases downstream of the genomic region of interest to be included.
 - **gr_genome** *[essential]*: The version of the genome in which the genomic coordinates of the regions are presented in the file listed in the `gr_file` column, e.g., `hg38`. This column must not contain values which are numbers, i.e. "hg38" is an allowed value, but "38" is not.
@@ -276,7 +294,7 @@ Typically, no upstream or downstream extensions of the CDS regions are considere
 |:-----------------:|:------------:|:---------:|:-----------:|:----------------:|:------------:|:--------------:|:-------------:|:---------------:|:----------------------------|:----------------:|:-----------------:|:-------------------:|:------------------:|:---------------------:|:---------------------:|:---------------------:|
 | Adenocarcinoma    | oncodrivefml       |  splice_sites   |   ss       | full_path_to_gtf |   20          |      6         | hg38          | coding             | CDS | full_path_to_gtf | 0 | 0 | hg38 | CRG;DAC;DUKE| 50 | 80|
 
-Splice sites are defined as intronic regions extending `20`bp from the donor site and `6`bp from the acceptor site. Therefore, values of `gr_upstr` and `gr_downstr` columns were set to `20` and `6` respectively. In order to prevent any spillover of the signal from coding regions of the genome to splice sites and keep them strictly intronic, regions of the genome annotated both as splice sites and coding are excluded from the consideration under splice sites set. To request this, columns `gr_excl_id`, `gr_excl_code`, `gr_excl_file`, `gr_excl_upstr`, `gr_excl_downstr`, and `gr_excl_genome` are set `coding`, `CDS`, `full_path_to_gtf`, `0`, `0`, and `hg38` respectively which matches the definition of `coding` regions from the section above. Shall you wish to define different coding regions to be excluded from the splice sites it is also possible via changes in `gr_excl_id`, `gr_excl_code`, `gr_excl_file`, `gr_excl_upstr`, `gr_excl_downstr`, and `gr_excl_genome` columns. That change will not affect the definition of coding regions to consider outlined in section [Example of analysis table entries for CDS](#Example-of-analysis-table-entries-for-CDS). To prevent the scoring of the same genomic regions multiple times, a union of splice site regions will be taken if they overlap > 50% (column `union_percentage`) and an intersection if they overlap > 80% (column `intersect_percentage`).
+Splice sites are defined as intronic regions extending `20`bp from the donor site and `6`bp from the acceptor site. Therefore, values of `gr_upstr` and `gr_downstr` columns were set to `20` and `6` respectively. In order to prevent any spillover of the signal from coding regions of the genome to splice sites and keep them strictly intronic, regions of the genome annotated both as splice sites and coding are excluded from the consideration under splice sites set. To request this, columns `gr_excl_id`, `gr_excl_code`, `gr_excl_file`, `gr_excl_upstr`, `gr_excl_downstr`, and `gr_excl_genome` are set `coding`, `CDS`, `full_path_to_gtf`, `0`, `0`, and `hg38` respectively which matches the definition of `coding` regions from the section above. Shall you wish to define different coding regions to be excluded from the splice sites it is also possible via changes in `gr_excl_id`, `gr_excl_code`, `gr_excl_file`, `gr_excl_upstr`, `gr_excl_downstr`, and `gr_excl_genome` columns. That change will not affect the definition of coding regions to consider outlined in section [Example of analysis table entries for CDS](#example-of-analysis-table-entries-for-cds). To prevent the scoring of the same genomic regions multiple times, a union of splice site regions will be taken if they overlap > 50% (column `union_percentage`) and an intersection if they overlap > 80% (column `intersect_percentage`).
 
 > full_path_to_gtf or bed is ok too?
 
@@ -287,7 +305,7 @@ Splice sites are defined as intronic regions extending `20`bp from the donor sit
 | Adenocarcinoma    | oncodrivefml       |  5_prime_UTR   |   5primeUTR       | full_path_to_gtf |   0          |      0         | hg38          | coding             | CDS | full_path_to_gtf | 0 | 0 | hg38 | CRG;DAC;DUKE| 50 | 80|
 | Adenocarcinoma    | oncodrivefml       |  5_prime_UTR   |   5primeUTR       | full_path_to_gtf |   0          |      0         | hg38          | splice_sites             | ss | full_path_to_gtf | 20 | 6 | hg38 | CRG;DAC;DUKE| 50 | 80|
 
-The table above shows an example definition table for 5'UTRs. Bases overlapping coding and splice site regions are excluded from the set of 5'UTRs. 
+The table above shows an example definition table for 5'UTRs. Bases overlapping coding and splice site regions are excluded from the set of 5'UTRs.
 
 #### Example of analysis table entries for 3'UTRs
 
@@ -302,20 +320,21 @@ The table above shows an example definition table for 3'UTRs. Bases overlapping 
 #### Example of analysis table entries for shortRNA
 
 ### Black or whitelisted regions inventory table
+
 The black-/while- listed regions inventory table is a comma-separated file that
-defines genomic regions of inclusion (white) and exclusion (black). Base pairs 
-constituting genomic regions of interest defined in the 
-[analysis inventory table](#Analysis-inventory-table) above will be excluded 
+defines genomic regions of inclusion (white) and exclusion (black). Base pairs
+constituting genomic regions of interest defined in the
+[analysis inventory table](#analysis-inventory-table) above will be excluded
 from the analysis if they overlap black-listed regions and will be included if
-and only if they overlap white-listed regions. This inventory table is 
-**optional**. If it is not provided, all values in the column 
-`blacklisted_codes` of 
-[analysis inventory table](#Analysis-inventory-table) should be set to `NA`.
+and only if they overlap white-listed regions. This inventory table is
+**optional**. If it is not provided, all values in the column
+`blacklisted_codes` of
+[analysis inventory table](#analysis-inventory-table) should be set to `NA`.
 
 The table below provides an example of black-/white- listed regions inventory
-table. The examples show commonly used black-/white- lists in the genomics 
-studies: CRG alignability for 100mers, DAC blacklisted regions, and Duke 
-uniqueness. More information about these tracks can be found 
+table. The examples show commonly used black-/white- lists in the genomics
+studies: CRG alignability for 100mers, DAC blacklisted regions, and Duke
+uniqueness. More information about these tracks can be found
 [here](https://genome.ucsc.edu/cgi-bin/hgTrackUi?g=wgEncodeMapability&db=hg19).
 
 |list_name | file_path                                          | file_genome | file_type |
@@ -327,31 +346,32 @@ uniqueness. More information about these tracks can be found
 where
 
 - **list_name** *[essential]*: A name of the black-/white- list. This name will
-be used in `blacklisted_codes` columns in the 
-[analysis inventory table](#Analysis-inventory-table). Each list name must 
+be used in `blacklisted_codes` columns in the
+[analysis inventory table](#analysis-inventory-table). Each list name must
 appear once and only once in the table and must not be a number.
-- **file_path** *[essential]*: The full path on your system 
-(computer/HPC/*etc*) to a 
-[`bigWig`](https://genome.ucsc.edu/goldenPath/help/bigWig.html) or 
-[`bed`](https://genome.ucsc.edu/FAQ/FAQformat.html#format1) file containing 
+- **file_path** *[essential]*: The full path on your system
+(computer/HPC/*etc*) to a
+[`bigWig`](https://genome.ucsc.edu/goldenPath/help/bigWig.html) or
+[`bed`](https://genome.ucsc.edu/FAQ/FAQformat.html#format1) file containing
 black- or white-listed regions. Each file path should appear once and only
 once in the table.
-- **file_type** *[essential]*: A type of regions: `black` (bases overlapping 
+- **file_type** *[essential]*: A type of regions: `black` (bases overlapping
 them will be excluded) or `white`(only bases overlapping them will be included)
 - **file_genome** *[essential]*: The version of the genome in which the genomic
 coordinates of the regions are presented in the file listed in the `file_path`
-column, e.g., `hg19`. This column must not contain values which are numbers, 
+column, e.g., `hg19`. This column must not contain values which are numbers,
 i.e. "hg19" is allowed value, but "19" is not.
 
 > [!WARNING]
 > Due to possible split of the genomic region into numerous smaller regions and
-> the subsequent increase in the computation requirements (i.e. RAM) required 
-> for the pipeline, black- and white-listed regions must be provided based on 
-> the same genome version as the target genome set by `target_genome_version` 
+> the subsequent increase in the computation requirements (i.e. RAM) required
+> for the pipeline, black- and white-listed regions must be provided based on
+> the same genome version as the target genome set by `target_genome_version`
 > parameter.
 
 ### DIGDriver models inventory table
-The DIGDriver inventory table is a comma-separated file that defines 
+
+The DIGDriver inventory table is a comma-separated file that defines
 relationship between the analysed tumour subtypes and models which will be used
 for them during the DIGDriver run. The complete list of the available models can be
 found on [DIGDriver data portal](https://cb.csail.mit.edu/cb/DIG/downloads/).
@@ -368,16 +388,17 @@ where
 
 - **tumour_subtype** *[essential]*: The name of the tumour cohort to be analyzed.
 It should match one of the cohort names listed in the `tumour_subtype` column of
-the [patient inventory table](#Patients-inventory-table). All tumour subtypes 
-for which analysis with DIGDriver was requested in the 
-[analysis inventory table](#Analysis-inventory-table) must have a DIGDriver 
+the [patient inventory table](#patients-inventory-table). All tumour subtypes
+for which analysis with DIGDriver was requested in the
+[analysis inventory table](#analysis-inventory-table) must have a DIGDriver
 model assigned.
 - **model_file** *[essential]*: A full path to one of [DIGDriver models](https://cb.csail.mit.edu/cb/DIG/downloads/)
 The same models could be used for the different tumour subtypes.
 
 ### CHASMplus annotators inventory table
+
 The CHASMplus annotators inventory table is a comma-separated file that defines
-the relationship between the analysed tumour subtypes and annotators which will be 
+the relationship between the analysed tumour subtypes and annotators which will be
 used for them during the CHASMplus run. The complete list of the available annotators
 can be found [here](https://chasmplus.readthedocs.io/en/latest/models.html).
 
@@ -385,27 +406,27 @@ The table below provides an example of a CHASMplus annotators inventory table.
 
 | tumour_subtype | chasm_annotator |
 |:-------------:|:---------------:|
-| Adenocarcinoma| chasmplus_LUAD  | 
-| Squamous_cell | chasmplus_LUSC  | 
+| Adenocarcinoma| chasmplus_LUAD  |
+| Squamous_cell | chasmplus_LUSC  |
 | Panlung       | chasmplus       |
-
 
 where
 
 - **tumour_subtype** *[essential]*: The name of the tumour cohort to be analyzed.
 It should match one of the cohort names listed in the `tumour_subtype` column of
-the [patient inventory table](#Patients-inventory-table). All tumour subtypes 
-for which analysis with CHASMplus was requested in the 
-[analysis inventory table](#Analysis-inventory-table) must have a CHASMplus 
+the [patient inventory table](#patients-inventory-table). All tumour subtypes
+for which analysis with CHASMplus was requested in the
+[analysis inventory table](#analysis-inventory-table) must have a CHASMplus
 model assigned.
-- **chasm_annotator** *[essential]*: A name of a 
+- **chasm_annotator** *[essential]*: A name of a
 [CHASMplus annotator](https://chasmplus.readthedocs.io/en/latest/models.html).
 The same annotator could be used for the different tumour subtypes.
 
 ### Expression inventory table
 
 # Parameters
-All the parameters described below are set in 
+
+All the parameters described below are set in
 [nextflow.config file](nextflow.config). Parameters related to the reference
 genome, such as path to the reference fasta (`target_genome_path`), chromosomal
 lengths (`target_genome_chr_len`) and chain file for liftover (`chain`) are set
@@ -414,41 +435,45 @@ up in configuration files in [conf](conf/) folder.
 ### General
 
 #### Target genome version
+
 - `target_genome_version`: a genome version to which the data should be brought
 to before the driver detection software is applied. Currently, only `hg19` is
 accepted. Please see [supported genomes version](#supported-genome-versions)
 section for the reasoning.
 
 #### Inventories
-- `patients_inventory`: a path to the inventory file, i.e. 
+
+- `patients_inventory`: a path to the inventory file, i.e.
 `'data/inventory/inventory_patients.csv'` provides detailed information about
-all participants (patients) in the cohort(s). See 
+all participants (patients) in the cohort(s). See
 [patients inventory table](#patients-inventory-table) section for more details.
-- `analysis_inventory`: a path to the inventory file, i.e.              
+- `analysis_inventory`: a path to the inventory file, i.e.
 `'data/inventory/inventory_analysis.csv'`. The table links together cohorts of
 tumour subtypes, genomic regions of interest and software to be applied to the
-regions. See 
+regions. See
 [analysis inventory table](#analysis-inventory-table) section for more details.
-- `blacklist_inventory`: a path to the inventory file, i.e.              
+- `blacklist_inventory`: a path to the inventory file, i.e.
 `'data/inventory/inventory_blacklist.csv'` providing detailed information about
-black-/white- listed genomic regions. See 
+black-/white- listed genomic regions. See
 [black or whitelisted regions inventory table](#black-or-whitelisted-regions-inventory-table)
 section for more details. This inventory is optional. If no genomic regions are
-black-/white- listed, set the value of this parameter to '', i.e. 
+black-/white- listed, set the value of this parameter to '', i.e.
 `blacklist_inventory = ''`.
 
 #### Output directory
+
 - `outdir` path to the output directory where results will be stored, i.e.
 `completed_runs/`.
 
 #### CHASMplus - specific files
+
 If analysis of data with [CHASMplus](https://chasmplus.readthedocs.io/en/latest/)
 is requested, an inventory linking together cohorts of tumour subtypes and
-[CHASMplus](https://chasmplus.readthedocs.io/en/latest/) annotators should be 
-provided via the `chasmplus_annotators_inventory` parameter, i.e. 
+[CHASMplus](https://chasmplus.readthedocs.io/en/latest/) annotators should be
+provided via the `chasmplus_annotators_inventory` parameter, i.e.
 `chasmplus_annotators_inventory = 'data/inventory/inventory_chasmplus_annotator.csv'`.
-If analysis with [CHASMplus](https://chasmplus.readthedocs.io/en/latest/) is 
-not requested, set this parameter to `''`, i.e. 
+If analysis with [CHASMplus](https://chasmplus.readthedocs.io/en/latest/) is
+not requested, set this parameter to `''`, i.e.
 `chasmplus_annotators_inventory = ''`.
 
 #### DIGDriver - specific files
@@ -457,55 +482,59 @@ If analysis of genomic regions with [DIGDriver](https://github.com/maxwellsh/DIG
 is requested, then a file matching [DIGDriver](https://github.com/maxwellsh/DIGDriver)
 models to the tumour subtypes under considereations and a `element_data.h5` file
 needed for [DIGDriver](https://github.com/maxwellsh/DIGDriver) training.
-- `DIGDriver_models_inventory`: a path to the inventory file, i.e. 
+
+- `DIGDriver_models_inventory`: a path to the inventory file, i.e.
 `'data/inventory/inventory_DIGDriver_models.csv'`. The table links together
 cohorts of tumour subtypes and [DIGDriver](https://github.com/maxwellsh/DIGDriver)
 models to be used for their analysis.
-- `DIGDriver_elements`: a path to `element_data.h5` used internally by 
+- `DIGDriver_elements`: a path to `element_data.h5` used internally by
 [DIGDriver](https://github.com/maxwellsh/DIGDriver). The file can be downloaded
-[here](https://cb.csail.mit.edu/cb/DIG/downloads//dig_data_files/). 
+[here](https://cb.csail.mit.edu/cb/DIG/downloads//dig_data_files/).
 
 If analysis with [DIGDriver](https://github.com/maxwellsh/DIGDriver) is not
 requested, set these parameters to `''`, i.e. `DIGDriver_models_inventory = ''`
 and `DIGDriver_elements = ''`.
 
 #### NBR - specific files
+
 If analysis of genomic regions with NBR is requested, then three additional
 files are needed to be provided. All of these files can be found in the
 [NBR](data/assets/NBR.zip) folder of this GitHub repository.
 
-- `nbr_regions_neutralbins_file`: a path to a file defining neutral regions, 
+- `nbr_regions_neutralbins_file`: a path to a file defining neutral regions,
 i.e. `'data/assets/NBR/Neutral_regions_within_100kb_bins_hg19.txt'`.
 - `nbr_trinucfreq_neutralbins_file`: a path to a file listing trinucleotide
-content within 100kb bins, i.e. 
+content within 100kb bins, i.e.
 `data/assets/NBR/Trinucfreqs_within_100kb_bins_hg19.txt`
 - `nbr_driver_regs_file`: a path to a file listing genomic regions containing
-known driver genomic elements, i.e. 
+known driver genomic elements, i.e.
 `data/assets/NBR/GRanges_driver_regions_hg19.txt`
 
 #### OncodriveFML - specific files
-If analysis of genomic regions with OncodriveFML is requested, then several 
+
+If analysis of genomic regions with OncodriveFML is requested, then several
 additional files are needed to be provided. First of all, a configuration file
 containing all OncodriveFML - specific perameters. Example of such file can be
-found in [conf/oncodrivefml_hg19.config](conf/oncodrivefml_hg19.config). 
-Descriptions of the parameters is available 
-[here](https://oncodrivefml.readthedocs.io/en/latest/configuration.html). To 
+found in [conf/oncodrivefml_hg19.config](conf/oncodrivefml_hg19.config).
+Descriptions of the parameters is available
+[here](https://oncodrivefml.readthedocs.io/en/latest/configuration.html). To
 let the pipeline know which file should be used as OncodriveFML configuration
 file, set up `oncodrivefml_config` parameter as path to the provided file,
-i.e. `conf/oncodrivefml_hg19.config`. If analysis of genomic regions with 
-OncodriveFML is not requested, `oncodrivefml_config` parameter can be set to 
+i.e. `conf/oncodrivefml_hg19.config`. If analysis of genomic regions with
+OncodriveFML is not requested, `oncodrivefml_config` parameter can be set to
 `''`.
 
 > [!WARNING]
-> OncodriveFML requires a large files (17Gb) with genomic scores to be 
+> OncodriveFML requires a large files (17Gb) with genomic scores to be
 > executed. It is not possible unfortunately to put such large files in the
 > container. Therefore, the files need to be pre-downloaded in your computing
-> environment. The download can be completed by executing the 
+> environment. The download can be completed by executing the
 > [example OncodriveFML run](https://oncodrivefml.readthedocs.io/en/latest/includes.html#run-the-example).
 > Upon the run completion all the needed files will be stored in your system
 > in `~/bgdata` folder.
 
 ### Containers
+
 The following set of parameters defines containers to be used during all steps of the pipeline execution. All containers can be viewed at [Docker hub](https://hub.docker.com/r/marialitovchenko/noncoding_driver_pipeline/tags). Recipes for container re-creation can be found in [container_recipes folder](container_recipes).
 
 - `chasmplus_container`: a container to be used for CHASMplus execution. Default: `marialitovchenko/noncoding_driver_pipeline:chasmplus`
@@ -521,65 +550,67 @@ The following set of parameters defines containers to be used during all steps o
 - `min_tumour_vaf`: a minimal percentage from the total reads with the alternative (mutated) allele (also known as variant allele fraction (VAF)) in the tumour sample for the mutation to be considered for the *de novo* cancer driver discovery. Recommended value: `5` (percent).
 - `max_germline_vac`: a maximum number of reads with the alternative (mutated) allele in the germline sample for the mutation to be considered for the *de novo* cancer driver discovery. Recommended value: `5`.
 - `max_germline_vaf`: a maximum percentage from the total reads with the alternative (mutated) allele in the germline sample for the mutation to be considered for the *de novo* cancer driver discovery. Recommended value: `1` (percent).
-- `max_n_vars`: a maximum number of SNVs and small indels discovered in a participant's tumour so that the sample is _not_ recognised as hypermutated. If mutations' number exceeds `max_n_vars`, then a sample will be removed from the analysis. Recommended value: `90000`.
+- `max_n_vars`: a maximum number of SNVs and small indels discovered in a participant's tumour so that the sample is *not* recognised as hypermutated. If mutations' number exceeds `max_n_vars`, then a sample will be removed from the analysis. Recommended value: `90000`.
 
 ### Genomic regions filtering parameters
-- `ignore_strand`: boolean, indicating, whatever or not strand information 
+
+- `ignore_strand`: boolean, indicating, whatever or not strand information
 should be taken into account while removing regions to exclude from the target
-regions. For example, if 3'UTR of a gene_A is located on '+' strand and 
-overlaps CDS of a gene_B located on the '-' strand, then bases of gene_A's 
-3'UTR will be removed if `ignore_strand` set to `F` and kept otherwide. 
+regions. For example, if 3'UTR of a gene_A is located on '+' strand and
+overlaps CDS of a gene_B located on the '-' strand, then bases of gene_A's
+3'UTR will be removed if `ignore_strand` set to `F` and kept otherwide.
 Default: `'T'`. Accepted values: `'T'` and `'F'`.
 - `min_reg_len`: during removal of unwanted regions from target regions (i.e.
-CDS from the set of 3'UTRs) some regions may become very small. The 
+CDS from the set of 3'UTRs) some regions may become very small. The
 `min_reg_len` parameter sets the smallest length of a region which still will
 be considered. Default: `5`.
 
 ### Assignment of mutations to regions and mutation rate calculations parameters
+
 In the course of pipeline execution three types of mutation rate based on  
-mutation mapping to genomic region can be computed: 
+mutation mapping to genomic region can be computed:
 
 1. **genomic region specific mutation rate** then number of mutations within
-each specific genomic region, i.e. TP53 CDS, is computed and divided by the 
-length of the corresponding region, 
+each specific genomic region, i.e. TP53 CDS, is computed and divided by the
+length of the corresponding region,
 2. **local mutation rate** computed via bining the genome on consequtive bins
 of certain size (for example 50kb), counting mutations inside them and dividing
-by the bin size 
+by the bin size
 3. **synonumous mutation rate** computed as number of synonymous mutations in a
-certain genomic region; the synonumous mutation rate is only computed for CDS 
-regions. 
+certain genomic region; the synonumous mutation rate is only computed for CDS
+regions.
 
-These three mutation rates can be later used in postprocessing for filtering 
+These three mutation rates can be later used in postprocessing for filtering
 out hypermutated regions of a genome. The genomic region specific mutation rate
-will always be computed. Calculations of the local mutation rate can be 
+will always be computed. Calculations of the local mutation rate can be
 switched off by setting `bin_len` parameter to `-1`. Similarly, calculations of
 synonumous mutation rate are controlled via `calc_synonymous` parameter.
 
-- `remove_synonymous_from_coding` boolean, indicating whether synonymous 
-mutations should be removed from calculations of genomic region specific 
+- `remove_synonymous_from_coding` boolean, indicating whether synonymous
+mutations should be removed from calculations of genomic region specific
 mutation rate in coding genomic regions. Default: `T`. Accepted values: `T` and
 `F`.
-- `bin_len` parameter sets the length of the bins (in bp) for the local 
-mutation rate computations. Set it to `-1` to switch off local mutation rate 
+- `bin_len` parameter sets the length of the bins (in bp) for the local
+mutation rate computations. Set it to `-1` to switch off local mutation rate
 calculations. Reccomended value: `50000` (50kb).
 - `calc_synonymous` boolean, indicating whether mutation rate based on
 synonymous mutations should be computed (CDS regions only). Reccomended value:
 `T`. Accepted values: `T` and `F`.
 
-During calculations of the mutation rates genomic variants will be mapped to 
+During calculations of the mutation rates genomic variants will be mapped to
 the genomic regions of interest. The mapping will be checked for consistency by
-ensuring that coding mutations are indeed mapped to the coding regions of a 
-genome and noncoding to the noncoding ones respectively. 
+ensuring that coding mutations are indeed mapped to the coding regions of a
+genome and noncoding to the noncoding ones respectively.
 
 - `gene_name_synonyms` a path to file which contains gene name synonyms, i.e.
 `'data/assets/hgnc_complete_set_processed.csv'`. Set this parameter to `''` if
-no such file can be provided. This file is used to match mutation to the 
-corresponding genes even if different gene names synonyms were used. For 
-example, `RASA1` gene is also 
+no such file can be provided. This file is used to match mutation to the
+corresponding genes even if different gene names synonyms were used. For
+example, `RASA1` gene is also
 [known](https://www.ensembl.org/Homo_sapiens/Gene/Summary?db=core;g=ENSG00000145715;r=5:87267883-87391931)
 under `CM-AVM`, `GAP`, `P120`, `P120GAP`, `P120RASGAP` and `RASA` names and
 mutations assigned to any of these synonums should be mapped to genomic regions
-associated with `RASA1`. The file should have two columns: `idx` and 
+associated with `RASA1`. The file should have two columns: `idx` and
 `gene_name`. Gene names synonyms should have the same `idx`, i.e.:
 
 | idx | gene_name  |
@@ -599,66 +630,70 @@ associated with `RASA1`. The file should have two columns: `idx` and
 - `cdsAcceptedClass` variant classifications from MAF format which are
 acceptable as annotation of coding variants. Should a mutation not annotated
 with the variant classifications set in this parameter be found in the coding
-genomic regions, it will be flagged and re-annotated. Reccomended value: 
+genomic regions, it will be flagged and re-annotated. Reccomended value:
 `Frame_Shift_Del Frame_Shift_Ins In_Frame_Del In_Frame_Ins Missense_Mutation Nonsense_Mutation Silent Translation_Start_Site Nonstop_Mutation De_novo_Start_InFrame De_novo_Start_OutOfFrame Unknown`.
-It is higly reccomended to include `Unknown` in the `cdsAcceptedClass` to 
+It is higly reccomended to include `Unknown` in the `cdsAcceptedClass` to
 handle MNPs.
 - `synAcceptedClass` variant classifications from MAF format which are
 acceptable as annotation of synonymous variants. Reccomended value: `Silent`.
 - `ncAcceptedClass` variant classifications from MAF format which are
 acceptable as annotation of noncoding variants. Should a mutation not annotated
 with the variant classifications set in this parameter be found in the coding
-genomic regions, it will be flagged and re-annotated. Reccomended value: 
+genomic regions, it will be flagged and re-annotated. Reccomended value:
 `3primeUTR 3primeFlank 5primeUTR 5primeFlank IGR Intron RNA Targeted_Region Splice_Site Unknown`
 
-As mentioned above in the description of `cdsAcceptedClass` and 
+As mentioned above in the description of `cdsAcceptedClass` and
 `ncAcceptedClass` parameters, should a mismatch between genomic region class
-and mutation class be detected, a variant re-annotation will be conducted by 
+and mutation class be detected, a variant re-annotation will be conducted by
 means of [VariantAnnotation](https://www.bioconductor.org/packages/release/bioc/html/VariantAnnotation.html)
 package. It is very likely that the initial annotation of the genetic variants
-was not performed by the VariantAnnotation package, and therefore the new and 
-the original annotations should be harmonized. Parameter 
+was not performed by the VariantAnnotation package, and therefore the new and
+the original annotations should be harmonized. Parameter
 `varanno_conversion_table` serves exactly this purpose.
 
-- `varanno_conversion_table` a path to file which contains table for 
+- `varanno_conversion_table` a path to file which contains table for
 harmonizing annotations created by VariantAnnotation package with the original
-ones. The file should contain three columns: `variantAnnotation_anno`, 
+ones. The file should contain three columns: `variantAnnotation_anno`,
 `var_type` and `var_class`, where
   - `variantAnnotation_anno` denotes a term used by VariantAnnotation package,
-   i.e. `synonymous` 
-  - `var_type` denotes variant structural type, and should be one of `SNP`, 
+   i.e. `synonymous`
+  - `var_type` denotes variant structural type, and should be one of `SNP`,
   `DEL`, `INS` or `MNP`.
-  - `var_class` denotes a term used by the tool used to produce original 
-  annotation, i.e. `Silent`. 
+  - `var_class` denotes a term used by the tool used to produce original
+  annotation, i.e. `Silent`.
 
-  Please note that 
+  Please note that a combination of values from `variantAnnotation_anno` and
+  `var_type` columns should be uniquely matched to a value of `var_class`
+  column. For example, `synonymous` and `SNP` uniquely maps to `Silent` value
+  of `var_class` column.
 
-  | variantAnnotation_anno | var_type  | var_type|
+  | variantAnnotation_anno | var_type  | var_class|
   |:---:|:----------:|:---:|
-  | synonymous	| SNP	| Silent | 
-  | synonymous	| DEL	| Unknown| 
-  | synonymous	| INS	| Unknown| 
-  | synonymous	| MNP	| Silent|
-  | nonsynonymous	| SNP	| Missense_Mutation|
-  | nonsynonymous	| DEL	| In_Frame_Del|
-  | nonsynonymous	| INS	| Frame_Shift_Ins|
-  | nonsynonymous	| MNP	| Missense_Mutation|
-  | nonsense	| SNP	| Nonsense_Mutation|
-  | nonsense	| DEL	| Frame_Shift_Del|
-  | nonsense	| INS	| Frame_Shift_Ins|
-  | nonsense	| MNP	| Nonsense_Mutation|
-  | frameshift	| SNP	| Unknown|
-  | frameshift	| DEL	| Frame_Shift_Del|
-  | frameshift	| INS	| Frame_Shift_Ins|
-  | frameshift	| MNP	| Unknown|
-- `annotation_failed_code`: string which should be used if `VariantAnnotation` 
+  | synonymous | SNP | Silent |
+  | synonymous | DEL | Unknown|
+  | synonymous | INS | Unknown|
+  | synonymous | MNP | Silent|
+  | nonsynonymous | SNP | Missense_Mutation|
+  | nonsynonymous | DEL | In_Frame_Del|
+  | nonsynonymous | INS | Frame_Shift_Ins|
+  | nonsynonymous | MNP | Missense_Mutation|
+  | nonsense | SNP | Nonsense_Mutation|
+  | nonsense | DEL | Frame_Shift_Del|
+  | nonsense | INS | Frame_Shift_Ins|
+  | nonsense | MNP | Nonsense_Mutation|
+  | frameshift | SNP | Unknown|
+  | frameshift | DEL | Frame_Shift_Del|
+  | frameshift | INS | Frame_Shift_Ins|
+  | frameshift | MNP | Unknown|
+- `annotation_failed_code`: string which should be used if `VariantAnnotation`
 package fails to re-annotate a variant. Reccomended value: `Unknown`.
 
 > [!NOTE]
-> While a re-annotation will be attempted, it is expected that the amount of 
+> While a re-annotation will be attempted, it is expected that the amount of
 > cases needing such a procedure will be low.
 
 ### Postprocessing
+
 - `known_cancer_genes` `'data/assets/cgc_knownCancerGenes.csv'`
 - `olfactory_genes` `'data/assets/olfactory_barnes_2020.csv'`
 - `rawP_cap` `'1e-8'`
@@ -672,8 +707,8 @@ package fails to re-annotate a variant. Reccomended value: `Unknown`.
 - `min_n_soft_cod`          3    // put to 0 to disable
 - `min_n_soft_noncod`       2    // put to 0 to disable
 - `min_n_muts`              3    // put to 0 to disable
-- `min_n_patients`          3    // put to 0 to disable 
-- `max_local_mut_rate_q`    0.95 // put to 1 to disable 
+- `min_n_patients`          3    // put to 0 to disable
+- `max_local_mut_rate_q`    0.95 // put to 1 to disable
 - `max_gr_mut_rate_q`       1    // put to 1 to disable //max_gr_mut_rate_q       0.99    // put to 1 to disable
 - `max_gr_syn_mut_rate_q`   1    // put to 1 to disable //max_gr_syn_mut_rate_q   0.99    // put to 1 to disable
 - `max_gr_len_q`            0.99 // put to 1 to disable
@@ -701,15 +736,16 @@ package fails to re-annotate a variant. Reccomended value: `Unknown`.
 - // extra exclude_silent_from_biotyping?
 - `known_driver_mutations`    `'data/assets/CancerGenomeInterpreter_lung_hg19.tsv'`
 
-- `subtype_spec_pval`         `0.05` 
+- `subtype_spec_pval`         `0.05`
 
 - `fold_splicesites_in_coding`        `'T'`
 - `min_patients_discover`             `10`
 - `specificity_mode`                  `"specific"`
 - `p_max_uniformal_subtypes_discover` `0.1`
 - `p_adj_discover`                    `0.05`
-    
+
 ### Plotting
+
 - `allowed_filter_values`      ["PASS", "INDEL, 2-5bp"]
 - `extra_studies`              ["data/assets/intogene_detectedCancerGenes.csv", "data/assets/mc3_detectedCancerGenes.csv", "data/assets/cgc_knownCancerGenes.csv"]
 - `extra_studies_names`        ["intogen", "mc3", "CGC"]
@@ -722,4 +758,3 @@ package fails to re-annotate a variant. Reccomended value: `Unknown`.
 # Pipeline's execution
 
 # Outputs
-
